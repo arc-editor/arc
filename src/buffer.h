@@ -36,6 +36,7 @@ typedef struct {
     char *file_name;
     int tab_width;
     int line_num_width;
+    int version;
     BufferLine **lines;
     TSParser *parser;
     TSTree *tree;
@@ -59,6 +60,7 @@ void buffer_line_init(BufferLine *line);
 void buffer_line_destroy(BufferLine *line);
 void buffer_init(Buffer *b, char *file_name);
 void buffer_destroy(Buffer *b);
-void buffer_set_line_num_width(Buffer *buffer);
+void buffer_set_line_num_width(Buffer *b);
+char *buffer_get_content(Buffer *b);
 
 #endif

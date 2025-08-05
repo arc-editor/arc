@@ -39,5 +39,6 @@ void editor_move_n_lines_down(int n);
 void editor_move_n_lines_up(int n);
 void editor_set_style(Style *style, int fg, int bg);
 void editor_set_cursor_shape(int shape_code);
+void editor_request_redraw(void);
 
 #endif

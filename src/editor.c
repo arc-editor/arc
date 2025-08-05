@@ -1,3 +1,4 @@
+#define _DEFAULT_SOURCE
 #define _POSIX_C_SOURCE 199309L
 
 #include <stdint.h>
@@ -12,6 +13,7 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <dlfcn.h>
+#include <limits.h>
 #include "log.h"
 #include "picker.h"
 #include "picker_file.h"
@@ -33,6 +35,7 @@ int (*editor_handle_input)(char);
 static int screen_rows;
 static int screen_cols;
 static atomic_int resize_requested = 0;
+static atomic_int redraw_requested = 0;
 static Buffer **buffers;
 static int buffer_count = 0;
 static int buffer_capacity = 0;
@@ -116,6 +119,12 @@ void check_for_resize() {
                 buffer->needs_draw = 1;
             }
         }
+    }
+}
+
+void check_for_redraw_request() {
+    if (atomic_exchange(&redraw_requested, 0)) {
+        buffer->needs_draw = 1;
     }
 }
 
@@ -312,6 +321,9 @@ void editor_draw() {
     int diagnostic_count = 0;
     if (buffer->file_name) {
         lsp_get_diagnostics(buffer->file_name, &diagnostics, &diagnostic_count);
+        if (diagnostic_count > 0) {
+            log_info("editor_draw: %d diagnostics to draw", diagnostic_count);
+        }
         for (int i = 0; i < diagnostic_count; i++) {
             Diagnostic d = diagnostics[i];
             if (d.line < buffer->line_count) {
@@ -322,9 +334,6 @@ void editor_draw() {
             }
         }
         if (diagnostics) {
-            for (int i = 0; i < diagnostic_count; i++) {
-                free(diagnostics[i].message);
-            }
             free(diagnostics);
         }
     }
@@ -341,10 +350,36 @@ void editor_draw() {
     buffer->needs_draw = 0;
 }
 
+void editor_request_redraw(void) {
+    atomic_store(&redraw_requested, 1);
+}
+
 void editor_needs_draw() {
     pthread_mutex_lock(&editor_mutex);
     buffer->needs_draw  = 1;
     pthread_mutex_unlock(&editor_mutex);
+}
+
+void editor_did_change_buffer() {
+    buffer->dirty = 1;
+    buffer->needs_draw = 1;
+    if (buffer->parser) {
+        buffer->needs_parse = 1;
+    }
+    buffer->version++;
+
+    if (buffer->file_name) {
+        char *content = buffer_get_content(buffer);
+        if (content) {
+            char absolute_path[PATH_MAX];
+            if (realpath(buffer->file_name, absolute_path) != NULL) {
+                char file_uri[PATH_MAX + 7];
+                snprintf(file_uri, sizeof(file_uri), "file://%s", absolute_path);
+                lsp_did_change(file_uri, content, buffer->version);
+            }
+            free(content);
+        }
+    }
 }
 
 void *render_loop(void *) {
@@ -355,6 +390,7 @@ void *render_loop(void *) {
         nanosleep(&req, NULL);
         pthread_mutex_lock(&editor_mutex);
         check_for_resize();
+        check_for_redraw_request();
         editor_draw();
         pthread_mutex_unlock(&editor_mutex);
     }
@@ -422,8 +458,7 @@ void editor_insert_new_line() {
     buffer->position_y++;
     buffer_reset_offset_y(buffer, screen_rows);
     buffer->position_x = 0;
-    buffer->dirty = 1;
-    buffer->needs_draw = 1;
+    editor_did_change_buffer();
     buffer_set_line_num_width(buffer);
 
     if (buffer->parser) {
@@ -491,6 +526,18 @@ void editor_open(char *file_name) {
         buffer_init(buffers[0], file_name);
         buffer_set_line_num_width(buffer);
         editor_handle_input = normal_handle_input;
+        
+        char absolute_path[PATH_MAX];
+        if (realpath(file_name, absolute_path) != NULL) {
+            char *content = buffer_get_content(buffer);
+            if (content) {
+                char file_uri[PATH_MAX + 7];
+                snprintf(file_uri, sizeof(file_uri), "file://%s", absolute_path);
+                lsp_did_open(file_uri, "c", content);
+                free(content);
+            }
+        }
+
         pthread_mutex_unlock(&editor_mutex);
         return;
     }
@@ -513,6 +560,18 @@ void editor_open(char *file_name) {
     buffer_init(buffer, file_name);
     buffer_set_line_num_width(buffer);
     editor_handle_input = normal_handle_input;
+
+    char absolute_path[PATH_MAX];
+    if (realpath(file_name, absolute_path) != NULL) {
+        char *content = buffer_get_content(buffer);
+        if (content) {
+            char file_uri[PATH_MAX + 7];
+            snprintf(file_uri, sizeof(file_uri), "file://%s", absolute_path);
+            lsp_did_open(file_uri, "c", content);
+            free(content);
+        }
+    }
+
     pthread_mutex_unlock(&editor_mutex);
 }
 
@@ -596,8 +655,7 @@ void editor_insert_char(int ch) {
     line->char_count++;
     buffer->position_x++;
     buffer_reset_offset_x(buffer, screen_cols);
-    buffer->dirty = 1;
-    buffer->needs_draw = 1;
+    editor_did_change_buffer();
 
     if (buffer->parser) {
         // Calculate byte position for the edit
@@ -780,11 +838,7 @@ void editor_delete() {
         }
     }
 
-    buffer->dirty = 1;
-    buffer->needs_draw = 1;
-    if (buffer->parser) {
-        buffer->needs_parse = 1;
-    }
+    editor_did_change_buffer();
     pthread_mutex_unlock(&editor_mutex);
 }
 
@@ -856,11 +910,7 @@ void editor_backspace() {
         }
     }
 
-    buffer->dirty = 1;
-    buffer->needs_draw = 1;
-    if (buffer->parser) {
-        buffer->needs_parse = 1;
-    }
+    editor_did_change_buffer();
     pthread_mutex_unlock(&editor_mutex);
 }
 
@@ -1375,11 +1425,11 @@ void editor_command_exec(EditorCommand *cmd) {
             buffer_reset_offset_x(buffer, screen_cols);
             buffer_reset_offset_y(buffer, screen_rows);
             buffer->needs_draw = 1;
-            if (buffer->parser) {
-                buffer->needs_parse = 1;
-            }
             if (left != right) {
-                buffer->dirty = 1;
+                if (buffer->parser) {
+                    buffer->needs_parse = 1;
+                }
+                editor_did_change_buffer();
             }
             break;
     }

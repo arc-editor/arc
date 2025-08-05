@@ -13,6 +13,34 @@ void buffer_set_line_num_width(Buffer *buffer) {
     buffer->line_num_width = (int)floor(log10(buffer->line_count)) + 3;
 }
 
+char *buffer_get_content(Buffer *b) {
+    size_t total_len = 0;
+    for (int i = 0; i < b->line_count; i++) {
+        total_len += b->lines[i]->char_count;
+    }
+    total_len += b->line_count -1; // for newlines
+
+    char *content = malloc(total_len + 1);
+    if (!content) {
+        log_error("buffer_get_content: malloc failed");
+        return NULL;
+    }
+
+    char *p = content;
+    for (int i = 0; i < b->line_count; i++) {
+        BufferLine *line = b->lines[i];
+        for (int j = 0; j < line->char_count; j++) {
+            *p++ = line->chars[j].value;
+        }
+        if (i < b->line_count - 1) {
+            *p++ = '\n';
+        }
+    }
+    *p = '\0';
+    return content;
+}
+
+
 // Structure to store capture information with priority
 typedef struct {
     uint32_t start_byte;
@@ -368,6 +396,7 @@ void buffer_init(Buffer *b, char *file_name) {
     b->position_x = 0;
     b->offset_y = 0;
     b->offset_x = 0;
+    b->version = 1;
     b->lines = (BufferLine **)malloc(sizeof(BufferLine *) * b->capacity);
     if (b->lines == NULL) {
         log_error("buffer.buffer_init: failed to allocate lines for buffer");
