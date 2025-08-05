@@ -282,6 +282,7 @@ void config_load_theme(char *name, Theme *theme) {
         log_error("config.config_load_theme: make_config_path failed");
         return;
     }
+    log_info("config.config_load_theme: loading theme from %s", path);
     theme_load(path, theme);
     free(path);
 }

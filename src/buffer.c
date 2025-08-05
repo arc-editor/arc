@@ -79,11 +79,11 @@ typedef struct {
 static const CapturePriorityTableEntry priority_table[] = {
     {"attribute", 15},
     {"comment", 10},
-    {"constant", 85},
-    {"constant.builtin.boolean", 87},
-    {"constant.character", 87},
-    {"constant.character.escape", 88},
-    {"constant.numeric", 87},
+    {"constant", 92},
+    {"constant.builtin.boolean", 93},
+    {"constant.character", 94},
+    {"constant.character.escape", 95},
+    {"constant.numeric", 96},
     {"error", 5},
     {"function", 100},
     {"function.builtin", 105},
@@ -134,7 +134,7 @@ int get_capture_priority(const char* capture_name) {
         return result->priority;
     }
     
-    log_warning("editor.get_capture_priority: unrecognized capture_name %s", capture_name);
+    log_warning("buffer.get_capture_priority: unrecognized capture_name %s", capture_name);
     return 0;
 }
 
@@ -200,7 +200,7 @@ void buffer_line_apply_syntax_highlighting(Buffer *b, BufferLine *line, uint32_t
     line->needs_highlight = 0;
 }
 
-const char *buffer_read(void *payload, uint32_t, TSPoint position, uint32_t *bytes_read) {
+const char *buffer_read(void *payload, uint32_t start_byte __attribute__((unused)), TSPoint position, uint32_t *bytes_read) {
     Buffer *buffer = (Buffer *)payload;
     if ((int)position.row >= buffer->line_count) {
         *bytes_read = 0;

@@ -4,158 +4,125 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "perfect_hashmap.h"
+#include "log.h"
 
 // --- Private Functions ---
 
-/**
- * @brief A simple string hashing function (djb2).
- *
- * This function computes a hash value for a given string up to a specified length.
- *
- * @param str The string to hash.
- * @param len The number of characters to consider for the hash.
- * @param salt A salt value to add to the hash, allowing for variation.
- * @return The computed 32-bit hash value.
- */
-static uint32_t hash_string(const char* str, size_t len, uint32_t salt) {
-    uint32_t hash = 5381;
-    for (size_t i = 0; i < len && str[i] != '\0'; ++i) {
-        hash = ((hash << 5) + hash) + str[i]; // hash * 33 + c
+static uint32_t hash_string(const char* str, uint32_t salt) {
+    if (!str) return salt;
+    const uint32_t FNV_PRIME = 0x01000193;
+    const uint32_t FNV_OFFSET_BASIS = 0x811c9dc5;
+    uint32_t hash = FNV_OFFSET_BASIS ^ salt;
+    while (*str) {
+        hash ^= (uint32_t)(unsigned char)*str++;
+        hash *= FNV_PRIME;
     }
-    return hash + salt;
+    return hash;
 }
 
-/**
- * @brief Checks for hash collisions with a given configuration.
- *
- * This function attempts to place all keys into a hash table of a given size
- * using a specific key length and salt for hashing. It checks if any two keys
- * map to the same index (a collision).
- *
- * @param keys An array of keys to be hashed.
- * @param key_count The number of keys in the array.
- * @param capacity The size of the hash table to test.
- * @param min_key_len The key length to use for hashing.
- * @param salt The salt to use for hashing.
- * @return `true` if no collisions are found, `false` otherwise.
- */
-static bool check_for_collisions(const char** keys, size_t key_count, size_t capacity, size_t min_key_len, uint32_t salt) {
-    bool* occupied_indices = calloc(capacity, sizeof(bool));
-    if (!occupied_indices) {
-        perror("Failed to allocate memory for collision check");
-        return false; // Cannot proceed if allocation fails
+static bool is_prime(size_t n) {
+    if (n <= 1) return false;
+    if (n <= 3) return true;
+    if (n % 2 == 0 || n % 3 == 0) return false;
+    for (size_t i = 5; i * i <= n; i = i + 6) {
+        if (n % i == 0 || n % (i + 2) == 0)
+            return false;
+    }
+    return true;
+}
+
+static size_t next_prime(size_t n) {
+    if (n <= 1) return 2;
+    size_t prime = n;
+    while (true) {
+        if (is_prime(prime)) {
+            return prime;
+        }
+        prime++;
+    }
+}
+
+static bool check_for_collisions(const char** keys, size_t key_count, size_t capacity, uint32_t salt) {
+    const char** occupied_slots = calloc(capacity, sizeof(const char*));
+    if (!occupied_slots) {
+        log_error("perfect_hashmap.check_for_collisions: failed to allocate memory for collision check");
+        return true;
     }
 
     for (size_t i = 0; i < key_count; ++i) {
-        uint32_t hash = hash_string(keys[i], min_key_len, salt);
+        uint32_t hash = hash_string(keys[i], salt);
         size_t index = hash % capacity;
-        if (occupied_indices[index]) {
-            free(occupied_indices);
+        if (occupied_slots[index]) {
+            free(occupied_slots);
             return true; // Collision detected
         }
-        occupied_indices[index] = true;
+        occupied_slots[index] = keys[i];
     }
 
-    free(occupied_indices);
+    free(occupied_slots);
     return false; // No collisions
 }
 
-
 // --- Public API ---
 
-/**
- * @brief Creates a perfect hash map from a set of keys.
- *
- * This function determines the optimal parameters (minimum key length and salt)
- * to create a collision-free hash map that is exactly the size of the number of keys.
- *
- * @param keys An array of unique C-string keys.
- * @param values An array of pointers to the values associated with the keys.
- * @param key_count The number of keys (and values).
- * @return A pointer to the newly created perfect_hashmap_t, or NULL on failure.
- */
 void perfect_hashmap_create(PerfectHashmap* map, const char** keys, void** values, size_t key_count) {
     if (!keys || !values || key_count == 0) {
+        map->table = NULL;
+        map->capacity = 0;
+        map->salt = 0;
         return;
     }
 
-    size_t capacity = key_count; // Smallest possible capacity
-    size_t max_key_len = 0;
-    for(size_t i = 0; i < key_count; ++i) {
-        size_t len = strlen(keys[i]);
-        if (len > max_key_len) {
-            max_key_len = len;
-        }
-    }
-
-    size_t   found_min_key_len = 0;
+    size_t capacity = next_prime(key_count * 2);
     uint32_t found_salt = 0;
-    bool     found_perfect_hash = false;
+    bool found_perfect_hash = false;
 
-    // Iterate through possible key lengths
-    for (size_t len = 1; len <= max_key_len; ++len) {
-        // Iterate through possible salt values
-        for (uint32_t salt = 0; salt < 1000; ++salt) { // Limit salt search to prevent infinite loops
-            if (!check_for_collisions(keys, key_count, capacity, len, salt)) {
-                found_min_key_len = len;
+    while (!found_perfect_hash) {
+        for (uint32_t salt = 123; salt < 567; ++salt) {
+            if (!check_for_collisions(keys, key_count, capacity, salt)) {
                 found_salt = salt;
                 found_perfect_hash = true;
-                goto found; // Exit both loops
+                break;
             }
         }
-    }
-
-found:
-    if (!found_perfect_hash) {
-        fprintf(stderr, "Could not find a perfect hash function within search limits.\n");
-        return;
+        if (found_perfect_hash) {
+            break;
+        }
+        capacity = next_prime(capacity + 1);
     }
 
     map->table = calloc(capacity, sizeof(PerfectHashmapEntry));
     if (!map->table) {
-        perror("Failed to allocate memory for hash table");
-        free(map);
+        log_error("perfect_hashmap.perfect_hashmap_create: failed to allocate memory for hash table");
+        map->capacity = 0;
+        map->salt = 0;
         return;
     }
 
     map->capacity = capacity;
-    map->min_key_len = found_min_key_len;
     map->salt = found_salt;
 
-    // Populate the table with the determined perfect hash
     for (size_t i = 0; i < key_count; ++i) {
-        uint32_t hash = hash_string(keys[i], map->min_key_len, map->salt);
+        uint32_t hash = hash_string(keys[i], map->salt);
         size_t index = hash % map->capacity;
         map->table[index].key = keys[i];
-        map->table[index].value = &values[i]; // Store the address of the void*
+        map->table[index].value = values[i];
     }
 
-    // printf("Perfect hash map created successfully!\n");
-    // printf("  - Capacity: %zu\n", map->capacity);
-    // printf("  - Min Key Length: %zu\n", map->min_key_len);
-    // printf("  - Salt: %u\n", map->salt);
+    log_info("Perfect hash map created successfully! Size: %zu, Capacity: %zu, Salt: %u", key_count, map->capacity, map->salt);
 }
 
-/**
- * @brief Retrieves a value from the perfect hash map.
- *
- * @param map A pointer to the perfect_hashmap_t.
- * @param key The key to look up.
- * @return A pointer to the value (void**), or NULL if the key is not found.
- */
 void* perfect_hashmap_get(PerfectHashmap* map, const char* key) {
-    if (!map || !key) {
+    if (!map || !key || map->capacity == 0 || !map->table) {
         return NULL;
     }
 
-    uint32_t hash = hash_string(key, map->min_key_len, map->salt);
+    uint32_t hash = hash_string(key, map->salt);
     size_t index = hash % map->capacity;
 
-    // Since it's a perfect hash, we just need to check if the key at the
-    // computed index is the one we are looking for.
     if (map->table[index].key && strcmp(map->table[index].key, key) == 0) {
         return map->table[index].value;
     }
 
-    return NULL; // Key not found
+    return NULL;
 }

@@ -48,32 +48,65 @@ static const StyleMapping style_map[] = {
     {"warning", offsetof(Theme, syntax_warning)},
 };
 
-PerfectHashmap styles;
+static PerfectHashmap styles;
+static const char** style_keys = NULL;
+static void** style_values = NULL;
+static size_t num_styles = 0;
 
-void theme_init() {
-    // TODO: Use or remove this
-    perfect_hashmap_create(&styles, NULL, NULL, 0);
+// A simple comparison function for qsort
+static int compare_strings(const void *a, const void *b) {
+    return strcmp(*(const char **)a, *(const char **)b);
 }
 
-int compare_style_mappings(const void *key, const void *element) {
-    const char *capture_name = (const char *)key;
-    const StyleMapping *mapping = (const StyleMapping *)element;
-    return strcmp(capture_name, mapping->name);
+void theme_init() {
+    num_styles = sizeof(style_map) / sizeof(style_map[0]);
+
+    const char **names_for_check = malloc(num_styles * sizeof(const char *));
+    for (size_t i = 0; i < num_styles; ++i) {
+        names_for_check[i] = style_map[i].name;
+    }
+
+    qsort(names_for_check, num_styles, sizeof(const char *), compare_strings);
+
+    for (size_t i = 0; i < num_styles - 1; ++i) {
+        if (strcmp(names_for_check[i], names_for_check[i+1]) == 0) {
+            log_error("theme.theme_init: found duplicate style name: %s", names_for_check[i]);
+            exit(1);
+        }
+    }
+    free(names_for_check);
+
+    style_keys = malloc(num_styles * sizeof(const char*));
+    style_values = malloc(num_styles * sizeof(void*));
+
+    for (size_t i = 0; i < num_styles; ++i) {
+        style_keys[i] = style_map[i].name;
+        style_values[i] = (void*)&style_map[i];
+    }
+
+    perfect_hashmap_create(&styles, style_keys, style_values, num_styles);
+}
+
+void theme_destroy() {
+    if (style_keys) {
+        free((void*)style_keys);
+        style_keys = NULL;
+    }
+    if (style_values) {
+        free(style_values);
+        style_values = NULL;
+    }
 }
 
 Style *theme_get_capture_style(const char* capture_name, Theme *theme) {
     Style* style = &theme->syntax_variable;
     if (capture_name) {
-        StyleMapping* found = bsearch(
-            capture_name,
-            style_map,
-            sizeof(style_map) / sizeof(style_map[0]),
-            sizeof(StyleMapping),
-            compare_style_mappings
-        );
+        void *found_value = perfect_hashmap_get(&styles, capture_name);
 
-        if (found) {
-            return (Style*)((char*)theme + found->style_offset);
+        if (found_value) {
+            StyleMapping* mapping = (StyleMapping*)found_value;
+            size_t style_offset = mapping->style_offset;
+            return (Style*)((char*)theme + style_offset);
         }
         log_warning("theme.theme_get_capture_style: unrecognized capture_name %s", capture_name);
     }

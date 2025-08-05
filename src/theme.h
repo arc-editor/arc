@@ -71,4 +71,7 @@ void theme_load(const char* filename, Theme *theme);
 
 Style *theme_get_capture_style(const char* capture_name, Theme *theme);
 
+void theme_init();
+void theme_destroy();
+
 #endif

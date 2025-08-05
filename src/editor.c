@@ -86,7 +86,7 @@ void editor_set_style(Style *style, int fg, int bg) {
     printf("%s", escape_seq);
 }
 
-void handle_sigwinch(int) {
+void handle_sigwinch(int arg __attribute__((unused))) {
     atomic_store(&resize_requested, 1);
 }
 
@@ -382,7 +382,7 @@ void editor_did_change_buffer() {
     }
 }
 
-void *render_loop(void *) {
+void *render_loop(void * arg __attribute__((unused))) {
     struct timespec req = {0};
     while (1) {
         req.tv_sec = 0;
@@ -474,6 +474,7 @@ void reset_terminal() {
     tcsetattr(STDIN_FILENO, TCSAFLUSH, &orig_termios);
     printf("\033[?1049l"); // Return to normal screen
     fflush(stdout);
+    theme_destroy();
 }
 
 void setup_terminal() {
@@ -505,6 +506,7 @@ void editor_init(char *file_name) {
         log_error("editor.editor_init: alloc current buffer failed");
         exit(1);
     }
+    theme_init();
     buffer_init(buffer, file_name);
     if (file_name) {
         editor_handle_input = normal_handle_input;

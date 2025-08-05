@@ -32,12 +32,6 @@ void *lsp_reader_thread_func(void *arg __attribute__((unused))) {
         }
 
         cJSON *method = cJSON_GetObjectItem(message, "method");
-        if (method) {
-            log_info("LSP message received: %s", method->valuestring);
-        } else {
-            log_info("LSP message received: (no method)");
-        }
-
         if (method && strcmp(method->valuestring, "textDocument/publishDiagnostics") == 0) {
             cJSON *params = cJSON_GetObjectItem(message, "params");
             cJSON *diagnostics_json = cJSON_GetObjectItem(params, "diagnostics");
@@ -254,11 +248,9 @@ void lsp_shutdown(void) {
 }
 
 void lsp_get_diagnostics(const char *file_path __attribute__((unused)), Diagnostic **out_diagnostics, int *out_diagnostic_count) {
-    log_info("lsp_get_diagnostics called");
     pthread_mutex_lock(&diagnostics_mutex);
     *out_diagnostic_count = diagnostic_count;
     if (diagnostic_count > 0) {
-        log_info("lsp_get_diagnostics: %d diagnostics found", diagnostic_count);
         *out_diagnostics = malloc(sizeof(Diagnostic) * diagnostic_count);
         memcpy(*out_diagnostics, diagnostics, sizeof(Diagnostic) * diagnostic_count);
     } else {

@@ -21,7 +21,6 @@ typedef struct {
 typedef struct {
     PerfectHashmapEntry* table;
     size_t                   capacity;
-    size_t                   min_key_len;
     uint32_t                 salt;
 } PerfectHashmap;
 
