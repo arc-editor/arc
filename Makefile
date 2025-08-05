@@ -1,11 +1,11 @@
 CC = clang
 LD = $(CC)
-CFLAGS = -O3 -march=native -Wall -Wextra -std=c23 -Iexternal/tree-sitter/lib/include -Iexternal/tomlc17/src
+CFLAGS = -O3 -march=native -Wall -Wextra -std=c23 -Iexternal/tree-sitter/lib/include -Iexternal/tomlc17/src -Iexternal/cjson
 LDFLAGS = -lm
 SRC_DIR = src
 SRCS = $(wildcard $(SRC_DIR)/*.c)
 BUILD_DIR = build
-OBJS = $(addprefix $(BUILD_DIR)/, $(patsubst %.c,%.o,$(notdir $(SRCS)))) $(BUILD_DIR)/tomlc17.o
+OBJS = $(addprefix $(BUILD_DIR)/, $(patsubst %.c,%.o,$(notdir $(SRCS)))) $(BUILD_DIR)/tomlc17.o $(BUILD_DIR)/cJSON.o
 EXEC_NAME = arc
 TARGET = $(BUILD_DIR)/$(EXEC_NAME)
 PREFIX ?= /usr/local
@@ -19,6 +19,10 @@ TREE_SITTER_LIB = $(TREE_SITTER_DIR)/libtree-sitter.a
 # tomlc17 paths
 TOMLC17_DIR = external/tomlc17/src
 TOMLC17_SRC = $(TOMLC17_DIR)/tomlc17.c
+
+# cJSON paths
+CJSON_DIR = external/cjson
+CJSON_SRC = $(CJSON_DIR)/cJSON.c
 
 .PHONY: all submodules
 all: submodules $(BUILD_DIR) $(TARGET)
@@ -36,6 +40,10 @@ $(TREE_SITTER_LIB): submodules
 
 # Build tomlc17 object
 $(BUILD_DIR)/tomlc17.o: $(TOMLC17_SRC) | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# Build cJSON object
+$(BUILD_DIR)/cJSON.o: $(CJSON_SRC) | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(TARGET): $(OBJS) $(TREE_SITTER_LIB)
