@@ -330,7 +330,7 @@ void editor_draw() {
     if (buffer->file_name) {
         lsp_get_diagnostics(buffer->file_name, &diagnostics, &diagnostic_count);
         if (diagnostic_count > 0) {
-            log_info("editor_draw: %d diagnostics to draw", diagnostic_count);
+            log_info("editor.editor_draw: %d diagnostics to draw", diagnostic_count);
         }
         for (int i = 0; i < diagnostic_count; i++) {
             Diagnostic d = diagnostics[i];

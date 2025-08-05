@@ -55,7 +55,7 @@ int mkdir_recursive(const char *path, __mode_t mode) {
 int ensure_directory_exists(const char *file_path) {
     char *path_copy = strdup(file_path);
     if (!path_copy) {
-        log_warning("ensure_directory_exists: strdup failed");
+        log_warning("config.ensure_directory_exists: strdup failed");
         return -1;
     }
     
@@ -72,7 +72,7 @@ int ensure_directory_exists(const char *file_path) {
     
     // Create the directory structure
     if (mkdir_recursive(path_copy, 0755) != 0) {
-        log_warning("ensure_directory_exists: mkdir_recursive failed for %s", path_copy);
+        log_warning("config.ensure_directory_exists: mkdir_recursive failed for %s", path_copy);
         free(path_copy);
         return -1;
     }
@@ -242,7 +242,7 @@ TSQuery *config_load_highlights(TSLanguage *language, char *name) {
         free(highlights_path);
         return NULL;
     }
-    log_info("loaded highlights from %s", highlights_path);
+    log_info("config.config_load_highlights: loaded highlights from %s", highlights_path);
     free(highlights_path);
     return query;
 }

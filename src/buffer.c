@@ -23,7 +23,7 @@ char *buffer_get_content(Buffer *b) {
 
     char *content = malloc(total_len + 1);
     if (!content) {
-        log_error("buffer_get_content: malloc failed");
+        log_error("buffer.buffer_get_content: malloc failed");
         return NULL;
     }
 

@@ -109,7 +109,7 @@ void perfect_hashmap_create(PerfectHashmap* map, const char** keys, void** value
         map->table[index].value = values[i];
     }
 
-    log_info("Perfect hash map created successfully! Size: %zu, Capacity: %zu, Salt: %u", key_count, map->capacity, map->salt);
+    log_info("perfect_hashmap.perfect_hashmap_create: Perfect hash map created successfully! Size: %zu, Capacity: %zu, Salt: %u", key_count, map->capacity, map->salt);
 }
 
 void* perfect_hashmap_get(PerfectHashmap* map, const char* key) {

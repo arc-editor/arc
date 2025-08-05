@@ -16,7 +16,7 @@ long get_current_time_ms(void) {
 
 void git_current_branch(char *buffer, size_t buffer_size) {
     if (buffer == NULL || buffer_size == 0) {
-        log_error("git.git_current_branch: null buffer provided to git_current_branc");
+        log_error("git.git_current_branch: null buffer provided to git_current_branch");
         exit(1);
     }
     buffer[0] = '\0';

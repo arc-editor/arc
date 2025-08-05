@@ -110,13 +110,13 @@ cJSON *lsp_read_message() {
 
 void lsp_init(void) {
     if (pipe(to_server_pipe) == -1 || pipe(from_server_pipe) == -1) {
-        log_error("lsp_init: pipe failed");
+        log_error("lsp.lsp_init: pipe failed");
         return;
     }
 
     lsp_server_pid = fork();
     if (lsp_server_pid == -1) {
-        log_error("lsp_init: fork failed");
+        log_error("lsp.lsp_init: fork failed");
         return;
     }
 
@@ -136,12 +136,12 @@ void lsp_init(void) {
         }
 
         execlp("clangd", "clangd", NULL);
-        log_error("lsp_init: execlp failed");
+        log_error("lsp.lsp_init: execlp failed");
         exit(1);
     } else { // Parent process
         close(to_server_pipe[0]);
         close(from_server_pipe[1]);
-        log_info("LSP server started with PID %d", lsp_server_pid);
+        log_info("lsp.lsp_init: LSP server started with PID %d", lsp_server_pid);
 
         cJSON *root = cJSON_CreateObject();
         cJSON_AddStringToObject(root, "jsonrpc", "2.0");
@@ -173,7 +173,7 @@ void lsp_init(void) {
         cJSON_Delete(root);
 
         if (pthread_create(&lsp_reader_thread, NULL, lsp_reader_thread_func, NULL) != 0) {
-            log_error("lsp_init: failed to create reader thread");
+            log_error("lsp.lsp_init: failed to create reader thread");
         }
     }
 }
@@ -243,7 +243,7 @@ void lsp_shutdown(void) {
         waitpid(lsp_server_pid, NULL, 0);
         close(to_server_pipe[1]);
         close(from_server_pipe[0]);
-        log_info("LSP server shut down");
+        log_info("lsp.lsp_shutdown: LSP server shut down");
     }
 }
 

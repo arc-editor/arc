@@ -21,6 +21,6 @@ void perf_end() {
     struct timespec end;
     clock_gettime(CLOCK_MONOTONIC, &end);
     long elapsed_ns = (end.tv_sec - ts.tv_sec) * 1000000000L + (end.tv_nsec - ts.tv_nsec);
-    log_info("%s: %.3f μs", curr_name, elapsed_ns / 1000.0);
+    log_info("perf.perf_end: %s: %.3f μs", curr_name, elapsed_ns / 1000.0);
 }
 
