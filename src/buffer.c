@@ -8,6 +8,7 @@
 #include "buffer.h"
 #include "log.h"
 #include "config.h"
+#include "theme.h"
 
 void buffer_set_line_num_width(Buffer *buffer) {
     buffer->line_num_width = (int)floor(log10(buffer->line_count)) + 3;
@@ -70,71 +71,15 @@ const char* find_best_capture_for_position(HighlightCapture *captures, uint32_t 
     return best_capture;
 }
 
-typedef struct {
-    const char* name;
-    int priority;
-} CapturePriorityTableEntry;
-
-// Static lookup table - MUST be sorted alphabetically by name for bsearch
-static const CapturePriorityTableEntry priority_table[] = {
-    {"attribute", 15},
-    {"comment", 10},
-    {"constant", 92},
-    {"constant.builtin.boolean", 93},
-    {"constant.character", 94},
-    {"constant.character.escape", 95},
-    {"constant.numeric", 96},
-    {"error", 5},
-    {"function", 100},
-    {"function.builtin", 105},
-    {"function.special", 110},
-    {"info", 5},
-    {"keyword", 80},
-    {"keyword.control", 81},
-    {"keyword.control.conditional", 81},
-    {"keyword.control.repeat", 81},
-    {"keyword.control.return", 81},
-    {"keyword.directive", 83},
-    {"keyword.storage.modifier", 82},
-    {"keyword.storage.type", 82},
-    {"label", 25},
-    {"operator", 70},
-    {"punctuation", 20},
-    {"punctuation.bracket", 20},
-    {"punctuation.delimiter", 20},
-    {"string", 60},
-    {"type", 90},
-    {"type.builtin", 95},
-    {"type.enum.variant", 92},
-    {"variable", 90},
-    {"variable.other.member", 52},
-    {"variable.parameter", 91},
-    {"warning", 5}
-};
-
-static const size_t priority_table_size = sizeof(priority_table) / sizeof(priority_table[0]);
-
-static int compare_capture_names(const void* key, const void* elem) {
-    const CapturePriorityTableEntry* entry = (const CapturePriorityTableEntry*)elem;
-    return strcmp(key, entry->name);
-}
-
 int get_capture_priority(const char* capture_name) {
-    if (capture_name == NULL) return 0;
-    
-    CapturePriorityTableEntry* result = bsearch(
-        capture_name,
-        priority_table,
-        priority_table_size,
-        sizeof(CapturePriorityTableEntry),
-        compare_capture_names
-    );
-    
-    if (result != NULL) {
-        return result->priority;
+    const CaptureInfo* info = theme_get_capture_info(capture_name);
+    if (info) {
+        return info->priority;
     }
     
-    log_warning("buffer.get_capture_priority: unrecognized capture_name %s", capture_name);
+    if (capture_name) {
+        log_warning("buffer.get_capture_priority: unrecognized capture_name %s", capture_name);
+    }
     return 0;
 }
 

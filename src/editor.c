@@ -263,17 +263,25 @@ void draw_buffer() {
                 cols_to_skip--;
                 continue;
             }
+            
+            Style* style;
+            if (row == buffer->position_y) {
+                style = &current_theme.content_cursor_line;
+            } else {
+                style = &current_theme.content_background;
+            }
+
             if (ch.underline) {
                 printf("\x1b[4m");
             }
             if (ch.italic && ch.bold) {
-                printf("\x1b[1;3;38;2;%d;%d;%dm%c", ch.r, ch.g, ch.b, ch.value);
+                printf("\x1b[1;3;38;2;%d;%d;%d;48;2;%d;%d;%dm%c", ch.r, ch.g, ch.b, style->bg_r, style->bg_g, style->bg_b, ch.value);
             } else if (ch.italic) {
-                printf("\x1b[3;38;2;%d;%d;%dm%c", ch.r, ch.g, ch.b, ch.value);
+                printf("\x1b[3;38;2;%d;%d;%d;48;2;%d;%d;%dm%c", ch.r, ch.g, ch.b, style->bg_r, style->bg_g, style->bg_b, ch.value);
             } else if (ch.bold) {
-                printf("\x1b[1;38;2;%d;%d;%dm%c", ch.r, ch.g, ch.b, ch.value);
+                printf("\x1b[1;38;2;%d;%d;%d;48;2;%d;%d;%dm%c", ch.r, ch.g, ch.b, style->bg_r, style->bg_g, style->bg_b, ch.value);
             } else {
-                printf("\x1b[22;23;38;2;%d;%d;%dm%c", ch.r, ch.g, ch.b, ch.value);
+                printf("\x1b[22;23;38;2;%d;%d;%d;48;2;%d;%d;%dm%c", ch.r, ch.g, ch.b, style->bg_r, style->bg_g, style->bg_b, ch.value);
             }
             if (ch.underline) {
                 printf("\x1b[24m");

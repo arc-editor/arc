@@ -1,21 +1,22 @@
 #ifndef THEME_H
 #define THEME_H
 
+#include <stddef.h>
+
 typedef struct {
-    unsigned char fg_r;
-    unsigned char fg_g;
-    unsigned char fg_b;
-    unsigned char bg_r;
-    unsigned char bg_g;
-    unsigned char bg_b;
+    unsigned char fg_r, fg_g, fg_b;
+    unsigned char bg_r, bg_g, bg_b;
     unsigned char bold;
     unsigned char italic;
     unsigned char underline;
-    unsigned char priority;
 } Style;
 
+typedef struct {
+    const char* name;
+    int priority;
+    size_t style_offset;
+} CaptureInfo;
 
-// Theme struct holding RGB colors for each capture type
 typedef struct {
     Style syntax_keyword;
     Style syntax_keyword_storage_type;
@@ -26,6 +27,7 @@ typedef struct {
     Style syntax_keyword_control_conditional;
     Style syntax_keyword_directive;
     Style syntax_function_special;
+    Style syntax_function_builtin;
     Style syntax_string;
     Style syntax_constant_character;
     Style syntax_type_enum_variant;
@@ -37,7 +39,6 @@ typedef struct {
     Style syntax_variable_parameter;
     Style syntax_variable_other_member;
     Style syntax_function;
-    Style syntax_function_builtin;
     Style syntax_type;
     Style syntax_type_builtin;
     Style syntax_attribute;
@@ -54,24 +55,21 @@ typedef struct {
     Style picker_item_text;
     Style picker_item_text_highlight;
 
+    Style content_background;
+    Style content_cursor_line;
     Style content_line_number;
     Style content_line_number_active;
     Style content_line_number_sticky;
-    Style content_cursor_line;
-    Style content_background;
- 
+
     Style statusline_mode_insert;
     Style statusline_mode_normal;
     Style statusline_text;
 } Theme;
 
-// Load and parse theme from a TOML file
-// Returns 1 on success, 0 on failure
-void theme_load(const char* filename, Theme *theme);
-
-Style *theme_get_capture_style(const char* capture_name, Theme *theme);
-
 void theme_init();
 void theme_destroy();
+void theme_load(const char* filename, Theme *theme);
+Style *theme_get_capture_style(const char* capture_name, Theme *theme);
+const CaptureInfo* theme_get_capture_info(const char* capture_name);
 
-#endif
+#endif // THEME_H

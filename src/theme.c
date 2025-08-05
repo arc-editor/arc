@@ -7,51 +7,46 @@
 #include "theme.h"
 #include "log.h"
 
-typedef struct {
-    const char *name;
-    size_t style_offset;
-} StyleMapping;
-
-static const StyleMapping style_map[] = {
-    {"attribute", offsetof(Theme, syntax_attribute)},
-    {"comment", offsetof(Theme, syntax_comment)},
-    {"constant", offsetof(Theme, syntax_constant)},
-    {"constant.builtin.boolean", offsetof(Theme, syntax_constant_builtin_boolean)},
-    {"constant.character", offsetof(Theme, syntax_constant_character)},
-    {"constant.character.escape", offsetof(Theme, syntax_constant_character_escape)},
-    {"constant.numeric", offsetof(Theme, syntax_constant_numeric)},
-    {"error", offsetof(Theme, syntax_error)},
-    {"function", offsetof(Theme, syntax_function)},
-    {"function.builtin", offsetof(Theme, syntax_function_builtin)},
-    {"function.special", offsetof(Theme, syntax_function_special)},
-    {"info", offsetof(Theme, syntax_info)},
-    {"keyword", offsetof(Theme, syntax_keyword)},
-    {"keyword.control", offsetof(Theme, syntax_keyword_control)},
-    {"keyword.control.conditional", offsetof(Theme, syntax_keyword_control_conditional)},
-    {"keyword.control.repeat", offsetof(Theme, syntax_keyword_control_repeat)},
-    {"keyword.control.return", offsetof(Theme, syntax_keyword_control_return)},
-    {"keyword.directive", offsetof(Theme, syntax_keyword_directive)},
-    {"keyword.storage.modifier", offsetof(Theme, syntax_keyword_storage_modifier)},
-    {"keyword.storage.type", offsetof(Theme, syntax_keyword_storage_type)},
-    {"label", offsetof(Theme, syntax_label)},
-    {"operator", offsetof(Theme, syntax_operator)},
-    {"punctuation", offsetof(Theme, syntax_punctuation)},
-    {"punctuation.bracket", offsetof(Theme, syntax_punctuation_bracket)},
-    {"punctuation.delimiter", offsetof(Theme, syntax_punctuation_delimiter)},
-    {"string", offsetof(Theme, syntax_string)},
-    {"type", offsetof(Theme, syntax_type)},
-    {"type.builtin", offsetof(Theme, syntax_type_builtin)},
-    {"type.enum.variant", offsetof(Theme, syntax_type_enum_variant)},
-    {"variable", offsetof(Theme, syntax_variable)},
-    {"variable.other.member", offsetof(Theme, syntax_variable_other_member)},
-    {"variable.parameter", offsetof(Theme, syntax_variable_parameter)},
-    {"warning", offsetof(Theme, syntax_warning)},
+static const CaptureInfo capture_info_table[] = {
+    {"attribute", 15, offsetof(Theme, syntax_attribute)},
+    {"comment", 10, offsetof(Theme, syntax_comment)},
+    {"constant", 92, offsetof(Theme, syntax_constant)},
+    {"constant.builtin.boolean", 93, offsetof(Theme, syntax_constant_builtin_boolean)},
+    {"constant.character", 94, offsetof(Theme, syntax_constant_character)},
+    {"constant.character.escape", 95, offsetof(Theme, syntax_constant_character_escape)},
+    {"constant.numeric", 96, offsetof(Theme, syntax_constant_numeric)},
+    {"error", 5, offsetof(Theme, syntax_error)},
+    {"function", 100, offsetof(Theme, syntax_function)},
+    {"function.builtin", 105, offsetof(Theme, syntax_function_builtin)},
+    {"function.special", 110, offsetof(Theme, syntax_function_special)},
+    {"info", 5, offsetof(Theme, syntax_info)},
+    {"keyword", 80, offsetof(Theme, syntax_keyword)},
+    {"keyword.control", 81, offsetof(Theme, syntax_keyword_control)},
+    {"keyword.control.conditional", 81, offsetof(Theme, syntax_keyword_control_conditional)},
+    {"keyword.control.repeat", 81, offsetof(Theme, syntax_keyword_control_repeat)},
+    {"keyword.control.return", 81, offsetof(Theme, syntax_keyword_control_return)},
+    {"keyword.directive", 83, offsetof(Theme, syntax_keyword_directive)},
+    {"keyword.storage.modifier", 82, offsetof(Theme, syntax_keyword_storage_modifier)},
+    {"keyword.storage.type", 82, offsetof(Theme, syntax_keyword_storage_type)},
+    {"label", 25, offsetof(Theme, syntax_label)},
+    {"operator", 70, offsetof(Theme, syntax_operator)},
+    {"punctuation", 20, offsetof(Theme, syntax_punctuation)},
+    {"punctuation.bracket", 20, offsetof(Theme, syntax_punctuation_bracket)},
+    {"punctuation.delimiter", 20, offsetof(Theme, syntax_punctuation_delimiter)},
+    {"string", 60, offsetof(Theme, syntax_string)},
+    {"type", 90, offsetof(Theme, syntax_type)},
+    {"type.builtin", 95, offsetof(Theme, syntax_type_builtin)},
+    {"type.enum.variant", 92, offsetof(Theme, syntax_type_enum_variant)},
+    {"variable", 90, offsetof(Theme, syntax_variable)},
+    {"variable.other.member", 52, offsetof(Theme, syntax_variable_other_member)},
+    {"variable.parameter", 91, offsetof(Theme, syntax_variable_parameter)},
+    {"warning", 5, offsetof(Theme, syntax_warning)},
 };
 
-static PerfectHashmap styles;
-static const char** style_keys = NULL;
-static void** style_values = NULL;
-static size_t num_styles = 0;
+static PerfectHashmap capture_map;
+static const char** capture_keys = NULL;
+static void** capture_values = NULL;
+static size_t num_captures = 0;
 
 // A simple comparison function for qsort
 static int compare_strings(const void *a, const void *b) {
@@ -59,16 +54,16 @@ static int compare_strings(const void *a, const void *b) {
 }
 
 void theme_init() {
-    num_styles = sizeof(style_map) / sizeof(style_map[0]);
+    num_captures = sizeof(capture_info_table) / sizeof(capture_info_table[0]);
 
-    const char **names_for_check = malloc(num_styles * sizeof(const char *));
-    for (size_t i = 0; i < num_styles; ++i) {
-        names_for_check[i] = style_map[i].name;
+    const char **names_for_check = malloc(num_captures * sizeof(const char *));
+    for (size_t i = 0; i < num_captures; ++i) {
+        names_for_check[i] = capture_info_table[i].name;
     }
 
-    qsort(names_for_check, num_styles, sizeof(const char *), compare_strings);
+    qsort(names_for_check, num_captures, sizeof(const char *), compare_strings);
 
-    for (size_t i = 0; i < num_styles - 1; ++i) {
+    for (size_t i = 0; i < num_captures - 1; ++i) {
         if (strcmp(names_for_check[i], names_for_check[i+1]) == 0) {
             log_error("theme.theme_init: found duplicate style name: %s", names_for_check[i]);
             exit(1);
@@ -76,41 +71,42 @@ void theme_init() {
     }
     free(names_for_check);
 
-    style_keys = malloc(num_styles * sizeof(const char*));
-    style_values = malloc(num_styles * sizeof(void*));
+    capture_keys = malloc(num_captures * sizeof(const char*));
+    capture_values = malloc(num_captures * sizeof(void*));
 
-    for (size_t i = 0; i < num_styles; ++i) {
-        style_keys[i] = style_map[i].name;
-        style_values[i] = (void*)&style_map[i];
+    for (size_t i = 0; i < num_captures; ++i) {
+        capture_keys[i] = capture_info_table[i].name;
+        capture_values[i] = (void*)&capture_info_table[i];
     }
 
-    perfect_hashmap_create(&styles, style_keys, style_values, num_styles);
+    perfect_hashmap_create(&capture_map, capture_keys, capture_values, num_captures);
 }
 
 void theme_destroy() {
-    if (style_keys) {
-        free((void*)style_keys);
-        style_keys = NULL;
+    if (capture_keys) {
+        free((void*)capture_keys);
+        capture_keys = NULL;
     }
-    if (style_values) {
-        free(style_values);
-        style_values = NULL;
+    if (capture_values) {
+        free(capture_values);
+        capture_values = NULL;
     }
 }
 
-Style *theme_get_capture_style(const char* capture_name, Theme *theme) {
-    Style* style = &theme->syntax_variable;
-    if (capture_name) {
-        void *found_value = perfect_hashmap_get(&styles, capture_name);
+const CaptureInfo* theme_get_capture_info(const char* capture_name) {
+    if (!capture_name) return NULL;
+    return perfect_hashmap_get(&capture_map, capture_name);
+}
 
-        if (found_value) {
-            StyleMapping* mapping = (StyleMapping*)found_value;
-            size_t style_offset = mapping->style_offset;
-            return (Style*)((char*)theme + style_offset);
-        }
+Style *theme_get_capture_style(const char* capture_name, Theme *theme) {
+    const CaptureInfo *info = theme_get_capture_info(capture_name);
+    if (info) {
+        return (Style*)((char*)theme + info->style_offset);
+    }
+    if (capture_name) {
         log_warning("theme.theme_get_capture_style: unrecognized capture_name %s", capture_name);
     }
-    return style;
+    return &theme->syntax_variable;
 }
 
 static int hex_to_rgb(const char* hex, unsigned char* r, unsigned char* g, unsigned char* b) {
@@ -151,7 +147,7 @@ static void parse_style(toml_datum_t root, const char* key, Style* style) {
     toml_datum_t bg_data = toml_seek(root, full_key);
     if (bg_data.type == TOML_STRING) {
         if (!hex_to_rgb(bg_data.u.s, &style->bg_r, &style->bg_g, &style->bg_b)) {
-            log_warning("theme.parse_style: invalid bg hex color for %s: %s", key, fg_data.u.s);
+            log_warning("theme.parse_style: invalid bg hex color for %s: %s", key, bg_data.u.s);
         }
     }
 

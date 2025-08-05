@@ -110,7 +110,11 @@ void picker_draw(int screen_cols, int screen_rows, Theme *theme) {
     int initial_y = y;
 
     // Draw search input
-    editor_set_style(&theme->syntax_variable, 1, 0);
+    Style search_style = theme->picker_item_text;
+    search_style.bg_r = theme->content_background.bg_r;
+    search_style.bg_g = theme->content_background.bg_g;
+    search_style.bg_b = theme->content_background.bg_b;
+    editor_set_style(&search_style, 1, 1);
     printf("\x1b[%d;%dH", y, x);
     char *search_ptr = search;
     int adj_search_len = search_len;
@@ -170,7 +174,11 @@ void picker_draw(int screen_cols, int screen_rows, Theme *theme) {
         for (int j = 0; j < (int)strlen(truncated_item_text); j++) {
             int original_idx = truncated_item_text - item_text + j;
             if (match_idx < match_count && original_idx == matches[match_idx]) {
-                editor_set_style(&theme->picker_item_text_highlight, 1, 0);
+                Style highlight_style = style;
+                highlight_style.fg_r = theme->picker_item_text_highlight.fg_r;
+                highlight_style.fg_g = theme->picker_item_text_highlight.fg_g;
+                highlight_style.fg_b = theme->picker_item_text_highlight.fg_b;
+                editor_set_style(&highlight_style, 1, 1);
                 printf("%c", truncated_item_text[j]);
                 editor_set_style(&style, 1, 1);
                 match_idx++;
