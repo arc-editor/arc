@@ -1,0 +1,47 @@
+name: Build and Release Arc Editor
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  build-linux-release:
+    name: Build Linux (x86-64) for Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install build dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y clang make
+
+    - name: Get version from release tag
+      id: get_version
+      run: |
+        RELEASE_VERSION=$(echo "${{ github.ref_name }}" | sed 's/^v//')
+        echo "Detected release version: ${RELEASE_VERSION}"
+        echo "RELEASE_VERSION=${RELEASE_VERSION}" >> $GITHUB_ENV
+
+    - name: Update EDITOR_VERSION in header
+      run: |
+        sed -i "s/^#define EDITOR_VERSION \".*\"/#define EDITOR_VERSION \"${{ env.RELEASE_VERSION }}\"/" src/editor.h
+        echo "Updated editor.h with version: $(cat editor.h | grep EDITOR_VERSION)"
+
+    - name: Build project (Release Mode)
+      run: make
+
+    - name: Rename executable for artifact clarity
+      run: |
+        mv build/arc build/arc-linux-x86_64-${{ env.RELEASE_VERSION }}
+
+    - name: Upload Release Asset
+      uses: softprops/action-gh-release@v2
+      if: github.event_name == 'release' && github.event.action == 'published'
+      with:
+        files: |
+          build/arc-linux-x86_64-*
