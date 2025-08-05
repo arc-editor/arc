@@ -64,6 +64,9 @@ typedef struct {
     Style statusline_mode_insert;
     Style statusline_mode_normal;
     Style statusline_text;
+
+    Style popup_border;
+    Style picker_border;
 } Theme;
 
 void theme_init();

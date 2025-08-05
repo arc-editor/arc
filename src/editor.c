@@ -27,6 +27,7 @@
 #include "buffer.h"
 #include "picker_file.h"
 #include "lsp.h"
+#include "ui.h"
 
 static pthread_mutex_t editor_mutex = PTHREAD_MUTEX_INITIALIZER;
 
@@ -327,6 +328,7 @@ void editor_draw() {
 
     Diagnostic *diagnostics = NULL;
     int diagnostic_count = 0;
+    int popup_shown_for_cursor = 0;
     if (buffer->file_name) {
         lsp_get_diagnostics(buffer->file_name, &diagnostics, &diagnostic_count);
         if (diagnostic_count > 0) {
@@ -339,7 +341,21 @@ void editor_draw() {
                 for (int j = d.col_start; j < d.col_end && j < line->char_count; j++) {
                     line->chars[j].underline = 1;
                 }
+                int is_on_line = buffer->position_y == d.line;
+                if (is_on_line) {
+                    if (d.col_start == d.col_end) {
+                        popup_shown_for_cursor = 1;
+                    } else if (buffer->position_x >= d.col_start && buffer->position_x < d.col_end) {
+                        if (editor_handle_input != insert_handle_input) {
+                            ui_show_popup(d.message, d.line, d.col_start, d.col_end);
+                            popup_shown_for_cursor = 1;
+                        }
+                    }
+                }
             }
+        }
+        if (!popup_shown_for_cursor) {
+            ui_hide_popup();
         }
         if (diagnostics) {
             free(diagnostics);
@@ -351,6 +367,15 @@ void editor_draw() {
     draw_statusline();
     if (picker_is_open()) {
         picker_draw(screen_cols, screen_rows, &current_theme);
+    } else if (ui_is_popup_visible()) {
+        int cursor_y = buffer->position_y - buffer->offset_y + 1;
+        int diag_line = ui_popup_line();
+        int diag_col_start = ui_popup_col_start();
+        int diag_col_end = ui_popup_col_end();
+        int diag_start_x = buffer_get_visual_x_for_line_pos(buffer, diag_line, diag_col_start) - buffer->offset_x;
+        int diag_end_x = buffer_get_visual_x_for_line_pos(buffer, diag_line, diag_col_end) - buffer->offset_x;
+        ui_draw_popup(&current_theme, diag_start_x, diag_end_x, cursor_y, screen_cols, screen_rows);
+        draw_cursor();
     } else {
         draw_cursor();
     }
@@ -1161,10 +1186,9 @@ void get_target_range(EditorCommand *cmd, Range *range) {
         case 'p':
             while (count) {
                 count--;
-                if (!line->char_count) {
+                if (is_line_empty(line)) {
                     return;
                 }
-                // TODO: line with only white spaces is also "empty"
                 int moved = 0;
                 if (range->y_end) {
                     while (line->char_count && range_expand_up(&line, range)) {
@@ -1449,4 +1473,8 @@ void editor_command_exec(EditorCommand *cmd) {
     }
     editor_command_reset(cmd);
     pthread_mutex_unlock(&editor_mutex);
+}
+
+Buffer *editor_get_active_buffer(void) {
+    return buffer;
 }

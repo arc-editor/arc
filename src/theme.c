@@ -224,5 +224,8 @@ void theme_load(const char* filename, Theme *theme) {
     parse_style(result.toptab, "statusline.mode-normal", &theme->statusline_mode_normal);
     parse_style(result.toptab, "statusline.text", &theme->statusline_text);
 
+    parse_style(result.toptab, "popup.border", &theme->popup_border);
+    parse_style(result.toptab, "picker.border", &theme->picker_border);
+
     toml_free(result);
 }

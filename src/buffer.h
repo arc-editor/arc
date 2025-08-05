@@ -62,5 +62,7 @@ void buffer_init(Buffer *b, char *file_name);
 void buffer_destroy(Buffer *b);
 void buffer_set_line_num_width(Buffer *b);
 char *buffer_get_content(Buffer *b);
+int is_line_empty(BufferLine *line);
+int buffer_get_visual_x_for_line_pos(Buffer *buffer, int y, int logical_x);
 
 #endif

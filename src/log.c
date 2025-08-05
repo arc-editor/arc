@@ -13,6 +13,8 @@
 #define TRUNCATE_TO_LINES 5000
 #define MAX_LOG_MESSAGE 4096
 
+static int foo = 4;
+
 typedef struct {
     FILE *file;
     int line_count;

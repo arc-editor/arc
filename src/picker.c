@@ -103,7 +103,7 @@ void picker_draw(int screen_cols, int screen_rows, Theme *theme) {
     if (!is_open || !delegate) return;
 
     int x, y, w, h;
-    if (!ui_draw_picker_box(screen_cols, screen_rows, &x, &y, &w, &h)) {
+    if (!ui_draw_picker_box(theme, screen_cols, screen_rows, &x, &y, &w, &h)) {
         return;
     }
     int initial_x = x;

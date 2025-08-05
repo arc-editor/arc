@@ -430,3 +430,27 @@ void buffer_destroy(Buffer *b) {
     }
     free(b->read_buffer);
 }
+
+int is_line_empty(BufferLine *line) {
+    if (line->char_count == 0) {
+        return 1;
+    }
+    for (int i = 0; i < line->char_count; i++) {
+        if (line->chars[i].value != ' ' && line->chars[i].value != '\t') {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+int buffer_get_visual_x_for_line_pos(Buffer *buffer, int y, int logical_x) {
+    if (y >= buffer->line_count) return 0;
+    BufferLine *line = buffer->lines[y];
+    int x_pos = logical_x + buffer->line_num_width + 1;
+    for (int i = 0; i < logical_x && i < line->char_count; i++) {
+        if (line->chars[i].value == '\t') {
+            x_pos += buffer->tab_width - 1;
+        }
+    }
+    return x_pos;
+}
