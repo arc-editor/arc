@@ -7,6 +7,8 @@
 #define MAX_INPUT_LEN 1024
 #define MAX_QUERY_LEN 256
 
+static const char **global_input;
+
 static int calculate_fuzzy_score(const char *input, const char *query, int *matches) {
     int input_len = strlen(input);
     int query_len = strlen(query);
@@ -86,11 +88,15 @@ typedef struct {
 static int compare_results(const void *a, const void *b) {
     SearchResult *resultA = (SearchResult*)a;
     SearchResult *resultB = (SearchResult*)b;
+    if (resultA->score == resultB->score) {
+        return strlen(global_input[resultA->index]) - strlen(global_input[resultB->index]);
+    }
     return resultB->score - resultA->score;
 }
 
 int fuzzy_search(const char **input, int input_len, const char *query, int *indices) {
     if (input_len == 0) return 0;
+    global_input = input;
     SearchResult *results = malloc(input_len * sizeof(SearchResult));
     if (!results) {
         log_error("fuzzy.fuzzy_search: failed to allocate memory for search results");

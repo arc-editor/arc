@@ -1,6 +1,5 @@
 #include <string.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include "picker.h"
 #include "ui.h"
 #include "editor.h"
@@ -82,19 +81,18 @@ int picker_handle_input(char ch) {
         if (search_len > 0) {
             search_len--;
             search[search_len] = '\0';
-            editor_request_redraw();
         }
     } else if ((ch >= 32 && ch <= 126)) {
         if (search_len < sizeof(search) - 1) {
             search[search_len++] = ch;
             search[search_len] = '\0';
-            editor_request_redraw();
         }
     }
 
     if (delegate->update_results) {
         delegate->update_results(search);
     }
+    editor_request_redraw();
 
     return 1;
 }
@@ -178,6 +176,9 @@ void picker_draw(int screen_cols, int screen_rows, Theme *theme) {
                 highlight_style.fg_r = theme->picker_item_text_highlight.fg_r;
                 highlight_style.fg_g = theme->picker_item_text_highlight.fg_g;
                 highlight_style.fg_b = theme->picker_item_text_highlight.fg_b;
+                highlight_style.bold = theme->picker_item_text_highlight.bold;
+                highlight_style.italic = theme->picker_item_text_highlight.italic;
+                highlight_style.underline = theme->picker_item_text_highlight.underline;
                 editor_set_style(&highlight_style, 1, 1);
                 printf("%c", truncated_item_text[j]);
                 editor_set_style(&style, 1, 1);
