@@ -29,7 +29,7 @@ void picker_open() {
         delegate->on_open();
     }
     editor_handle_input = picker_handle_input;
-    editor_needs_draw();
+    editor_request_redraw();
 }
 
 int picker_is_open() {
@@ -43,7 +43,7 @@ void picker_close() {
     is_open = 0;
     delegate = NULL;
     editor_handle_input = normal_handle_input;
-    editor_needs_draw();
+    editor_request_redraw();
 }
 
 int picker_handle_input(char ch) {
@@ -66,13 +66,13 @@ int picker_handle_input(char ch) {
     if (ch == 14) { // Down arrow
         if (selection < delegate->get_results_count() - 1) {
             selection++;
-            editor_needs_draw();
+            editor_request_redraw();
         }
         return 1;
     } else if (ch == 16) { // Up arrow
         if (selection > 0) {
             selection--;
-            editor_needs_draw();
+            editor_request_redraw();
         }
         return 1;
     }
@@ -82,13 +82,13 @@ int picker_handle_input(char ch) {
         if (search_len > 0) {
             search_len--;
             search[search_len] = '\0';
-            editor_needs_draw();
+            editor_request_redraw();
         }
     } else if ((ch >= 32 && ch <= 126)) {
         if (search_len < sizeof(search) - 1) {
             search[search_len++] = ch;
             search[search_len] = '\0';
-            editor_needs_draw();
+            editor_request_redraw();
         }
     }
 
