@@ -24,6 +24,7 @@
 #include "config.h"
 #include "buffer.h"
 #include "picker_file.h"
+#include "lsp.h"
 
 static pthread_mutex_t editor_mutex = PTHREAD_MUTEX_INITIALIZER;
 
@@ -46,27 +47,39 @@ void editor_command_reset(EditorCommand *cmd) {
 }
 
 void editor_set_style(Style *style, int fg, int bg) {
-    char escape_seq[64] = "\x1b[";
-    int pos = 2;
-    if (style->bold && style->italic) {
-        pos += sprintf(escape_seq + pos, "1;3;");
-    } else if (style->bold) {
-        pos += sprintf(escape_seq + pos, "1;");
-    } else if (style->italic) {
-        pos += sprintf(escape_seq + pos, "3;");
+    char escape_seq[128];
+    char *p = escape_seq;
+    p += sprintf(p, "\x1b[");
+
+    if (style->bold) {
+        p += sprintf(p, "1;");
     } else {
-        pos += sprintf(escape_seq + pos, "22;23;");
+        p += sprintf(p, "22;");
     }
+    if (style->italic) {
+        p += sprintf(p, "3;");
+    } else {
+        p += sprintf(p, "23;");
+    }
+    if (style->underline) {
+        p += sprintf(p, "4;");
+    } else {
+        p += sprintf(p, "24;");
+    }
+
     if (fg) {
-        pos += sprintf(escape_seq + pos, "38;2;%d;%d;%d", style->fg_r, style->fg_g, style->fg_b);
+        p += sprintf(p, "38;2;%d;%d;%d", style->fg_r, style->fg_g, style->fg_b);
         if (bg) {
-            pos += sprintf(escape_seq + pos, ";");
+            p += sprintf(p, ";");
         }
     }
     if (bg) {
-        pos += sprintf(escape_seq + pos, "48;2;%d;%d;%d", style->bg_r, style->bg_g, style->bg_b);
+        p += sprintf(p, "48;2;%d;%d;%d", style->bg_r, style->bg_g, style->bg_b);
     }
-    sprintf(escape_seq + pos, "m");
+
+    *p++ = 'm';
+    *p = '\0';
+
     printf("%s", escape_seq);
 }
 
@@ -241,6 +254,9 @@ void draw_buffer() {
                 cols_to_skip--;
                 continue;
             }
+            if (ch.underline) {
+                printf("\x1b[4m");
+            }
             if (ch.italic && ch.bold) {
                 printf("\x1b[1;3;38;2;%d;%d;%dm%c", ch.r, ch.g, ch.b, ch.value);
             } else if (ch.italic) {
@@ -249,6 +265,9 @@ void draw_buffer() {
                 printf("\x1b[1;38;2;%d;%d;%dm%c", ch.r, ch.g, ch.b, ch.value);
             } else {
                 printf("\x1b[22;23;38;2;%d;%d;%dm%c", ch.r, ch.g, ch.b, ch.value);
+            }
+            if (ch.underline) {
+                printf("\x1b[24m");
             }
             chars_to_print--;
         }
@@ -280,6 +299,36 @@ void editor_draw() {
     if (buffer->needs_parse) {
         buffer_parse(buffer);
     }
+
+    // Clear previous underlines
+    for (int i = 0; i < buffer->line_count; i++) {
+        BufferLine *line = buffer->lines[i];
+        for (int j = 0; j < line->char_count; j++) {
+            line->chars[j].underline = 0;
+        }
+    }
+
+    Diagnostic *diagnostics = NULL;
+    int diagnostic_count = 0;
+    if (buffer->file_name) {
+        lsp_get_diagnostics(buffer->file_name, &diagnostics, &diagnostic_count);
+        for (int i = 0; i < diagnostic_count; i++) {
+            Diagnostic d = diagnostics[i];
+            if (d.line < buffer->line_count) {
+                BufferLine *line = buffer->lines[d.line];
+                for (int j = d.col_start; j < d.col_end && j < line->char_count; j++) {
+                    line->chars[j].underline = 1;
+                }
+            }
+        }
+        if (diagnostics) {
+            for (int i = 0; i < diagnostic_count; i++) {
+                free(diagnostics[i].message);
+            }
+            free(diagnostics);
+        }
+    }
+
     editor_clear_screen();
     draw_buffer();
     draw_statusline();

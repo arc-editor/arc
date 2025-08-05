@@ -11,6 +11,7 @@ typedef struct {
     unsigned char b;
     unsigned char italic;
     unsigned char bold;
+    unsigned char underline;
 } Char;
 
 typedef struct {

@@ -127,13 +127,13 @@ void picker_draw(int screen_cols, int screen_rows, Theme *theme) {
 
     // Draw results
     int results_count = delegate->get_results_count();
-    Style style = theme->picker_item_text;
 
     for (int i = 0; i < results_count && i < h; i++) {
         int item_index = delegate->get_result_index(i);
         printf("\x1b[%d;%dH", y + i, x);
         const char *item_text = delegate->get_item_text(item_index);
         
+        Style style = theme->picker_item_text;
         if (selection == i) {
             style.bg_r = theme->content_cursor_line.bg_r;
             style.bg_g = theme->content_cursor_line.bg_g;

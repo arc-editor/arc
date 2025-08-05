@@ -71,16 +71,20 @@ run: $(TARGET)
 
 .PHONY: compile_commands
 compile_commands:
-	@echo '[' > compile_commands.json
-	@for src in $(SRCS) $(TOMLC17_SRC); do \
-	echo '  {' >> compile_commands.json; \
-	echo '	"directory": "$(shell pwd)",' >> compile_commands.json; \
-	echo '	"command": "$(CC) $(CFLAGS) -c $$src",' >> compile_commands.json; \
-	echo '	"file": "$$src"' >> compile_commands.json; \
-	if [ "$$src" != "$(lastword $(SRCS) $(TOMLC17_SRC))" ]; then \
-	echo '  },' >> compile_commands.json; \
-	else \
-	echo '  }' >> compile_commands.json; \
-	fi; \
+	@echo '[' > compile_commands.json.tmp
+	@first=true; \
+	for src in $(SRCS) $(TOMLC17_SRC) $(CJSON_SRC); do \
+		if [ "$first" = "true" ]; then \
+			first=false; \
+		else \
+			echo ',' >> compile_commands.json.tmp; \
+		fi; \
+		echo '  {' >> compile_commands.json.tmp; \
+		echo '    "directory": "$(shell pwd)",' >> compile_commands.json.tmp; \
+		echo '    "command": "$(CC) $(CFLAGS) -o build/$(notdir $src).o -c $src",' >> compile_commands.json.tmp; \
+		echo '    "file": "'$src'",' >> compile_commands.json.tmp; \
+		echo '    "output": "build/$(notdir $src).o"' >> compile_commands.json.tmp; \
+		echo '  }' >> compile_commands.json.tmp; \
 	done
-	@echo ']' >> compile_commands.json
+	@echo ']' >> compile_commands.json.tmp
+	@mv compile_commands.json.tmp compile_commands.json

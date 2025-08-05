@@ -10,6 +10,7 @@ typedef struct {
     unsigned char bg_b;
     unsigned char bold;
     unsigned char italic;
+    unsigned char underline;
     unsigned char priority;
 } Style;
 

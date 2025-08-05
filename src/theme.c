@@ -99,6 +99,7 @@ static void set_default_style(Style* style) {
     style->bg_b = 0;
     style->bold = 0;
     style->italic = 0;
+    style->underline = 0;
 }
 
 static void parse_style(toml_datum_t root, const char* key, Style* style) {
@@ -131,6 +132,12 @@ static void parse_style(toml_datum_t root, const char* key, Style* style) {
     toml_datum_t bold_data = toml_seek(root, full_key);
     if (bold_data.type == TOML_BOOLEAN) {
         style->bold = bold_data.u.boolean ? 1 : 0; 
+    }
+
+    snprintf(full_key, sizeof(full_key), "%s.underline", key);
+    toml_datum_t underline_data = toml_seek(root, full_key);
+    if (underline_data.type == TOML_BOOLEAN) {
+        style->underline = underline_data.u.boolean ? 1 : 0;
     }
 }
 
