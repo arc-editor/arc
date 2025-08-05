@@ -2,10 +2,8 @@
 #include <unistd.h>
 #include "insert.h"
 #include "editor.h"
-#include "picker.h"
 #include "picker_file.h"
 #include "picker_buffer.h"
-#include "log.h"
 
 EditorCommand cmd;
 EditorCommand prev_cmd;
@@ -60,6 +58,9 @@ int normal_handle_input(char ch) {
         break;
       case 'b':
         picker_buffer_show();
+        break;
+      case 'c':
+        editor_close_buffer(editor_get_active_buffer_idx());
         break;
     case 'q':
       return 0;

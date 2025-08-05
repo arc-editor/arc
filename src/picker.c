@@ -186,6 +186,6 @@ void picker_draw(int screen_cols, int screen_rows, Theme *theme) {
         }
     }
 
-    editor_set_cursor_shape(5);
+    // editor_set_cursor_shape(5);
     printf("\x1b[%d;%dH", initial_y, initial_x + 1 + adj_search_len);
 }

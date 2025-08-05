@@ -1,5 +1,3 @@
-#include <string.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include "fuzzy.h"
 #include "picker.h"
@@ -24,10 +22,14 @@ static void on_open() {
         filtered_indices = realloc(filtered_indices, sizeof(int) * results_capacity);
     }
 
+    int real_buffer_count = 0;
     for (int i = 0; i < buffer_count; i++) {
-        buffer_names[i] = buffers[i]->file_name ? buffers[i]->file_name : "[No Name]";
+        if (buffers[i]->file_name) {
+            buffer_names[real_buffer_count] = buffers[i]->file_name;
+            real_buffer_count++;
+        }
     }
-    results_count = fuzzy_search((const char**)buffer_names, buffer_count, "", filtered_indices);
+    results_count = fuzzy_search((const char**)buffer_names, real_buffer_count, "", filtered_indices);
 }
 
 static void on_close() {

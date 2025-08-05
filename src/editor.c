@@ -23,6 +23,7 @@
 #include "theme.h"
 #include "config.h"
 #include "buffer.h"
+#include "picker_file.h"
 
 static pthread_mutex_t editor_mutex = PTHREAD_MUTEX_INITIALIZER;
 
@@ -277,17 +278,11 @@ void editor_draw() {
         return;
     }
     if (buffer->needs_parse) {
-        // perf_start("buffer_parse");
         buffer_parse(buffer);
-        // perf_end();
     }
     editor_clear_screen();
-    // perf_start("draw_buffer");
     draw_buffer();
-    // perf_end();
-    // perf_start("draw_statusline");
     draw_statusline();
-    // perf_end();
     if (picker_is_open()) {
         picker_draw(screen_cols, screen_rows, &current_theme);
     } else {
@@ -359,18 +354,22 @@ void editor_insert_new_line() {
     }
 
     // Mark both lines for rehighlighting
-    current_line->needs_highlight = 1;
-    buffer->lines[buffer->position_y + 1]->needs_highlight = 1;
+    if (buffer->parser) {
+        current_line->needs_highlight = 1;
+        buffer->lines[buffer->position_y + 1]->needs_highlight = 1;
+    }
 
     buffer->line_count++;
-    ts_tree_edit(buffer->tree, &(TSInputEdit){
-        .start_byte = start_byte,
-        .old_end_byte = start_byte,
-        .new_end_byte = start_byte + 1, // Add one byte for the newline
-        .start_point = { (uint32_t)buffer->position_y, (uint32_t)buffer->position_x },
-        .old_end_point = { (uint32_t)buffer->position_y, (uint32_t)buffer->position_x },
-        .new_end_point = { (uint32_t)(buffer->position_y + 1), 0 }
-    });
+    if (buffer->parser) {
+        ts_tree_edit(buffer->tree, &(TSInputEdit){
+            .start_byte = start_byte,
+            .old_end_byte = start_byte,
+            .new_end_byte = start_byte + 1, // Add one byte for the newline
+            .start_point = { (uint32_t)buffer->position_y, (uint32_t)buffer->position_x },
+            .old_end_point = { (uint32_t)buffer->position_y, (uint32_t)buffer->position_x },
+            .new_end_point = { (uint32_t)(buffer->position_y + 1), 0 }
+        });
+    }
     buffer->position_y++;
     buffer_reset_offset_y(buffer, screen_rows);
     buffer->position_x = 0;
@@ -378,7 +377,9 @@ void editor_insert_new_line() {
     buffer->needs_draw = 1;
     buffer_set_line_num_width(buffer);
 
-    buffer->needs_parse = 1;
+    if (buffer->parser) {
+        buffer->needs_parse = 1;
+    }
 
     pthread_mutex_unlock(&editor_mutex);
 }
@@ -434,6 +435,17 @@ void editor_init(char *file_name) {
 
 void editor_open(char *file_name) {
     pthread_mutex_lock(&editor_mutex);
+
+    if (buffer_count == 1 && buffers[0]->file_name == NULL) {
+        // Overwrite the initial empty buffer
+        buffer_destroy(buffers[0]);
+        buffer_init(buffers[0], file_name);
+        buffer_set_line_num_width(buffer);
+        editor_handle_input = normal_handle_input;
+        pthread_mutex_unlock(&editor_mutex);
+        return;
+    }
+
     if (buffer_count == buffer_capacity) {
         buffer_capacity *= 2;
         buffers = realloc(buffers, sizeof(Buffer*) * buffer_capacity);
@@ -466,6 +478,42 @@ void editor_set_active_buffer(int index) {
     }
     editor_handle_input = normal_handle_input;
     buffer->needs_draw = 1;
+}
+
+void editor_close_buffer(int buffer_index) {
+    pthread_mutex_lock(&editor_mutex);
+    if (buffer_index < 0 || buffer_index >= buffer_count) {
+        pthread_mutex_unlock(&editor_mutex);
+        return;
+    }
+
+    buffer_destroy(buffers[buffer_index]);
+    free(buffers[buffer_index]);
+
+    for (int i = buffer_index; i < buffer_count - 1; i++) {
+        buffers[i] = buffers[i + 1];
+    }
+    buffer_count--;
+
+    if (buffer_count == 0) {
+        buffer_capacity = 1;
+        buffers = realloc(buffers, sizeof(Buffer*) * buffer_capacity);
+        buffers[0] = (Buffer *)malloc(sizeof(Buffer));
+        buffer_init(buffers[0], NULL);
+        buffer_count = 1;
+        active_buffer_idx = 0;
+        buffer->needs_draw = 1;
+        pthread_mutex_unlock(&editor_mutex);
+        picker_file_show();
+        return;
+    } else if (active_buffer_idx >= buffer_index) {
+        if (active_buffer_idx > 0) {
+            active_buffer_idx--;
+        }
+    }
+    
+    buffer->needs_draw = 1;
+    pthread_mutex_unlock(&editor_mutex);
 }
 
 int editor_get_active_buffer_idx(void) {
@@ -502,22 +550,24 @@ void editor_insert_char(int ch) {
     buffer->dirty = 1;
     buffer->needs_draw = 1;
 
-    // Calculate byte position for the edit
-    uint32_t start_byte = 0;
-    for (int i = 0; i < buffer->position_y; i++) {
-        start_byte += buffer->lines[i]->char_count + (i < buffer->line_count - 1 ? 1 : 0); // Only add newline if not last line
+    if (buffer->parser) {
+        // Calculate byte position for the edit
+        uint32_t start_byte = 0;
+        for (int i = 0; i < buffer->position_y; i++) {
+            start_byte += buffer->lines[i]->char_count + (i < buffer->line_count - 1 ? 1 : 0); // Only add newline if not last line
+        }
+        start_byte += buffer->position_x - 1;
+        ts_tree_edit(buffer->tree, &(TSInputEdit){
+            .start_byte = start_byte,
+            .old_end_byte = start_byte,
+            .new_end_byte = start_byte + 1,
+            .start_point = { (uint32_t)buffer->position_y, (uint32_t)(buffer->position_x - 1) },
+            .old_end_point = { (uint32_t)buffer->position_y, (uint32_t)(buffer->position_x - 1) },
+            .new_end_point = { (uint32_t)buffer->position_y, (uint32_t)buffer->position_x }
+        });
+        line->needs_highlight = 1;
+        buffer->needs_parse = 1;
     }
-    start_byte += buffer->position_x - 1;
-    ts_tree_edit(buffer->tree, &(TSInputEdit){
-        .start_byte = start_byte,
-        .old_end_byte = start_byte,
-        .new_end_byte = start_byte + 1,
-        .start_point = { (uint32_t)buffer->position_y, (uint32_t)(buffer->position_x - 1) },
-        .old_end_point = { (uint32_t)buffer->position_y, (uint32_t)(buffer->position_x - 1) },
-        .new_end_point = { (uint32_t)buffer->position_y, (uint32_t)buffer->position_x }
-    });
-    line->needs_highlight = 1;
-    buffer->needs_parse = 1;
     pthread_mutex_unlock(&editor_mutex);
 }
 
@@ -635,8 +685,11 @@ void editor_delete() {
             return;
         }
         // Case 1: Merge current line with next line
+        if (buffer->parser) {
+            BufferLine *next_line = buffer->lines[buffer->position_y + 1];
+            next_line->needs_highlight = 1;
+        }
         BufferLine *next_line = buffer->lines[buffer->position_y + 1];
-        next_line->needs_highlight = 1;
         int new_char_count = line->char_count + next_line->char_count;
         buffer_line_realloc_for_capacity(line, new_char_count);
         memcpy(&line->chars[line->char_count], next_line->chars, next_line->char_count * sizeof(Char));
@@ -649,34 +702,40 @@ void editor_delete() {
         }
         buffer->line_count--;
         buffer_set_line_num_width(buffer);
-        ts_tree_edit(buffer->tree, &(TSInputEdit){
-            .start_byte = start_byte,
-            .old_end_byte = start_byte + 1,
-            .new_end_byte = start_byte,
-            .start_point = { (uint32_t)buffer->position_y, (uint32_t)buffer->position_x },
-            .old_end_point = { (uint32_t)(buffer->position_y + 1), 0 },
-            .new_end_point = { (uint32_t)buffer->position_y, (uint32_t)buffer->position_x }
-        });
+        if (buffer->parser) {
+            ts_tree_edit(buffer->tree, &(TSInputEdit){
+                .start_byte = start_byte,
+                .old_end_byte = start_byte + 1,
+                .new_end_byte = start_byte,
+                .start_point = { (uint32_t)buffer->position_y, (uint32_t)buffer->position_x },
+                .old_end_point = { (uint32_t)(buffer->position_y + 1), 0 },
+                .new_end_point = { (uint32_t)buffer->position_y, (uint32_t)buffer->position_x }
+            });
+        }
     } else {
         // Case 2: Delete character within the current line
         memmove(&line->chars[buffer->position_x], 
                 &line->chars[buffer->position_x + 1], 
                 (line->char_count - buffer->position_x - 1) * sizeof(Char));
         line->char_count--;
-        line->needs_highlight = 1;
-        ts_tree_edit(buffer->tree, &(TSInputEdit){
-            .start_byte = start_byte,
-            .old_end_byte = start_byte + 1,
-            .new_end_byte = start_byte,
-            .start_point = { (uint32_t)buffer->position_y, (uint32_t)buffer->position_x },
-            .old_end_point = { (uint32_t)buffer->position_y, (uint32_t)(buffer->position_x + 1) },
-            .new_end_point = { (uint32_t)buffer->position_y, (uint32_t)buffer->position_x }
-        });
+        if (buffer->parser) {
+            line->needs_highlight = 1;
+            ts_tree_edit(buffer->tree, &(TSInputEdit){
+                .start_byte = start_byte,
+                .old_end_byte = start_byte + 1,
+                .new_end_byte = start_byte,
+                .start_point = { (uint32_t)buffer->position_y, (uint32_t)buffer->position_x },
+                .old_end_point = { (uint32_t)buffer->position_y, (uint32_t)(buffer->position_x + 1) },
+                .new_end_point = { (uint32_t)buffer->position_y, (uint32_t)buffer->position_x }
+            });
+        }
     }
 
     buffer->dirty = 1;
     buffer->needs_draw = 1;
-    buffer->needs_parse = 1;
+    if (buffer->parser) {
+        buffer->needs_parse = 1;
+    }
     pthread_mutex_unlock(&editor_mutex);
 }
 
@@ -702,7 +761,9 @@ void editor_backspace() {
         buffer_line_realloc_for_capacity(prev_line, new_char_count);
         memcpy(&prev_line->chars[prev_line->char_count], line->chars, line->char_count * sizeof(Char));
         prev_line->char_count = new_char_count;
-        prev_line->needs_highlight = 1;
+        if (buffer->parser) {
+            prev_line->needs_highlight = 1;
+        }
 
         // Shift lines up
         for (int i = buffer->position_y; i < buffer->line_count - 1; i++) {
@@ -710,15 +771,17 @@ void editor_backspace() {
         }
         buffer->line_count--;
         buffer_set_line_num_width(buffer);
-        ts_tree_edit(buffer->tree, &(TSInputEdit){
-            .start_byte = start_byte - 1,
-            .old_end_byte = start_byte,
-            .new_end_byte = start_byte - 1,
-            .start_point = { (uint32_t)buffer->position_y, 0 },
-            .old_end_point = { (uint32_t)buffer->position_y, 0 },
-            .new_end_point = { (uint32_t)(buffer->position_y - 1), (uint32_t)buffer->lines[buffer->position_y - 1]->char_count }
-                         
-        });
+        if (buffer->parser) {
+            ts_tree_edit(buffer->tree, &(TSInputEdit){
+                .start_byte = start_byte - 1,
+                .old_end_byte = start_byte,
+                .new_end_byte = start_byte - 1,
+                .start_point = { (uint32_t)buffer->position_y, 0 },
+                .old_end_point = { (uint32_t)buffer->position_y, 0 },
+                .new_end_point = { (uint32_t)(buffer->position_y - 1), (uint32_t)buffer->lines[buffer->position_y - 1]->char_count }
+                             
+            });
+        }
         buffer->position_y--;
         buffer_reset_offset_y(buffer, screen_rows);
         buffer->position_x = buffer->lines[buffer->position_y]->char_count - line->char_count;
@@ -731,20 +794,24 @@ void editor_backspace() {
                 (line->char_count - buffer->position_x) * sizeof(Char));
         line->char_count--;
         buffer->position_x--;
-        line->needs_highlight = 1;
-        ts_tree_edit(buffer->tree, &(TSInputEdit){
-            .start_byte = start_byte - 1,
-            .old_end_byte = start_byte,
-            .new_end_byte = start_byte - 1,
-            .start_point = { (uint32_t)buffer->position_y, (uint32_t)(buffer->position_x - 1) },
-            .old_end_point = { (uint32_t)buffer->position_y, (uint32_t)buffer->position_x },
-            .new_end_point = { (uint32_t)buffer->position_y, (uint32_t)(buffer->position_x - 1) }
-         });
+        if (buffer->parser) {
+            line->needs_highlight = 1;
+            ts_tree_edit(buffer->tree, &(TSInputEdit){
+                .start_byte = start_byte - 1,
+                .old_end_byte = start_byte,
+                .new_end_byte = start_byte - 1,
+                .start_point = { (uint32_t)buffer->position_y, (uint32_t)(buffer->position_x - 1) },
+                .old_end_point = { (uint32_t)buffer->position_y, (uint32_t)buffer->position_x },
+                .new_end_point = { (uint32_t)buffer->position_y, (uint32_t)(buffer->position_x - 1) }
+             });
+        }
     }
 
     buffer->dirty = 1;
     buffer->needs_draw = 1;
-    buffer->needs_parse = 1;
+    if (buffer->parser) {
+        buffer->needs_parse = 1;
+    }
     pthread_mutex_unlock(&editor_mutex);
 }
 
@@ -1164,37 +1231,43 @@ void range_delete(Buffer *b, Range *range) {
     if (left == right && top == bottom) return;
     if (right == range->x_end) right++;
     TSInputEdit edit;
-    edit.start_byte = 0;
-    for (int i = 0; i < top; i++) {
-        edit.start_byte += b->lines[i]->char_count + (i < b->line_count - 1 ? 1 : 0);
+    if (b->parser) {
+        edit.start_byte = 0;
+        for (int i = 0; i < top; i++) {
+            edit.start_byte += b->lines[i]->char_count + (i < b->line_count - 1 ? 1 : 0);
+        }
+        edit.start_byte += left;
+        edit.old_end_byte = edit.start_byte;
+        edit.new_end_byte = edit.start_byte;
+        edit.start_point.row = top;
+        edit.start_point.column = left;
+        edit.new_end_point.row = top;
+        edit.new_end_point.column = left;
+        edit.old_end_point.row = bottom;
+        edit.old_end_point.column = right;
     }
-    edit.start_byte += left;
-    edit.old_end_byte = edit.start_byte;
-    edit.new_end_byte = edit.start_byte;
-    edit.start_point.row = top;
-    edit.start_point.column = left;
-    edit.new_end_point.row = top;
-    edit.new_end_point.column = left;
-    edit.old_end_point.row = bottom;
-    edit.old_end_point.column = right;
     BufferLine *line = b->lines[top];
     if (top == bottom) {
         memmove(&line->chars[left], &line->chars[right], (line->char_count - right + 1) * sizeof(Char));
         int del_cnt = right - left;
         if (line->char_count < del_cnt) del_cnt = line->char_count;
         line->char_count -= del_cnt;
-        line->needs_highlight = 1;
-        edit.old_end_byte += del_cnt;
-        ts_tree_edit(b->tree, &edit);
+        if (b->parser) {
+            line->needs_highlight = 1;
+            edit.old_end_byte += del_cnt;
+            ts_tree_edit(b->tree, &edit);
+        }
         return;
     }
-    for (int i = top; i < bottom; i++) {
-        edit.old_end_byte += b->lines[i]->char_count + (i < b->line_count - 1 ? 1 : 0);
-        b->lines[i]->needs_highlight = 1;
+    if (b->parser) {
+        for (int i = top; i < bottom; i++) {
+            edit.old_end_byte += b->lines[i]->char_count + (i < b->line_count - 1 ? 1 : 0);
+            b->lines[i]->needs_highlight = 1;
+        }
+        b->lines[bottom]->needs_highlight = 1;
+        edit.old_end_byte += right;
+        ts_tree_edit(b->tree, &edit);
     }
-    b->lines[bottom]->needs_highlight = 1;
-    edit.old_end_byte += right;
-    ts_tree_edit(b->tree, &edit);
 
     // truncate start line
     if (!left) {
@@ -1253,7 +1326,9 @@ void editor_command_exec(EditorCommand *cmd) {
             buffer_reset_offset_x(buffer, screen_cols);
             buffer_reset_offset_y(buffer, screen_rows);
             buffer->needs_draw = 1;
-            buffer->needs_parse = 1;
+            if (buffer->parser) {
+                buffer->needs_parse = 1;
+            }
             if (left != right) {
                 buffer->dirty = 1;
             }

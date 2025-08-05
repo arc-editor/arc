@@ -9,7 +9,6 @@
 #include "fuzzy.h"
 #include "picker.h"
 #include "editor.h"
-#include "log.h"
 
 static char **files = NULL;
 static int file_count = 0;

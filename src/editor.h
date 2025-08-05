@@ -23,6 +23,7 @@ void editor_open(char *file_name);
 Buffer **editor_get_buffers(int *count);
 void editor_set_active_buffer(int index);
 int editor_get_active_buffer_idx(void);
+void editor_close_buffer(int buffer_index);
 void editor_needs_draw();
 void editor_clear_screen();
 void editor_move_cursor_right();

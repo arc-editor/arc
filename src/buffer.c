@@ -1,6 +1,5 @@
 #define _POSIX_C_SOURCE 200809L
 
-
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -385,6 +384,9 @@ void buffer_init(Buffer *b, char *file_name) {
     b->cursor = NULL;
     b->parser = NULL;
     b->tree = NULL;
+    if (file_name == NULL) {
+        return;
+    }
 
     char *lang_name = get_file_extension(file_name);
     TSLanguage *lang = config_load_language(lang_name);
@@ -402,9 +404,6 @@ void buffer_init(Buffer *b, char *file_name) {
         }
     }
 
-    if (file_name == NULL) {
-        return;
-    }
     FILE *fp = fopen(file_name, "r");
     if (fp == NULL) {
         log_error("buffer.buffer_init: failed to allocate first BufferLine");
