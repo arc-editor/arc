@@ -55,10 +55,16 @@ void *lsp_reader_thread_func(void *arg __attribute__((unused))) {
                     cJSON *start = cJSON_GetObjectItem(range, "start");
                     cJSON *end = cJSON_GetObjectItem(range, "end");
                     cJSON *message_json = cJSON_GetObjectItem(diag_json, "message");
+                    cJSON *severity_json = cJSON_GetObjectItem(diag_json, "severity");
 
                     diagnostics[i].line = cJSON_GetObjectItem(start, "line")->valueint;
                     diagnostics[i].col_start = cJSON_GetObjectItem(start, "character")->valueint;
                     diagnostics[i].col_end = cJSON_GetObjectItem(end, "character")->valueint;
+                    if (severity_json) {
+                        diagnostics[i].severity = (DiagnosticSeverity)severity_json->valueint;
+                    } else {
+                        diagnostics[i].severity = LSP_DIAGNOSTIC_SEVERITY_HINT;
+                    }
                     diagnostics[i].message = strdup(message_json->valuestring);
                 }
                 diagnostic_count = new_diagnostic_count;

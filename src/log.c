@@ -13,8 +13,6 @@
 #define TRUNCATE_TO_LINES 5000
 #define MAX_LOG_MESSAGE 4096
 
-static int foo = 4;
-
 typedef struct {
     FILE *file;
     int line_count;
@@ -43,10 +41,9 @@ static int ensure_log_directory(void) {
         fprintf(stderr, "Error creating cache directory: %s\n", strerror(errno));
         return -1;
     }
-    
+
     char arc_dir[512];
     snprintf(arc_dir, sizeof(arc_dir), "%s/.cache/arc", home_dir);
-    
     if (mkdir(arc_dir, 0755) != 0 && errno != EEXIST) {
         fprintf(stderr, "Error creating arc directory: %s\n", strerror(errno));
         return -1;

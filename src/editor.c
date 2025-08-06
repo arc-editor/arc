@@ -347,7 +347,7 @@ void editor_draw() {
                         popup_shown_for_cursor = 1;
                     } else if (buffer->position_x >= d.col_start && buffer->position_x < d.col_end) {
                         if (editor_handle_input != insert_handle_input) {
-                            ui_show_popup(d.message, d.line, d.col_start, d.col_end);
+                            ui_show_popup(d.message, d.line, d.col_start, d.col_end, d.severity);
                             popup_shown_for_cursor = 1;
                         }
                     }

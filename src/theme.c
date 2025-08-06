@@ -15,11 +15,9 @@ static const CaptureInfo capture_info_table[] = {
     {"constant.character", 87, offsetof(Theme, syntax_constant_character)},
     {"constant.character.escape", 88, offsetof(Theme, syntax_constant_character_escape)},
     {"constant.numeric", 89, offsetof(Theme, syntax_constant_numeric)},
-    {"error", 5, offsetof(Theme, syntax_error)},
     {"function", 100, offsetof(Theme, syntax_function)},
     {"function.builtin", 105, offsetof(Theme, syntax_function_builtin)},
     {"function.special", 110, offsetof(Theme, syntax_function_special)},
-    {"info", 5, offsetof(Theme, syntax_info)},
     {"keyword", 80, offsetof(Theme, syntax_keyword)},
     {"keyword.control", 81, offsetof(Theme, syntax_keyword_control)},
     {"keyword.control.conditional", 81, offsetof(Theme, syntax_keyword_control_conditional)},
@@ -41,6 +39,12 @@ static const CaptureInfo capture_info_table[] = {
     {"variable.other.member", 52, offsetof(Theme, syntax_variable_other_member)},
     {"variable.parameter", 91, offsetof(Theme, syntax_variable_parameter)},
     {"warning", 5, offsetof(Theme, syntax_warning)},
+    {"error", 5, offsetof(Theme, syntax_error)},
+    {"info", 5, offsetof(Theme, syntax_info)},
+    {"diagnostics.warning", 5, offsetof(Theme, diagnostics_warning)},
+    {"diagnostics.error", 5, offsetof(Theme, diagnostics_error)},
+    {"diagnostics.info", 5, offsetof(Theme, diagnostics_info)},
+    {"diagnostics.hint", 5, offsetof(Theme, diagnostics_hint)},
 };
 
 static PerfectHashmap capture_map;
@@ -210,6 +214,10 @@ void theme_load(const char* filename, Theme *theme) {
     parse_style(result.toptab, "syntax.info", &theme->syntax_info);
     parse_style(result.toptab, "syntax.warning", &theme->syntax_warning);
     parse_style(result.toptab, "syntax.error", &theme->syntax_error);
+    parse_style(result.toptab, "diagnostics.info", &theme->diagnostics_info);
+    parse_style(result.toptab, "diagnostics.warning", &theme->diagnostics_warning);
+    parse_style(result.toptab, "diagnostics.error", &theme->diagnostics_error);
+    parse_style(result.toptab, "diagnostics.hint", &theme->diagnostics_hint);
 
     parse_style(result.toptab, "picker.item-text", &theme->picker_item_text);
     parse_style(result.toptab, "picker.item-text-highlight", &theme->picker_item_text_highlight);

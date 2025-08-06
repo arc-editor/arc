@@ -1,10 +1,18 @@
 #ifndef LSP_H
 #define LSP_H
 
+typedef enum {
+    LSP_DIAGNOSTIC_SEVERITY_ERROR = 1,
+    LSP_DIAGNOSTIC_SEVERITY_WARNING = 2,
+    LSP_DIAGNOSTIC_SEVERITY_INFO = 3,
+    LSP_DIAGNOSTIC_SEVERITY_HINT = 4
+} DiagnosticSeverity;
+
 typedef struct {
     int line;
     int col_start;
     int col_end;
+    DiagnosticSeverity severity;
     char *message;
 } Diagnostic;
 

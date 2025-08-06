@@ -51,6 +51,10 @@ typedef struct {
     Style syntax_info;
     Style syntax_warning;
     Style syntax_error;
+    Style diagnostics_info;
+    Style diagnostics_warning;
+    Style diagnostics_error;
+    Style diagnostics_hint;
 
     Style picker_item_text;
     Style picker_item_text_highlight;
