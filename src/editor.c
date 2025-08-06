@@ -1212,8 +1212,8 @@ void get_target_range(EditorCommand *cmd, Range *range) {
     range->x_end = buffer->position_x;
     range->y_end = buffer->position_y;
     if (cmd->target && line->char_count && buffer->position_x == line->char_count) {
-        range->x_start--;
-        range->x_end--;
+        // range->x_start--;
+        // range->x_end--;
     }
     switch (cmd->target) {
         case 'p':
@@ -1351,8 +1351,8 @@ void get_target_range(EditorCommand *cmd, Range *range) {
             range_expand_B(line, count, range);
             break;
         case 'l':
-            if (range->x_end < line->char_count - 1) {
-                range->x_end = line->char_count - 1;
+            if (range->x_end < line->char_count) {
+                range->x_end = line->char_count;
             }
             break;
         case 'h':
@@ -1400,7 +1400,7 @@ void range_delete(Buffer *b, Range *range) {
     if (b->parser) {
         edit.start_byte = 0;
         for (int i = 0; i < top; i++) {
-            edit.start_byte += b->lines[i]->char_count + (i < b->line_count - 1 ? 1 : 0);
+            edit.start_byte += b->lines[i]->char_count + 1;
         }
         edit.start_byte += left;
         edit.old_end_byte = edit.start_byte;
