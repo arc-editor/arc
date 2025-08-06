@@ -324,6 +324,7 @@ char *get_file_extension(const char *file_name) {
 }
 
 void buffer_init(Buffer *b, char *file_name) {
+    b->diagnostics_version = 0;
     b->tab_width = 4;
     b->line_num_width = 3;
     if (file_name) {
@@ -400,6 +401,7 @@ void buffer_init(Buffer *b, char *file_name) {
             buffer_line_realloc_for_capacity(line, line->char_count + 1);
             Char new_char = line->chars[line->char_count];
             new_char.value = ch;
+            new_char.underline = 0;
             line->chars[line->char_count] = new_char;
             line->char_count++;
         }

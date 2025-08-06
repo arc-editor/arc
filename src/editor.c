@@ -201,7 +201,7 @@ void draw_statusline() {
     printf("\x1b[0m");
 }
 
-void draw_buffer() {
+void draw_buffer(Diagnostic *diagnostics, int diagnostics_count, int update_diagnostics) {
     uint32_t start_byte = 0;
     for (int i = 0; i < buffer->offset_y; i++) {
         BufferLine *line = buffer->lines[i];
@@ -223,6 +223,19 @@ void draw_buffer() {
 
         if (line->needs_highlight) {
             buffer_line_apply_syntax_highlighting(buffer, line, start_byte, &current_theme);
+        }
+        if (update_diagnostics) {
+            for (int j = 0; j < line->char_count; j++) {
+                line->chars[j].underline = 0;
+            }
+            for (int i = 0; i < diagnostics_count; i++) {
+                Diagnostic d = diagnostics[i];
+                if (d.line == row) {
+                    for (int j = d.col_start; j < d.col_end && j < line->char_count; j++) {
+                        line->chars[j].underline = 1;
+                    }
+                }
+            }
         }
         char line_num_str[16];
         int line_num_len = snprintf(line_num_str, sizeof(line_num_str), "%*d ", buffer->line_num_width - 1, row + 1);
@@ -310,6 +323,17 @@ void draw_cursor() {
     printf("\x1b[%d;%dH", y, x);
 }
 
+void draw_diagnostics(const Diagnostic *diagnostics, int diagnostics_count) {
+    for (int i = 0; i < diagnostics_count; i++) {
+        Diagnostic d = diagnostics[i];
+        if (d.line != buffer->position_y) continue;
+        if (d.col_start == d.col_end || (d.col_start <= buffer->position_x && d.col_end > buffer->position_x)) {
+            int y = buffer->position_y - buffer->offset_y + 1;
+            ui_draw_popup(&current_theme, d.severity, d.message, y, screen_cols, screen_rows);
+        }
+    }
+}
+
 void editor_draw() {
     if (!buffer->needs_draw) {
         return;
@@ -317,68 +341,33 @@ void editor_draw() {
     if (buffer->needs_parse) {
         buffer_parse(buffer);
     }
-
-    // Clear previous underlines
-    for (int i = 0; i < buffer->line_count; i++) {
-        BufferLine *line = buffer->lines[i];
-        for (int j = 0; j < line->char_count; j++) {
-            line->chars[j].underline = 0;
-        }
-    }
-
+    // TODO: free once malloc was used
     Diagnostic *diagnostics = NULL;
     int diagnostic_count = 0;
-    int popup_shown_for_cursor = 0;
+    int prev_diag_version = buffer->diagnostics_version;
+    int update_diagnostics = 0;
     if (buffer->file_name) {
-        lsp_get_diagnostics(buffer->file_name, &diagnostics, &diagnostic_count);
-        if (diagnostic_count > 0) {
-            log_info("editor.editor_draw: %d diagnostics to draw", diagnostic_count);
-        }
-        for (int i = 0; i < diagnostic_count; i++) {
-            Diagnostic d = diagnostics[i];
-            if (d.line < buffer->line_count) {
-                BufferLine *line = buffer->lines[d.line];
-                for (int j = d.col_start; j < d.col_end && j < line->char_count; j++) {
-                    line->chars[j].underline = 1;
-                }
-                int is_on_line = buffer->position_y == d.line;
-                if (is_on_line) {
-                    if (d.col_start == d.col_end) {
-                        popup_shown_for_cursor = 1;
-                    } else if (buffer->position_x >= d.col_start && buffer->position_x < d.col_end) {
-                        if (editor_handle_input != insert_handle_input) {
-                            ui_show_popup(d.message, d.line, d.col_start, d.col_end, d.severity);
-                            popup_shown_for_cursor = 1;
-                        }
-                    }
-                }
-            }
-        }
-        if (!popup_shown_for_cursor) {
-            ui_hide_popup();
-        }
-        if (diagnostics) {
-            free(diagnostics);
+        buffer->diagnostics_version = lsp_get_diagnostics(buffer->file_name, &diagnostics, &diagnostic_count);
+        if (buffer->diagnostics_version != prev_diag_version) {
+            update_diagnostics = 1;
         }
     }
-
     editor_clear_screen();
-    draw_buffer();
+    draw_buffer(diagnostics, diagnostic_count, update_diagnostics);
     draw_statusline();
     if (picker_is_open()) {
         picker_draw(screen_cols, screen_rows, &current_theme);
-    } else if (ui_is_popup_visible()) {
-        int cursor_y = buffer->position_y - buffer->offset_y + 1;
-        int diag_line = ui_popup_line();
-        int diag_col_start = ui_popup_col_start();
-        int diag_col_end = ui_popup_col_end();
-        int diag_start_x = buffer_get_visual_x_for_line_pos(buffer, diag_line, diag_col_start) - buffer->offset_x;
-        int diag_end_x = buffer_get_visual_x_for_line_pos(buffer, diag_line, diag_col_end) - buffer->offset_x;
-        ui_draw_popup(&current_theme, diag_start_x, diag_end_x, cursor_y, screen_cols, screen_rows);
-        draw_cursor();
-    } else {
-        draw_cursor();
     }
+    if (editor_handle_input == normal_handle_input) {
+        draw_diagnostics(diagnostics, diagnostic_count);
+    }
+    if (diagnostics) {
+        free(diagnostics);
+        for (int i = 0; i < diagnostic_count; i++) {
+            free(diagnostics[i].message);
+        }
+    }
+    draw_cursor();
     fflush(stdout);
     buffer->needs_draw = 0;
 }
@@ -510,16 +499,36 @@ void reset_terminal() {
     theme_destroy();
 }
 
+void handle_sigint(int sig) {
+    (void)sig;
+}
+
+void handle_sigpipe(int sig) {
+    (void)sig; // Ignore SIGPIPE
+}
+
 void setup_terminal() {
     tcgetattr(STDIN_FILENO, &orig_termios);
     atexit(reset_terminal);
     struct termios raw = orig_termios;
-    raw.c_lflag &= ~(ECHO | ICANON);
+    raw.c_lflag &= ~(ECHO | ICANON | ISIG);
     raw.c_iflag &= ~(IXON | ICRNL);
     raw.c_cc[VMIN] = 1;
     raw.c_cc[VTIME] = 0;
     tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
-    printf("\033[?1049h"); // Switch to alternate screen
+
+    struct sigaction sa;
+    // SIGINT handler
+    sa.sa_handler = handle_sigint;
+    sa.sa_flags = 0;
+    sigemptyset(&sa.sa_mask);
+    sigaction(SIGINT, &sa, NULL);
+
+    // SIGPIPE handler
+    sa.sa_handler = handle_sigpipe;
+    sigaction(SIGPIPE, &sa, NULL);
+
+    printf("\033[?1049h");
     fflush(stdout);
 }
 
@@ -679,13 +688,38 @@ void editor_insert_char(int ch) {
     pthread_mutex_lock(&editor_mutex);
     BufferLine *line = buffer->lines[buffer->position_y];
     buffer_line_realloc_for_capacity(line, line->char_count + 1);
-    Char new = line->chars[line->char_count];
-    new.value = ch;
+
+    int should_underline = 0;
+    // Predict underlining based on surrounding characters and their syntax node.
+    if (buffer->parser && buffer->tree && buffer->position_x > 0 && buffer->position_x < line->char_count) {
+        Char *prev_char = &line->chars[buffer->position_x - 1];
+        Char *next_char = &line->chars[buffer->position_x];
+
+        if (prev_char->underline && next_char->underline) {
+            TSNode root_node = ts_tree_root_node(buffer->tree);
+            TSPoint prev_point = {(uint32_t)buffer->position_y, (uint32_t)buffer->position_x - 1};
+            TSPoint next_point = {(uint32_t)buffer->position_y, (uint32_t)buffer->position_x};
+            
+            TSNode prev_leaf = ts_node_named_descendant_for_point_range(root_node, prev_point, prev_point);
+            TSNode next_leaf = ts_node_named_descendant_for_point_range(root_node, next_point, next_point);
+
+            if (!ts_node_is_null(prev_leaf) && ts_node_eq(prev_leaf, next_leaf)) {
+                should_underline = 1;
+            }
+        }
+    }
+
+    Char new = (Char){
+        .value = ch,
+        .underline = should_underline,
+    };
+
     if (buffer->position_x < line->char_count) {
-        memmove(&line->chars[buffer->position_x + 1], 
-                &line->chars[buffer->position_x], 
+        memmove(&line->chars[buffer->position_x + 1],
+                &line->chars[buffer->position_x],
                 (line->char_count - buffer->position_x) * sizeof(Char));
     }
+
     line->chars[buffer->position_x] = new;
     line->char_count++;
     buffer->position_x++;
@@ -693,19 +727,18 @@ void editor_insert_char(int ch) {
     editor_did_change_buffer();
 
     if (buffer->parser) {
-        // Calculate byte position for the edit
         uint32_t start_byte = 0;
         for (int i = 0; i < buffer->position_y; i++) {
-            start_byte += buffer->lines[i]->char_count + (i < buffer->line_count - 1 ? 1 : 0); // Only add newline if not last line
+            start_byte += buffer->lines[i]->char_count + 1;
         }
         start_byte += buffer->position_x - 1;
         ts_tree_edit(buffer->tree, &(TSInputEdit){
             .start_byte = start_byte,
             .old_end_byte = start_byte,
             .new_end_byte = start_byte + 1,
-            .start_point = { (uint32_t)buffer->position_y, (uint32_t)(buffer->position_x - 1) },
-            .old_end_point = { (uint32_t)buffer->position_y, (uint32_t)(buffer->position_x - 1) },
-            .new_end_point = { (uint32_t)buffer->position_y, (uint32_t)buffer->position_x }
+            .start_point = {(uint32_t)buffer->position_y, (uint32_t)(buffer->position_x - 1)},
+            .old_end_point = {(uint32_t)buffer->position_y, (uint32_t)(buffer->position_x - 1)},
+            .new_end_point = {(uint32_t)buffer->position_y, (uint32_t)buffer->position_x}
         });
         line->needs_highlight = 1;
         buffer->needs_parse = 1;

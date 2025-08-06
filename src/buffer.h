@@ -43,6 +43,7 @@ typedef struct {
     TSNode root;
     TSQuery *query;
     TSQueryCursor *cursor;
+    int diagnostics_version;
 } Buffer;
 
 void buffer_line_apply_syntax_highlighting(Buffer *b, BufferLine *line, uint32_t start_byte, Theme *theme);

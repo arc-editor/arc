@@ -2,65 +2,96 @@
 
 #include <stdio.h>
 #include <string.h>
-#include <stdlib.h>
 #include "theme.h"
 #include "lsp.h"
 
-static int popup_visible = 0;
-static char *popup_text = NULL;
-static int popup_line;
-static int popup_col_start;
-static int popup_col_end;
-static DiagnosticSeverity popup_severity;
+typedef struct {
+    const char* text;
+    int length;
+} DrawableLine;
 
-void ui_show_popup(const char *text, int line, int col_start, int col_end, DiagnosticSeverity severity) {
-    if (popup_text) {
-        free(popup_text);
+void ui_draw_popup(const Theme* theme, DiagnosticSeverity severity, const char *popup_text, int cursor_y, int screen_cols, int screen_rows) {
+    #define MAX_POPUP_LINES 20
+    DrawableLine lines[MAX_POPUP_LINES];
+    int num_lines = 0;
+    int max_line_len = 0;
+    int current_line_len = 0;
+    const char* temp_ptr = popup_text;
+    while (*temp_ptr) {
+        if (*temp_ptr == '\n') {
+            if (current_line_len > max_line_len) {
+                max_line_len = current_line_len;
+            }
+            current_line_len = 0;
+        } else {
+            current_line_len++;
+        }
+        temp_ptr++;
     }
-    popup_text = strdup(text);
-    popup_visible = 1;
-    popup_line = line;
-    popup_col_start = col_start;
-    popup_col_end = col_end;
-    popup_severity = severity;
-}
-
-void ui_hide_popup(void) {
-    if (popup_text) {
-        free(popup_text);
-        popup_text = NULL;
-    }
-    popup_visible = 0;
-}
-
-int ui_is_popup_visible(void) {
-    return popup_visible;
-}
-
-int ui_popup_line(void) {
-    return popup_line;
-}
-
-int ui_popup_col_start(void) {
-    return popup_col_start;
-}
-
-int ui_popup_col_end(void) {
-    return popup_col_end;
-}
-
-void ui_draw_popup(const Theme* theme, int diag_start_x __attribute__((unused)), int diag_end_x __attribute__((unused)), int cursor_y, int screen_cols, int screen_rows) {
-    if (!popup_visible || !popup_text) {
-        return;
+    if (current_line_len > max_line_len) {
+        max_line_len = current_line_len;
     }
 
     int max_width = screen_cols / 2;
+    int width = (max_line_len + 4 < max_width) ? max_line_len + 4 : max_width;
 
-    int text_len = strlen(popup_text);
-    int width = (text_len + 4 < max_width) ? text_len + 4 : max_width;
-    int num_lines = (text_len / (width - 4)) + 1;
-    int height = num_lines + 1;
+    if (width < 5) width = 5;
+    if (width > screen_cols) width = screen_cols;
+    
+    int content_width = width - 4;
 
+    const char* line_start = popup_text;
+    while (*line_start && num_lines < MAX_POPUP_LINES) {
+        const char* line_end = strchr(line_start, '\n');
+        const char* segment_end = line_end ? line_end : line_start + strlen(line_start);
+        int segment_len = segment_end - line_start;
+
+        if (segment_len == 0) { // Handle empty lines (e.g., "a\n\nb")
+             lines[num_lines].text = line_start;
+             lines[num_lines].length = 0;
+             num_lines++;
+        } else {
+            const char* segment_ptr = line_start;
+            while(segment_ptr < segment_end) {
+                int remaining_in_segment = segment_end - segment_ptr;
+                int chunk_len = (remaining_in_segment > content_width) ? content_width : remaining_in_segment;
+                
+                // If we're breaking a word in the middle (not at a space), add a hyphen
+                if (chunk_len < remaining_in_segment && 
+                    segment_ptr[chunk_len-1] != ' ' && 
+                    segment_ptr[chunk_len] != ' ') {
+                    // Reduce chunk length by 1 to make room for hyphen
+                    if (chunk_len > 1) {
+                        chunk_len--;
+                    }
+                    // Add the chunk with hyphen
+                    if (num_lines < MAX_POPUP_LINES) {
+                        lines[num_lines].text = segment_ptr;
+                        lines[num_lines].length = chunk_len;
+                        // Add hyphen at the end (we'll print it with the text)
+                        num_lines++;
+                    }
+                    segment_ptr += chunk_len;
+                } else {
+                    if (num_lines < MAX_POPUP_LINES) {
+                        lines[num_lines].text = segment_ptr;
+                        lines[num_lines].length = chunk_len;
+                        num_lines++;
+                    }
+                    segment_ptr += chunk_len;
+                }
+            }
+        }
+        
+        if (line_end) {
+            line_start = line_end + 1; // Move to the start of the next line
+        } else {
+            break; // No more newlines, we're done
+        }
+    }
+    if (num_lines == 0 && strlen(popup_text) == 0) num_lines = 1; // Popup for empty string
+
+    int height = num_lines + 2;
     int x = screen_cols - width;
     int y;
 
@@ -74,7 +105,7 @@ void ui_draw_popup(const Theme* theme, int diag_start_x __attribute__((unused)),
     if (y < 1) y = 1;
 
     const Style *style;
-    switch (popup_severity) {
+    switch (severity) {
         case LSP_DIAGNOSTIC_SEVERITY_ERROR:
             style = &theme->diagnostics_error;
             break;
@@ -112,14 +143,19 @@ void ui_draw_popup(const Theme* theme, int diag_start_x __attribute__((unused)),
     }
     printf("\x1b[0m");
 
-    // Draw text
     printf("\x1b[38;2;%d;%d;%dm", style->fg_r, style->fg_g, style->fg_b);
-    int max_line_len = width - 4;
     for (int i = 0; i < num_lines; i++) {
         printf("\x1b[%d;%dH", y + 1 + i, x + 2);
-        int remaining_len = text_len - (i * max_line_len);
-        int line_len = (remaining_len > max_line_len) ? max_line_len : remaining_len;
-        printf("%.*s", line_len, popup_text + (i * max_line_len));
+        if (lines[i].length > 0) {
+            printf("%.*s", lines[i].length, lines[i].text);
+            // Add hyphen if we're at the end of a broken word
+            if (i < num_lines - 1 && 
+                lines[i].text[lines[i].length-1] != ' ' && 
+                lines[i+1].text[0] != ' ' &&
+                lines[i].text + lines[i].length == lines[i+1].text) {
+                printf("-");
+            }
+        }
     }
     printf("\x1b[0m");
 }

@@ -4,9 +4,6 @@
 #include "editor.h"
 #include "picker_file.h"
 #include "picker_buffer.h"
-#include "lsp.h"
-#include "ui.h"
-#include "log.h"
 
 EditorCommand cmd;
 EditorCommand prev_cmd;
@@ -40,10 +37,6 @@ void dispatch_command() {
 
 int normal_handle_input(char ch) {
   if (ch == 27) {
-      if (ui_is_popup_visible()) {
-          ui_hide_popup();
-          editor_request_redraw();
-      }
       editor_command_reset(&cmd);
       return 1;
   }
