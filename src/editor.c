@@ -1212,7 +1212,7 @@ void range_expand_B(BufferLine *line, int count, Range *range) {
     }
 }
 
-void get_target_range(EditorCommand *cmd, Range *range) {
+static void get_target_range(EditorCommand *cmd, Range *range) {
     BufferLine *line = buffer->lines[buffer->position_y];
     int count = cmd->count ? cmd->count : 1;
     range->x_start = buffer->position_x;
@@ -1258,7 +1258,7 @@ void get_target_range(EditorCommand *cmd, Range *range) {
                 }
                 if (moved) {
                     range_expand_up(&line, range);
-                    range->x_end = line->char_count;
+                    range->x_end = line->char_count - 1;
                 }
             }
         case 'w':
@@ -1273,6 +1273,7 @@ void get_target_range(EditorCommand *cmd, Range *range) {
                     range->x_start = tmp;
                 }
                 range_expand_e(line, count, range);
+                range->x_end++;
                 break;
             }
             while (count) {
@@ -1312,6 +1313,7 @@ void get_target_range(EditorCommand *cmd, Range *range) {
                 range->x_end = range->x_start;
                 range->x_start = tmp;
                 range_expand_E(line, count, range);
+                range->x_end++;
                 break;
             }
             while (count) {
@@ -1341,10 +1343,12 @@ void get_target_range(EditorCommand *cmd, Range *range) {
                 range->y_end = buffer->line_count - 1;                
             } else {
                 range_expand_e(line, count, range);
+                range->x_end++;
             }
             break;
         case 'E':
             range_expand_E(line, count, range);
+            range->x_end++;
             break;
         case 'b':
             if (cmd->action == 'g') {
@@ -1413,7 +1417,7 @@ void range_delete(Buffer *b, Range *range) {
     int top = range_get_top_boundary(range);
     int bottom = range_get_bottom_boundary(range);
     if (left == right && top == bottom) return;
-    if (right == range->x_end) right++;
+    // if (top == bottom && right == range->x_end) right++;
     TSInputEdit edit;
     if (b->parser) {
         edit.start_byte = 0;
@@ -1457,7 +1461,7 @@ void range_delete(Buffer *b, Range *range) {
     }
 
     // trim top line
-    int bottom_remaining_chars = b->lines[bottom]->char_count - right + 1;
+    int bottom_remaining_chars = b->lines[bottom]->char_count - right;
     int new_char_count = left + bottom_remaining_chars;
     buffer_line_realloc_for_capacity(b->lines[top], new_char_count);
     memcpy(&b->lines[top]->chars[left], &b->lines[bottom]->chars[right], bottom_remaining_chars * sizeof(Char));
@@ -1490,6 +1494,7 @@ void editor_command_exec(EditorCommand *cmd) {
     pthread_mutex_lock(&editor_mutex);
     Range range;
     get_target_range(cmd, &range);
+    log_info("get targ range: (%d, %d), (%d, %d)", range.y_start, range.x_start, range.y_end, range.x_end);
     int left = range_get_left_boundary(&range);
     int right = range_get_right_boundary(&range);
     if (!cmd->action) { // target only

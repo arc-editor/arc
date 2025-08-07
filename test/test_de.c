@@ -8,12 +8,12 @@
 void test_de(void) {
     printf("  - test_de\n");
 
-    const char* filename = "test_de_fixture.txt";
+    const char* filename = "test.txt";
     FILE *fp = fopen(filename, "w");
     fprintf(fp, "hello world");
     fclose(fp);
 
-    editor_init((char*)filename);
+    editor_open((char*)filename);
 
     Buffer *buffer = editor_get_active_buffer();
     buffer->position_x = 3;

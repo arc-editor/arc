@@ -5,25 +5,25 @@
 #include <stdio.h>
 #include <unistd.h>
 
-void test_dw(void) {
-    printf("  - test_dw\n");
+void test_mid_file_single_line_dp(void) {
+    printf("  - test_mid_file_single_line_dp\n");
 
     const char* filename = "test.txt";
     FILE *fp = fopen(filename, "w");
-    fprintf(fp, "hello world");
+    fprintf(fp, "foo\n\nbar\n\nbat");
     fclose(fp);
 
     editor_open((char*)filename);
 
     Buffer *buffer = editor_get_active_buffer();
     buffer->position_x = 0;
-    buffer->position_y = 0;
+    buffer->position_y = 2;
 
     normal_handle_input('d');
-    normal_handle_input('w');
+    normal_handle_input('p');
 
     char *result = buffer_get_content(buffer);
-    ASSERT_STRING_EQUAL(result, " world");
+    ASSERT_STRING_EQUAL(result, "foo\n\n\nbat");
 
     free(result);
     remove(filename);
