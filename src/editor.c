@@ -342,6 +342,7 @@ void draw_buffer(Diagnostic *diagnostics, int diagnostics_count, int update_diag
             }
             chars_to_print--;
         }
+        editor_set_style(line_style, 0, 1);
         while (chars_to_print > 0) {
             putchar(' ');
             chars_to_print--;
