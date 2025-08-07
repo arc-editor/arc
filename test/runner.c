@@ -178,7 +178,7 @@ int main(void) {
     test_visual_action_helper("test_visual_delete", "hello world", 0, 0, "lld", "lo world");
     test_visual_action_helper("test_visual_delete_backward", "hello world", 0, 3, "hhd", "ho world");
     test_visual_action_helper("test_visual_delete_backward_across_line", "foo\nbar", 1, 1, "kld", "for");
-    test_visual_action_helper("test_visual_delete_forward_across_line", "foo\nbar", 0, 0, "jd", "far");
+    test_visual_action_helper("test_visual_delete_forward_across_line", "foo\nbar", 0, 1, "jhd", "far");
 
     if (g_test_failures == 0) {
         printf("All tests passed.\n");

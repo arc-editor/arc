@@ -212,10 +212,10 @@ void draw_statusline() {
 static int is_in_selection(int y, int x) {
     Buffer *buf = buffer;
     int start_y = buf->selection_start_y;
-    int start_x = buf->selection_start_x + 1;
+    int start_x = buf->selection_start_x;
     int end_y = buf->position_y;
     int end_x = buf->position_x;
-    if (end_x > start_x) start_x--;
+    if ((end_x <= start_x && end_y <= start_y) || end_y < start_y) start_x++;
 
     if (start_y > end_y || (start_y == end_y && start_x > end_x)) {
         int tmp_y = start_y;
