@@ -399,9 +399,7 @@ void buffer_init(Buffer *b, char *file_name) {
         } else {
             BufferLine *line = b->lines[b->line_count - 1];
             buffer_line_realloc_for_capacity(line, line->char_count + 1);
-            Char new_char = line->chars[line->char_count];
-            new_char.value = ch;
-            new_char.underline = 0;
+            Char new_char = { .value = ch, .underline = 0 };
             line->chars[line->char_count] = new_char;
             line->char_count++;
         }
