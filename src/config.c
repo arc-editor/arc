@@ -129,7 +129,7 @@ char *get_path(const char *partial_format, ...) {
     return full_path;
 }
 
-TSLanguage *config_load_language(char *name) {
+TSLanguage *config_load_language(const char *name) {
     if (name == NULL) return NULL;
     char *parser_path = get_path("/grammars/%s.so", name);
     if (!parser_path) {
@@ -177,7 +177,7 @@ TSLanguage *config_load_language(char *name) {
     return fn();
 }
 
-TSQuery *config_load_highlights(TSLanguage *language, char *name) {
+TSQuery *config_load_highlights(TSLanguage *language, const char *name) {
     if (name == NULL || language == NULL) return NULL;
     char *highlights_path = get_path("/highlights/%s.scm", name);
     if (!highlights_path) {

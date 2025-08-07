@@ -3,7 +3,7 @@ LD = $(CC)
 CFLAGS = -O3 -march=native -Wall -Wextra -std=c23 -Iexternal/tree-sitter/lib/include -Iexternal/tomlc17/src -Iexternal/cjson -Isrc
 LDFLAGS = -lm
 SRC_DIR = src
-SRCS = $(wildcard $(SRC_DIR)/*.c)
+SRCS = $(wildcard $(SRC_DIR)/*.c) src/language.c
 BUILD_DIR = build
 OBJS = $(addprefix $(BUILD_DIR)/, $(patsubst %.c,%.o,$(notdir $(SRCS))))
 EXEC_NAME = arc

@@ -10,8 +10,8 @@ typedef struct {
 
 typedef TSLanguage *(*TSLanguageFn)(void);
 
-TSLanguage *config_load_language(char *name);
-TSQuery *config_load_highlights(TSLanguage *language, char *name);
+TSLanguage *config_load_language(const char *name);
+TSQuery *config_load_highlights(TSLanguage *language, const char *name);
 void config_load_theme(char *name, Theme *theme);
 void config_load(Config *config);
 void config_destroy(Config *config);

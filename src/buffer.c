@@ -316,12 +316,7 @@ void buffer_line_destroy(BufferLine *line) {
     free(line->chars);
 }
 
-char *get_file_extension(const char *file_name) {
-    if (file_name == NULL) return NULL;
-    char *dot = strrchr(file_name, '.');
-    if (!dot || dot == file_name) return NULL;
-    return dot + 1;
-}
+#include "language.h"
 
 void buffer_init(Buffer *b, char *file_name) {
     b->diagnostics_version = 0;
@@ -363,7 +358,7 @@ void buffer_init(Buffer *b, char *file_name) {
         return;
     }
 
-    char *lang_name = get_file_extension(file_name);
+    const char *lang_name = get_treesitter_language_name_from_file_name(file_name);
     TSLanguage *lang = config_load_language(lang_name);
     if (lang) {
         b->parser = ts_parser_new();
