@@ -247,7 +247,13 @@ static void get_language_id_and_server(const char *file_name, const char **langu
     }
 }
 
-void lsp_init(const char *file_name) {
+void lsp_init(void) {
+  // This function is now empty, but we keep it for future global LSP setup
+}
+
+void lsp_start_server(const char *file_name) {
+  lsp_shutdown();
+
   const char *language_id;
   const char *lsp_server_cmd;
   get_language_id_and_server(file_name, &language_id, &lsp_server_cmd);
@@ -256,6 +262,7 @@ void lsp_init(const char *file_name) {
     log_info("lsp.lsp_init: no LSP server for file %s", file_name ? file_name : "(null)");
     return;
   }
+
   if (pipe(to_server_pipe) == -1 || pipe(from_server_pipe) == -1) {
     log_error("lsp.lsp_init: pipe failed");
     return;
