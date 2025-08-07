@@ -139,6 +139,8 @@ int normal_handle_input(char ch) {
         buffer->selection_start_x = buffer->position_x;
         buffer->selection_start_y = buffer->position_y;
         editor_handle_input = visual_handle_input;
+        visual_mode_enter();
+        editor_request_redraw();
       }
       break;
     case 'x':

@@ -321,7 +321,7 @@ void draw_buffer(Diagnostic *diagnostics, int diagnostics_count, int update_diag
             int in_selection = is_visual_mode && is_in_selection(row, ch_idx);
 
             if (in_selection) {
-                style = &current_theme.selection;
+                style = &current_theme.content_selection;
             }
 
             if (ch.underline) {
@@ -1065,7 +1065,7 @@ void editor_move_n_lines_up(int n) {
 }
 
 // Helper function to check if character is a word character
-static int is_word_char(char ch) {
+int is_word_char(char ch) {
     return (ch >= 'a' && ch <= 'z') || 
            (ch >= 'A' && ch <= 'Z') || 
            (ch >= '0' && ch <= '9') || 
@@ -1073,16 +1073,9 @@ static int is_word_char(char ch) {
 }
 
 // Helper function to check if character is whitespace
-static int is_whitespace(char ch) {
+int is_whitespace(char ch) {
     return ch == ' ' || ch == '\t' || ch == '\n';
 }
-
-typedef struct {
-    int x_start;
-    int x_end;
-    int y_start;
-    int y_end;
-} Range;
 
 // returns 1 if changed lines, 0 otherwise
 int range_expand_right(BufferLine **line, Range *range) {
@@ -1560,7 +1553,31 @@ void range_delete(Buffer *b, Range *range, EditorCommand *cmd) {
 void editor_command_exec(EditorCommand *cmd) {
     pthread_mutex_lock(&editor_mutex);
     Range range;
-    get_target_range(cmd, &range);
+
+    if (editor_handle_input == visual_handle_input) {
+        if (cmd->target == 'v') { // Action
+            range.x_start = buffer->selection_start_x;
+            range.y_start = buffer->selection_start_y;
+            range.x_end = buffer->position_x;
+            range.y_end = buffer->position_y;
+            if (range.x_end >= range.x_start) {
+                range.x_end++;
+            } else {
+                range.x_start++;
+            }
+        } else { // Motion
+            if (cmd->count == 0) cmd->count = 1;
+            get_target_range(cmd, &range);
+            buffer->position_x = range.x_end;
+            buffer->position_y = range.y_end;
+            editor_request_redraw();
+            pthread_mutex_unlock(&editor_mutex);
+            return;
+        }
+    } else { // Normal mode
+        get_target_range(cmd, &range);
+    }
+
     log_info("get targ range: (%d, %d), (%d, %d)", range.y_start, range.x_start, range.y_end, range.x_end);
     if (cmd->action) {
         switch (cmd->target) {
@@ -1617,6 +1634,9 @@ void editor_command_exec(EditorCommand *cmd) {
     if (cmd->action == 'c') {
         normal_insertion_registration_init();
         editor_handle_input = insert_handle_input;
+    }
+    if (editor_handle_input == visual_handle_input) {
+        editor_handle_input = normal_handle_input;
     }
     editor_command_reset(cmd);
     pthread_mutex_unlock(&editor_mutex);

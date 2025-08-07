@@ -64,7 +64,7 @@ typedef struct {
     Style content_line_number;
     Style content_line_number_active;
     Style content_line_number_sticky;
-    Style selection;
+    Style content_selection;
 
     Style statusline_mode_insert;
     Style statusline_mode_normal;
