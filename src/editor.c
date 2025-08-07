@@ -1213,9 +1213,6 @@ void range_expand_B(BufferLine *line, int count, Range *range) {
 }
 
 void get_target_range(EditorCommand *cmd, Range *range) {
-#ifdef TEST_BUILD
-    printf("get_target_range: action=%c, target=%c, count=%d, y=%d, x=%d\n", cmd->action, cmd->target, cmd->count, buffer->position_y, buffer->position_x);
-#endif
     BufferLine *line = buffer->lines[buffer->position_y];
     int count = cmd->count ? cmd->count : 1;
     range->x_start = buffer->position_x;
@@ -1415,7 +1412,6 @@ void range_delete(Buffer *b, Range *range) {
     int right = range_get_right_boundary(range);
     int top = range_get_top_boundary(range);
     int bottom = range_get_bottom_boundary(range);
-    log_info("get range: (%d, %d) (%d, %d)", top, left, bottom, right);
     if (left == right && top == bottom) return;
     if (right == range->x_end) right++;
     TSInputEdit edit;
@@ -1460,36 +1456,18 @@ void range_delete(Buffer *b, Range *range) {
         ts_tree_edit(b->tree, &edit);
     }
 
-    // truncate start line
-    // if (!left) {
-    //     top--;
-    // } else {
-        // TODO: .
-        // int bottom_remaining_chars = b->lines[bottom]->char_count - right;
-        // int new_char_count = left + bottom_remaining_chars;
-        // buffer_line_realloc_for_capacity(b->lines[top], new_char_count);
-        // memcpy(&b->lines[top]->chars[left], b->lines[bottom]->chars, bottom_remaining_chars * sizeof(Char));
-        // b->lines[top]->char_count = new_char_count;
-
-        // memcpy(&b->lines[bottom]->chars[0], &b->lines[bottom]->chars[right], right * sizeof(Char));
-        // b->lines[bottom]->char_count = bottom_remaining_chars;
-    // }
-
     // trim top line
     int bottom_remaining_chars = b->lines[bottom]->char_count - right + 1;
     int new_char_count = left + bottom_remaining_chars;
     buffer_line_realloc_for_capacity(b->lines[top], new_char_count);
     memcpy(&b->lines[top]->chars[left], &b->lines[bottom]->chars[right], bottom_remaining_chars * sizeof(Char));
     b->lines[top]->char_count = new_char_count;
-    log_info("bottom remaining chars: %d, new ch cnt %d", bottom_remaining_chars, new_char_count);
 
     // cut end line
     int trim_bottom = 1;
     if (right == b->lines[bottom]->char_count) {
         bottom++;
         trim_bottom = 0;
-    } else {
-        // TODO: .
     }
 
     // destroy all completely removed
@@ -1503,7 +1481,6 @@ void range_delete(Buffer *b, Range *range) {
     b->line_count -= lines_to_shift;
 
     if (trim_bottom) {
-        log_info("trim bottom: %d", lines_to_shift); // 0
         memcpy(&b->lines[bottom]->chars[0], &b->lines[bottom]->chars[right], right * sizeof(Char));
         b->lines[bottom]->char_count = bottom_remaining_chars;
     }

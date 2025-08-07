@@ -5,10 +5,10 @@
 #include <stdio.h>
 #include <unistd.h>
 
-void test_dw(void) {
-    printf("  - test_dw\n");
+void test_de(void) {
+    printf("  - test_de\n");
 
-    const char* filename = "test_dw_fixture.txt";
+    const char* filename = "test_de_fixture.txt";
     FILE *fp = fopen(filename, "w");
     fprintf(fp, "hello world");
     fclose(fp);
@@ -16,14 +16,14 @@ void test_dw(void) {
     editor_init((char*)filename);
 
     Buffer *buffer = editor_get_active_buffer();
-    buffer->position_x = 0;
+    buffer->position_x = 3;
     buffer->position_y = 0;
 
     normal_handle_input('d');
-    normal_handle_input('w');
+    normal_handle_input('e');
 
     char *result = buffer_get_content(buffer);
-    ASSERT_STRING_EQUAL(result, " world");
+    ASSERT_STRING_EQUAL(result, "hel world");
 
     free(result);
     remove(filename);
