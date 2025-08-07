@@ -1371,6 +1371,58 @@ static void get_target_range(EditorCommand *cmd, Range *range) {
         case 'h':
             range->x_end = 0;
             break;
+        case 'f':
+            for (int i = 0; i < count; i++) {
+                int found = 0;
+                for (int j = range->x_end + 1; j < line->char_count; j++) {
+                    if (line->chars[j].value == cmd->specifier) {
+                        range->x_end = j;
+                        found = 1;
+                        break;
+                    }
+                }
+                if (!found) break;
+            }
+            break;
+        case 'F':
+            for (int i = 0; i < count; i++) {
+                int found = 0;
+                for (int j = range->x_end - 1; j >= 0; j--) {
+                    if (line->chars[j].value == cmd->specifier) {
+                        range->x_end = j;
+                        found = 1;
+                        break;
+                    }
+                }
+                if (!found) break;
+            }
+            break;
+        case 't':
+            for (int i = 0; i < count; i++) {
+                int found = 0;
+                for (int j = range->x_end + 1; j < line->char_count; j++) {
+                    if (line->chars[j].value == cmd->specifier) {
+                        range->x_end = j - 1;
+                        found = 1;
+                        break;
+                    }
+                }
+                if (!found) break;
+            }
+            break;
+        case 'T':
+            for (int i = 0; i < count; i++) {
+                int found = 0;
+                for (int j = range->x_end - 1; j >= 0; j--) {
+                    if (line->chars[j].value == cmd->specifier) {
+                        range->x_end = j + 1;
+                        found = 1;
+                        break;
+                    }
+                }
+                if (!found) break;
+            }
+            break;
     }
 }
 
@@ -1495,6 +1547,22 @@ void editor_command_exec(EditorCommand *cmd) {
     Range range;
     get_target_range(cmd, &range);
     log_info("get targ range: (%d, %d), (%d, %d)", range.y_start, range.x_start, range.y_end, range.x_end);
+    if (cmd->action) {
+        switch (cmd->target) {
+            case 'f':
+            case 't':
+                if (range.x_end < buffer->lines[range.y_end]->char_count) {
+                    range.x_end++;
+                }
+                break;
+            case 'F':
+            case 'T':
+                if (range.x_start < buffer->lines[range.y_start]->char_count) {
+                    range.x_start++;
+                }
+                break;
+        }
+    }
     int left = range_get_left_boundary(&range);
     int right = range_get_right_boundary(&range);
     if (!cmd->action) { // target only
