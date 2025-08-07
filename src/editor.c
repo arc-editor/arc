@@ -212,10 +212,10 @@ void draw_statusline() {
 static int is_in_selection(int y, int x) {
     Buffer *buf = buffer;
     int start_y = buf->selection_start_y;
-    int start_x = buf->selection_start_x + 1;
+    int start_x = buf->selection_start_x;
     int end_y = buf->position_y;
     int end_x = buf->position_x;
-    if (end_x > start_x) start_x--;
+    if ((end_x <= start_x && end_y <= start_y) || end_y < start_y) start_x++;
 
     if (start_y > end_y || (start_y == end_y && start_x > end_x)) {
         int tmp_y = start_y;
@@ -1248,7 +1248,14 @@ static void get_target_range(EditorCommand *cmd, Range *range) {
         range->y_start = buffer->selection_start_y;
         range->x_end = buffer->position_x;
         range->y_end = buffer->position_y;
-        if (range->x_end >= range->x_start) {
+        if (range->y_start == range->y_end) {
+            if (range->x_end >= range->x_start) {
+                range->x_end++;
+            } else {
+                range->x_start++;
+            }
+        } else if (range->y_end > range->y_start) {
+            range->x_start++;
             range->x_end++;
         } else {
             range->x_start++;
@@ -1554,15 +1561,22 @@ void range_delete(Buffer *b, Range *range, EditorCommand *cmd) {
     memmove(&b->lines[top]->chars[left], &b->lines[bottom]->chars[right], bottom_remaining_chars * sizeof(Char));
     b->lines[top]->char_count = new_char_count;
 
-    // destroy all completely removed
-    int lines_to_shift = bottom - top;
-    for (int i = top + 1; i < b->line_count - lines_to_shift; i++) {
-        if (i < bottom) {
+    // destroy all completely removed lines and shift
+    if (bottom > top) {
+        for (int i = top + 1; i < bottom; i++) {
             buffer_line_destroy(b->lines[i]);
+            free(b->lines[i]);
         }
-        b->lines[i] = b->lines[i + lines_to_shift];
+
+        buffer_line_destroy(b->lines[bottom]);
+        free(b->lines[bottom]);
+
+        int lines_to_remove = bottom - top;
+        if (b->line_count > bottom) {
+            memmove(&b->lines[top + 1], &b->lines[bottom + 1], (b->line_count - bottom - 1) * sizeof(BufferLine *));
+        }
+        b->line_count -= lines_to_remove;
     }
-    b->line_count -= lines_to_shift;
 }
 
 void editor_command_exec(EditorCommand *cmd) {
