@@ -283,11 +283,11 @@ void lsp_start_server(const char *file_name) {
     dup2(from_server_pipe[1], STDOUT_FILENO);
     close(from_server_pipe[1]);
 
-    int dev_null = open("/dev/null", O_WRONLY);
-    if (dev_null != -1) {
-      dup2(dev_null, STDERR_FILENO);
-      close(dev_null);
-    }
+    // int dev_null = open("/dev/null", O_WRONLY);
+    // if (dev_null != -1) {
+    //   dup2(dev_null, STDERR_FILENO);
+    //   close(dev_null);
+    // }
 
     execlp(lsp_server_cmd, lsp_server_cmd, NULL);
     log_error("lsp.lsp_init: execlp failed for %s", lsp_server_cmd);
