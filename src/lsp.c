@@ -253,7 +253,7 @@ void lsp_init(const char *file_name) {
   get_language_id_and_server(file_name, &language_id, &lsp_server_cmd);
 
   if (!lsp_server_cmd) {
-    log_info("lsp.lsp_init: no LSP server for file %s", file_name);
+    log_info("lsp.lsp_init: no LSP server for file %s", file_name ? file_name : "(null)");
     return;
   }
   if (pipe(to_server_pipe) == -1 || pipe(from_server_pipe) == -1) {
