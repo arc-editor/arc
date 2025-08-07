@@ -91,6 +91,7 @@ void handle_sigwinch(int arg __attribute__((unused))) {
     atomic_store(&resize_requested, 1);
 }
 
+#ifndef TEST_BUILD
 void init_terminal_size() {
     struct winsize ws;
     if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1) {
@@ -109,6 +110,9 @@ void init_terminal_size() {
         exit(1);
     }
 }
+#else
+void init_terminal_size() {}
+#endif
 
 void check_for_resize() {
     if (atomic_exchange(&resize_requested, 0)) {
@@ -507,6 +511,7 @@ void handle_sigpipe(int sig) {
     (void)sig; // Ignore SIGPIPE
 }
 
+#ifndef TEST_BUILD
 void setup_terminal() {
     tcgetattr(STDIN_FILENO, &orig_termios);
     atexit(reset_terminal);
@@ -531,6 +536,9 @@ void setup_terminal() {
     printf("\033[?1049h");
     fflush(stdout);
 }
+#else
+void setup_terminal() {}
+#endif
 
 void editor_init(char *file_name) {
     init_terminal_size();
