@@ -33,12 +33,8 @@ void *lsp_reader_thread_func(void *arg __attribute__((unused))) {
   while (1) {
     cJSON *message = lsp_read_message();
     if (!message) {
-      log_info("lsp_reader_thread_func: lsp_read_message returned NULL");
       break; // Server closed connection
     }
-    char *unformatted = cJSON_PrintUnformatted(message);
-    log_info("lsp_reader_thread_func: received message: %s", unformatted);
-    free(unformatted);
 
     cJSON *method = cJSON_GetObjectItem(message, "method");
     if (method && strcmp(method->valuestring, "textDocument/publishDiagnostics") == 0) {
