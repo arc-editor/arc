@@ -91,6 +91,20 @@ int main(void) {
     // ================ target only commands ================
     test_motion_helper("test_w_motion", "hello world", 0, 0, "w", 0, 6);
 
+    // ================ find commands ================
+    test_motion_helper("test_f_motion", "hello world", 0, 0, "fl", 0, 2);
+    test_motion_helper("test_f_motion_no_match", "hello world", 0, 0, "fz", 0, 0);
+    test_motion_helper("test_2f_motion", "hello world, hello", 0, 0, "2fl", 0, 3);
+    test_motion_helper("test_F_motion", "hello world", 0, 5, "Fh", 0, 0);
+    test_motion_helper("test_t_motion", "hello world", 0, 0, "tw", 0, 5);
+    test_motion_helper("test_T_motion", "hello world", 0, 5, "Th", 0, 1);
+
+    // ================ find with delete ================
+    test_helper("test_df_motion", "hello world", 0, 0, "dfl", "lo world");
+    test_helper("test_dF_motion", "hello world", 0, 5, "dFh", "world");
+    test_helper("test_dt_motion", "hello world", 0, 0, "dtw", "world");
+    test_helper("test_dT_motion", "hello world", 0, 5, "dTh", "hworld");
+
     printf("All tests passed.\n");
     return 0;
 }

@@ -12,6 +12,7 @@ char insertion_buffer[64];
 int insertion_buffer_count = 0;
 int is_insertion_bufferable = 1;
 int is_space_mode = 0;
+int is_waiting_for_specifier = 0;
 
 void normal_register_insertion(char ch) {
     if (is_insertion_bufferable) {
@@ -72,6 +73,13 @@ int normal_handle_input(char ch) {
     return 1;
   }
 
+  if (is_waiting_for_specifier) {
+    cmd.specifier = ch;
+    dispatch_command();
+    is_waiting_for_specifier = 0;
+    return 1;
+  }
+
   if (ch >= '0' && ch <= '9') {
     if (cmd.count) {
       cmd.count = cmd.count * 10 + (ch - '0');
@@ -83,6 +91,13 @@ int normal_handle_input(char ch) {
 
   if (cmd.action) {
     switch (ch) {
+      case 'f':
+      case 'F':
+      case 't':
+      case 'T':
+        cmd.target = ch;
+        is_waiting_for_specifier = 1;
+        break;
       case 'W':
       case 'w':
       case 'e':
@@ -94,8 +109,6 @@ int normal_handle_input(char ch) {
       case 'p':
         cmd.target = ch;
         dispatch_command();
-      default:
-        editor_command_reset(&cmd);
         break;
     }
     return 1;
@@ -151,6 +164,13 @@ int normal_handle_input(char ch) {
     case 'B':
       cmd.target = ch;
       dispatch_command();
+      break;
+    case 'f':
+    case 'F':
+    case 't':
+    case 'T':
+      cmd.target = ch;
+      is_waiting_for_specifier = 1;
       break;
     case 'c':
     case 'd':
