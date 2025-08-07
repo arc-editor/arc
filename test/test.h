@@ -19,4 +19,6 @@
         exit(1); \
     }
 
+void test_helper(const char* test_name, const char* initial_content, int start_y, int start_x, const char* commands, const char* expected_content);
+
 #endif // TEST_H
