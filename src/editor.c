@@ -540,9 +540,33 @@ void setup_terminal() {
 void setup_terminal() {}
 #endif
 
+static const char* get_language_id(const char *file_name) {
+    if (!file_name) {
+        return NULL;
+    }
+
+    const char *ext = strrchr(file_name, '.');
+    if (!ext) {
+        return NULL;
+    }
+
+    if (strcmp(ext, ".c") == 0 || strcmp(ext, ".h") == 0) {
+        return "c";
+    } else if (strcmp(ext, ".js") == 0) {
+        return "javascript";
+    } else if (strcmp(ext, ".ts") == 0) {
+        return "typescript";
+    } else if (strcmp(ext, ".go") == 0) {
+        return "go";
+    }
+
+    return NULL;
+}
+
 void editor_init(char *file_name) {
     init_terminal_size();
     setup_terminal();
+    lsp_init(file_name);
     buffer_capacity = 1;
     buffers = malloc(sizeof(Buffer*) * buffer_capacity);
     if (!buffers) {
@@ -579,14 +603,17 @@ void editor_open(char *file_name) {
         buffer_set_line_num_width(buffer);
         editor_handle_input = normal_handle_input;
         
-        char absolute_path[PATH_MAX];
-        if (realpath(file_name, absolute_path) != NULL) {
-            char *content = buffer_get_content(buffer);
-            if (content) {
-                char file_uri[PATH_MAX + 7];
-                snprintf(file_uri, sizeof(file_uri), "file://%s", absolute_path);
-                lsp_did_open(file_uri, "c", content);
-                free(content);
+        const char *language_id = get_language_id(file_name);
+        if (language_id) {
+            char absolute_path[PATH_MAX];
+            if (realpath(file_name, absolute_path) != NULL) {
+                char *content = buffer_get_content(buffer);
+                if (content) {
+                    char file_uri[PATH_MAX + 7];
+                    snprintf(file_uri, sizeof(file_uri), "file://%s", absolute_path);
+                    lsp_did_open(file_uri, language_id, content);
+                    free(content);
+                }
             }
         }
 
@@ -613,14 +640,17 @@ void editor_open(char *file_name) {
     buffer_set_line_num_width(buffer);
     editor_handle_input = normal_handle_input;
 
-    char absolute_path[PATH_MAX];
-    if (realpath(file_name, absolute_path) != NULL) {
-        char *content = buffer_get_content(buffer);
-        if (content) {
-            char file_uri[PATH_MAX + 7];
-            snprintf(file_uri, sizeof(file_uri), "file://%s", absolute_path);
-            lsp_did_open(file_uri, "c", content);
-            free(content);
+    const char *language_id = get_language_id(file_name);
+    if (language_id) {
+        char absolute_path[PATH_MAX];
+        if (realpath(file_name, absolute_path) != NULL) {
+            char *content = buffer_get_content(buffer);
+            if (content) {
+                char file_uri[PATH_MAX + 7];
+                snprintf(file_uri, sizeof(file_uri), "file://%s", absolute_path);
+                lsp_did_open(file_uri, language_id, content);
+                free(content);
+            }
         }
     }
 

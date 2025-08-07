@@ -33,8 +33,12 @@ void *lsp_reader_thread_func(void *arg __attribute__((unused))) {
   while (1) {
     cJSON *message = lsp_read_message();
     if (!message) {
+      log_info("lsp_reader_thread_func: lsp_read_message returned NULL");
       break; // Server closed connection
     }
+    char *unformatted = cJSON_PrintUnformatted(message);
+    log_info("lsp_reader_thread_func: received message: %s", unformatted);
+    free(unformatted);
 
     cJSON *method = cJSON_GetObjectItem(message, "method");
     if (method && strcmp(method->valuestring, "textDocument/publishDiagnostics") == 0) {
@@ -215,7 +219,47 @@ cJSON *lsp_read_message() {
     }
 }
 
-void lsp_init(void) {
+static void get_language_id_and_server(const char *file_name, const char **language_id, const char **lsp_server_cmd) {
+    if (!file_name) {
+        *language_id = NULL;
+        *lsp_server_cmd = NULL;
+        return;
+    }
+
+    const char *ext = strrchr(file_name, '.');
+    if (!ext) {
+        *language_id = NULL;
+        *lsp_server_cmd = NULL;
+        return;
+    }
+
+    if (strcmp(ext, ".c") == 0 || strcmp(ext, ".h") == 0) {
+        *language_id = "c";
+        *lsp_server_cmd = "clangd";
+    } else if (strcmp(ext, ".js") == 0) {
+        *language_id = "javascript";
+        *lsp_server_cmd = "typescript-language-server";
+    } else if (strcmp(ext, ".ts") == 0) {
+        *language_id = "typescript";
+        *lsp_server_cmd = "typescript-language-server";
+    } else if (strcmp(ext, ".go") == 0) {
+        *language_id = "go";
+        *lsp_server_cmd = "gopls";
+    } else {
+        *language_id = NULL;
+        *lsp_server_cmd = NULL;
+    }
+}
+
+void lsp_init(const char *file_name) {
+  const char *language_id;
+  const char *lsp_server_cmd;
+  get_language_id_and_server(file_name, &language_id, &lsp_server_cmd);
+
+  if (!lsp_server_cmd) {
+    log_info("lsp.lsp_init: no LSP server for file %s", file_name);
+    return;
+  }
   if (pipe(to_server_pipe) == -1 || pipe(from_server_pipe) == -1) {
     log_error("lsp.lsp_init: pipe failed");
     return;
@@ -242,8 +286,8 @@ void lsp_init(void) {
       close(dev_null);
     }
 
-    execlp("clangd", "clangd", NULL);
-    log_error("lsp.lsp_init: execlp failed");
+    execlp(lsp_server_cmd, lsp_server_cmd, NULL);
+    log_error("lsp.lsp_init: execlp failed for %s", lsp_server_cmd);
     exit(1);
   } else { // Parent process
     close(to_server_pipe[0]);
