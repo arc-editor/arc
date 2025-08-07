@@ -1255,9 +1255,13 @@ static void get_target_range(EditorCommand *cmd, Range *range) {
                 range->x_start++;
             }
         } else if (range->y_end > range->y_start) {
-            range->x_end++;
+            if (buffer->lines[range->y_end]->char_count > 0) {
+                range->x_end++;
+            }
         } else {
-            range->x_start++;
+            if (buffer->lines[range->y_start]->char_count > 0) {
+                range->x_start++;
+            }
         }
         return;
     }
