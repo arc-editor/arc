@@ -29,6 +29,8 @@ typedef struct {
     int needs_parse;
     int position_y;
     int position_x;
+    int selection_start_y;
+    int selection_start_x;
     int offset_y;
     int offset_x;
     char *read_buffer;

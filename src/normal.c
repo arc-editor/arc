@@ -4,6 +4,7 @@
 #include "editor.h"
 #include "picker_file.h"
 #include "picker_buffer.h"
+#include "visual.h"
 
 EditorCommand cmd;
 EditorCommand prev_cmd;
@@ -132,6 +133,14 @@ int normal_handle_input(char ch) {
   }
 
   switch (ch) {
+    case 'v':
+      {
+        Buffer *buffer = editor_get_active_buffer();
+        buffer->selection_start_x = buffer->position_x;
+        buffer->selection_start_y = buffer->position_y;
+        editor_handle_input = visual_handle_input;
+      }
+      break;
     case 'x':
       editor_delete();
       break;
