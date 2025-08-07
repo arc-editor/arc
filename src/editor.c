@@ -1362,6 +1362,11 @@ void get_target_range(EditorCommand *cmd, Range *range) {
 }
 
 int range_get_left_boundary(Range *range) {
+    if (range->y_start < range->y_end) {
+        return range->x_start;
+    } else if (range->y_end < range->y_start) {
+        return range->x_end;
+    }
     if (range->x_end < range->x_start) {
         return range->x_end;
     }
@@ -1369,6 +1374,11 @@ int range_get_left_boundary(Range *range) {
 }
 
 int range_get_right_boundary(Range *range) {
+    if (range->y_start < range->y_end) {
+        return range->x_end;
+    } else if (range->y_end < range->y_start) {
+        return range->x_start;
+    }
     if (range->x_end > range->x_start) {
         return range->x_end;
     }
@@ -1394,6 +1404,7 @@ void range_delete(Buffer *b, Range *range) {
     int right = range_get_right_boundary(range);
     int top = range_get_top_boundary(range);
     int bottom = range_get_bottom_boundary(range);
+    log_info("get range: (%d, %d) (%d, %d)", top, left, bottom, right);
     if (left == right && top == bottom) return;
     if (right == range->x_end) right++;
     TSInputEdit edit;
@@ -1427,7 +1438,10 @@ void range_delete(Buffer *b, Range *range) {
     }
     if (b->parser) {
         for (int i = top; i < bottom; i++) {
-            edit.old_end_byte += b->lines[i]->char_count + (i < b->line_count - 1 ? 1 : 0);
+            edit.old_end_byte += b->lines[i]->char_count + 1;
+            if (i == top) {
+                edit.old_end_byte -= left;
+            }
             b->lines[i]->needs_highlight = 1;
         }
         b->lines[bottom]->needs_highlight = 1;
@@ -1436,21 +1450,39 @@ void range_delete(Buffer *b, Range *range) {
     }
 
     // truncate start line
-    if (!left) {
-        top--;
-    } else {
+    // if (!left) {
+    //     top--;
+    // } else {
         // TODO: .
-    }
+        // int bottom_remaining_chars = b->lines[bottom]->char_count - right;
+        // int new_char_count = left + bottom_remaining_chars;
+        // buffer_line_realloc_for_capacity(b->lines[top], new_char_count);
+        // memcpy(&b->lines[top]->chars[left], b->lines[bottom]->chars, bottom_remaining_chars * sizeof(Char));
+        // b->lines[top]->char_count = new_char_count;
+
+        // memcpy(&b->lines[bottom]->chars[0], &b->lines[bottom]->chars[right], right * sizeof(Char));
+        // b->lines[bottom]->char_count = bottom_remaining_chars;
+    // }
+
+    // trim top line
+    int bottom_remaining_chars = b->lines[bottom]->char_count - right + 1;
+    int new_char_count = left + bottom_remaining_chars;
+    buffer_line_realloc_for_capacity(b->lines[top], new_char_count);
+    memcpy(&b->lines[top]->chars[left], &b->lines[bottom]->chars[right], bottom_remaining_chars * sizeof(Char));
+    b->lines[top]->char_count = new_char_count;
+    log_info("bottom remaining chars: %d, new ch cnt %d", bottom_remaining_chars, new_char_count);
 
     // cut end line
-    if (right > b->lines[bottom]->char_count) {
+    int trim_bottom = 1;
+    if (right == b->lines[bottom]->char_count) {
         bottom++;
+        trim_bottom = 0;
     } else {
         // TODO: .
     }
 
     // destroy all completely removed
-    int lines_to_shift = bottom - top - 1;
+    int lines_to_shift = bottom - top;
     for (int i = top + 1; i < b->line_count - lines_to_shift; i++) {
         if (i < bottom) {
             buffer_line_destroy(b->lines[i]);
@@ -1458,6 +1490,12 @@ void range_delete(Buffer *b, Range *range) {
         b->lines[i] = b->lines[i + lines_to_shift];
     }
     b->line_count -= lines_to_shift;
+
+    if (trim_bottom) {
+        log_info("trim bottom: %d", lines_to_shift); // 0
+        memcpy(&b->lines[bottom]->chars[0], &b->lines[bottom]->chars[right], right * sizeof(Char));
+        b->lines[bottom]->char_count = bottom_remaining_chars;
+    }
 }
 
 void editor_command_exec(EditorCommand *cmd) {
