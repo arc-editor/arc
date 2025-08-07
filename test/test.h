@@ -5,26 +5,28 @@
 #include <string.h>
 #include <stdlib.h>
 
-#define ASSERT(condition) \
+extern int g_test_failures;
+
+#define ASSERT(test_name, condition) \
     if (!(condition)) { \
-        fprintf(stderr, "Assertion failed: %s, file %s, line %d\n", #condition, __FILE__, __LINE__); \
-        exit(1); \
+        fprintf(stderr, "[%s] Assertion failed: %s, file %s, line %d\n", test_name, #condition, __FILE__, __LINE__); \
+        g_test_failures++; \
     }
 
-#define ASSERT_STRING_EQUAL(s1, s2) \
+#define ASSERT_STRING_EQUAL(test_name, s1, s2) \
     if (strcmp(s1, s2) != 0) { \
-        fprintf(stderr, "Assertion failed: strings are not equal.\n"); \
+        fprintf(stderr, "[%s] Assertion failed: strings are not equal.\n", test_name); \
         fprintf(stderr, "  Expected: \"%s\"\n", s2); \
         fprintf(stderr, "  Actual:   \"%s\"\n", s1); \
-        exit(1); \
+        g_test_failures++; \
     }
 
-#define ASSERT_EQUAL(a, b) \
+#define ASSERT_EQUAL(test_name, a, b) \
     if ((a) != (b)) { \
-        fprintf(stderr, "Assertion failed: values are not equal.\n"); \
+        fprintf(stderr, "[%s] Assertion failed: values are not equal.\n", test_name); \
         fprintf(stderr, "  Expected: %d\n", (b)); \
         fprintf(stderr, "  Actual:   %d\n", (a)); \
-        exit(1); \
+        g_test_failures++; \
     }
 
 void test_helper(const char* test_name, const char* initial_content, int start_y, int start_x, const char* commands, const char* expected_content);

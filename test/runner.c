@@ -5,6 +5,8 @@
 #include <stdio.h>
 #include <unistd.h>
 
+int g_test_failures = 0;
+
 void test_helper(const char* test_name, const char* initial_content, int start_y, int start_x, const char* commands, const char* expected_content) {
     printf("  - %s\n", test_name);
 
@@ -24,7 +26,7 @@ void test_helper(const char* test_name, const char* initial_content, int start_y
     }
 
     char *result = buffer_get_content(buffer);
-    ASSERT_STRING_EQUAL(result, expected_content);
+    ASSERT_STRING_EQUAL(test_name, result, expected_content);
 
     free(result);
     remove(filename);
@@ -48,8 +50,8 @@ void test_motion_helper(const char* test_name, const char* initial_content, int 
         normal_handle_input(commands[i]);
     }
 
-    ASSERT_EQUAL(buffer->position_y, end_y);
-    ASSERT_EQUAL(buffer->position_x, end_x);
+    ASSERT_EQUAL(test_name, buffer->position_y, end_y);
+    ASSERT_EQUAL(test_name, buffer->position_x, end_x);
 
     remove(filename);
 }
@@ -84,13 +86,13 @@ int main(void) {
 
     // p: paragraphs
     test_helper("test_mid_file_single_line_dp", "foo\n\nbar\n\nbat", 2, 0, "dp", "foo\n\n\nbat");
-    // test_helper("test_mid_file_multi_line_from_top_dp", "foo\n\nbar\nbaz\n\nbat", 2, 0, "dp", "foo\n\n\nbat");
-    // test_helper("test_mid_file_multi_line_from_middle_dp", "foo\n\nbar\nbaz\nbat\n\nbam", 3, 0, "dp", "foo\n\n\nbam");
-    // test_helper("test_mid_file_multi_line_from_bottom_dp", "foo\n\nbar\nbaz\n\nbat", 3, 0, "dp", "foo\n\n\nbat");
+    test_helper("test_mid_file_multi_line_from_top_dp", "foo\n\nbar\nbaz\n\nbat", 2, 0, "dp", "foo\n\n\nbat");
+    test_helper("test_mid_file_multi_line_from_middle_dp", "foo\n\nbar\nbaz\nbat\n\nbam", 3, 0, "dp", "foo\n\n\nbam");
+    test_helper("test_mid_file_multi_line_from_bottom_dp", "foo\n\nbar\nbaz\n\nbat", 3, 0, "dp", "foo\n\n\nbat");
 
     // ================ target only commands ================
     test_motion_helper("test_w_motion", "hello world", 0, 0, "w", 0, 6);
-    // test_motion_helper("test_e_motion", "hello world", 0, 0, "e", 0, 4);
+    test_motion_helper("test_e_motion", "hello world", 0, 0, "e", 0, 4);
     test_motion_helper("test_b_motion", "hello world", 0, 8, "b", 0, 6);
     test_motion_helper("test_b_motion", "hello world", 0, 6, "b", 0, 0);
 
@@ -110,6 +112,11 @@ int main(void) {
     test_helper("test_dt_motion", "hello world", 0, 0, "dtw", "world");
     test_helper("test_dT_motion", "hello world", 0, 5, "dTh", "hworld");
 
-    printf("All tests passed.\n");
-    return 0;
+    if (g_test_failures == 0) {
+        printf("All tests passed.\n");
+        return 0;
+    } else {
+        printf("%d test(s) failed.\n", g_test_failures);
+        return 1;
+    }
 }

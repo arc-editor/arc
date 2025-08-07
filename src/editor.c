@@ -1225,41 +1225,32 @@ static void get_target_range(EditorCommand *cmd, Range *range) {
     }
     switch (cmd->target) {
         case 'p':
-            while (count) {
-                count--;
-                if (is_line_empty(line)) {
-                    return;
-                }
-                int moved = 0;
-                if (range->y_end) {
-                    while (line->char_count && range_expand_up(&line, range)) {
-                        // find empty line above
-                        moved = 1;
-                    }
-                    if (moved) {
-                        range_expand_down(&line, range);
-                        range->x_end = 0;
-                    }
+            {
+                int original_y = range->y_start;
+
+                // If we are on an empty line, treat it as a paragraph of its own.
+                if (is_line_empty(buffer->lines[original_y])) {
+                    range->y_start = original_y;
+                    range->y_end = original_y;
                 } else {
-                    range->x_end = 0;
-                }
-                int tmp_y = range->y_end;
-                range->y_end = range->y_start;
-                range->y_start = tmp_y;
+                    // Find the start of the paragraph (move up to first non-empty line after an empty one)
+                    while (range->y_start > 0 && !is_line_empty(buffer->lines[range->y_start - 1])) {
+                        range->y_start--;
+                    }
 
-                int tmp_x = range->x_end;
-                range->x_end = range->x_start;
-                range->x_start = tmp_x;
+                    // Find the end of the paragraph (move down to last non-empty line before an empty one)
+                    while (range->y_end < buffer->line_count - 1 && !is_line_empty(buffer->lines[range->y_end + 1])) {
+                        range->y_end++;
+                    }
+                }
 
-                moved = 0;
-                while (line->char_count && range_expand_down(&line, range)) {
-                    // find empty line above
-                    moved = 1;
+                // Include the trailing empty line if it exists
+                if (range->y_end < buffer->line_count - 1 && is_line_empty(buffer->lines[range->y_end + 1])) {
+                    range->y_end++;
                 }
-                if (moved) {
-                    range_expand_up(&line, range);
-                    range->x_end = line->char_count - 1;
-                }
+
+                range->x_start = 0;
+                range->x_end = buffer->lines[range->y_end]->char_count;
             }
             break;
         case 'w':
@@ -1344,7 +1335,9 @@ static void get_target_range(EditorCommand *cmd, Range *range) {
                 range->y_end = buffer->line_count - 1;                
             } else {
                 range_expand_e(line, count, range);
-                range->x_end++;
+                if (cmd->action) {
+                    range->x_end++;
+                }
             }
             break;
         case 'E':
@@ -1514,17 +1507,9 @@ void range_delete(Buffer *b, Range *range, EditorCommand *cmd) {
     // trim top line
     int bottom_remaining_chars = b->lines[bottom]->char_count - right;
     int new_char_count = left + bottom_remaining_chars;
-    int old_char_count = b->lines[bottom]->char_count;
     buffer_line_realloc_for_capacity(b->lines[top], new_char_count);
     memmove(&b->lines[top]->chars[left], &b->lines[bottom]->chars[right], bottom_remaining_chars * sizeof(Char));
     b->lines[top]->char_count = new_char_count;
-
-    // cut end line
-    int trim_bottom = 1;
-    if (right == old_char_count && top != bottom) {
-        bottom++;
-        trim_bottom = 0;
-    }
 
     // destroy all completely removed
     int lines_to_shift = bottom - top;
@@ -1535,11 +1520,6 @@ void range_delete(Buffer *b, Range *range, EditorCommand *cmd) {
         b->lines[i] = b->lines[i + lines_to_shift];
     }
     b->line_count -= lines_to_shift;
-
-    if (trim_bottom && top != bottom) {
-        memcpy(&b->lines[bottom]->chars[0], &b->lines[bottom]->chars[right], right * sizeof(Char));
-        b->lines[bottom]->char_count = bottom_remaining_chars;
-    }
 }
 
 void editor_command_exec(EditorCommand *cmd) {
