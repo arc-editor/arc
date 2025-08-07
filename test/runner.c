@@ -180,6 +180,9 @@ int main(void) {
     test_visual_action_helper("test_visual_delete_backward_across_line", "foo\nbar", 1, 1, "kld", "for");
     test_visual_action_helper("test_visual_delete_forward_across_line", "foo\nbar", 0, 1, "jhd", "far");
 
+    // ================ utf8 ================
+    test_helper("test_utf8_loading", "Hello, world!\nПривет, мир!\n你好,世界!\n👋\n", 0, 0, "", "Hello, world!\nПривет, мир!\n你好,世界!\n👋\n");
+
     if (g_test_failures == 0) {
         printf("All tests passed.\n");
         return 0;
