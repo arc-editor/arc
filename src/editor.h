@@ -6,6 +6,13 @@
 #include "buffer.h"
 
 typedef struct {
+    int x_start;
+    int x_end;
+    int y_start;
+    int y_end;
+} Range;
+
+typedef struct {
   int count; // 1, 10
   char action; // 'c', 'd'
   char target; // 'w', 'e', 'B'
@@ -41,5 +48,18 @@ void editor_set_style(Style *style, int fg, int bg);
 void editor_set_cursor_shape(int shape_code);
 void editor_request_redraw(void);
 Buffer *editor_get_active_buffer(void);
+void range_delete(Buffer *b, Range *range, EditorCommand *cmd);
+int range_get_left_boundary(Range *range);
+int range_get_right_boundary(Range *range);
+int range_get_top_boundary(Range *range);
+int range_get_bottom_boundary(Range *range);
+int is_word_char(char ch);
+int is_whitespace(char ch);
+int range_expand_right(BufferLine **line, Range *range);
+int range_expand_left(BufferLine **line, Range *range);
+void range_expand_e(BufferLine *line, int count, Range *range);
+void range_expand_E(BufferLine *line, int count, Range *range);
+void range_expand_b(BufferLine *line, int count, Range *range);
+void range_expand_B(BufferLine *line, int count, Range *range);
 
 #endif

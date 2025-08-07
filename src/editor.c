@@ -20,6 +20,7 @@
 #include "tree_sitter/api.h"
 #include "insert.h"
 #include "normal.h"
+#include "visual.h"
 #include "editor.h"
 #include "git.h"
 #include "theme.h"
@@ -148,6 +149,9 @@ void draw_statusline() {
     if (editor_handle_input == insert_handle_input) {
         editor_set_style(&current_theme.statusline_mode_insert, 1, 1);
         mode = " INSERT ";
+    } else if (editor_handle_input == visual_handle_input) {
+        editor_set_style(&current_theme.statusline_mode_visual, 1, 1);
+        mode = " VISUAL ";
     } else {
         editor_set_style(&current_theme.statusline_mode_normal, 1, 1);
         mode = " NORMAL ";
@@ -205,6 +209,34 @@ void draw_statusline() {
     printf("\x1b[0m");
 }
 
+static int is_in_selection(int y, int x) {
+    Buffer *buf = buffer;
+    int start_y = buf->selection_start_y;
+    int start_x = buf->selection_start_x;
+    int end_y = buf->position_y;
+    int end_x = buf->position_x;
+
+    if (start_y > end_y || (start_y == end_y && start_x > end_x)) {
+        int tmp_y = start_y;
+        int tmp_x = start_x;
+        start_y = end_y;
+        start_x = end_x;
+        end_y = tmp_y;
+        end_x = tmp_x;
+    }
+
+    if (y < start_y || y > end_y) {
+        return 0;
+    }
+    if (y == start_y && x < start_x) {
+        return 0;
+    }
+    if (y == end_y && x >= end_x) {
+        return 0;
+    }
+    return 1;
+}
+
 void draw_buffer(Diagnostic *diagnostics, int diagnostics_count, int update_diagnostics) {
     uint32_t start_byte = 0;
     for (int i = 0; i < buffer->offset_y; i++) {
@@ -252,11 +284,14 @@ void draw_buffer(Diagnostic *diagnostics, int diagnostics_count, int update_diag
         }
         printf("%.*s", line_num_len, line_num_str);
 
+        int is_visual_mode = editor_handle_input == visual_handle_input;
+        Style *line_style;
         if (row == buffer->position_y) {
-            editor_set_style(&current_theme.content_cursor_line, 0, 1);
+            line_style = &current_theme.content_cursor_line;
         } else {
-            editor_set_style(&current_theme.content_background, 0, 1);
+            line_style = &current_theme.content_background;
         }
+        editor_set_style(line_style, 0, 1);
 
         int cols_to_skip = buffer->offset_x;
         int chars_to_print = screen_cols - buffer->line_num_width;
@@ -282,11 +317,11 @@ void draw_buffer(Diagnostic *diagnostics, int diagnostics_count, int update_diag
                 continue;
             }
             
-            Style* style;
-            if (row == buffer->position_y) {
-                style = &current_theme.content_cursor_line;
-            } else {
-                style = &current_theme.content_background;
+            Style* style = line_style;
+            int in_selection = is_visual_mode && is_in_selection(row, ch_idx);
+
+            if (in_selection) {
+                style = &current_theme.content_selection;
             }
 
             if (ch.underline) {
@@ -1030,7 +1065,7 @@ void editor_move_n_lines_up(int n) {
 }
 
 // Helper function to check if character is a word character
-static int is_word_char(char ch) {
+int is_word_char(char ch) {
     return (ch >= 'a' && ch <= 'z') || 
            (ch >= 'A' && ch <= 'Z') || 
            (ch >= '0' && ch <= '9') || 
@@ -1038,16 +1073,9 @@ static int is_word_char(char ch) {
 }
 
 // Helper function to check if character is whitespace
-static int is_whitespace(char ch) {
+int is_whitespace(char ch) {
     return ch == ' ' || ch == '\t' || ch == '\n';
 }
-
-typedef struct {
-    int x_start;
-    int x_end;
-    int y_start;
-    int y_end;
-} Range;
 
 // returns 1 if changed lines, 0 otherwise
 int range_expand_right(BufferLine **line, Range *range) {
@@ -1213,6 +1241,19 @@ void range_expand_B(BufferLine *line, int count, Range *range) {
 }
 
 static void get_target_range(EditorCommand *cmd, Range *range) {
+    if (editor_handle_input == visual_handle_input && cmd->action) {
+        range->x_start = buffer->selection_start_x;
+        range->y_start = buffer->selection_start_y;
+        range->x_end = buffer->position_x;
+        range->y_end = buffer->position_y;
+        if (range->x_end >= range->x_start) {
+            range->x_end++;
+        } else {
+            range->x_start++;
+        }
+        return;
+    }
+
     BufferLine *line = buffer->lines[buffer->position_y];
     int count = cmd->count ? cmd->count : 1;
     range->x_start = buffer->position_x;
@@ -1526,6 +1567,15 @@ void editor_command_exec(EditorCommand *cmd) {
     pthread_mutex_lock(&editor_mutex);
     Range range;
     get_target_range(cmd, &range);
+
+    if (editor_handle_input == visual_handle_input && !cmd->action) {
+        buffer->position_x = range.x_end;
+        buffer->position_y = range.y_end;
+        editor_request_redraw();
+        pthread_mutex_unlock(&editor_mutex);
+        return;
+    }
+
     log_info("get targ range: (%d, %d), (%d, %d)", range.y_start, range.x_start, range.y_end, range.x_end);
     if (cmd->action) {
         switch (cmd->target) {
@@ -1582,6 +1632,9 @@ void editor_command_exec(EditorCommand *cmd) {
     if (cmd->action == 'c') {
         normal_insertion_registration_init();
         editor_handle_input = insert_handle_input;
+    }
+    if (editor_handle_input == visual_handle_input) {
+        editor_handle_input = normal_handle_input;
     }
     editor_command_reset(cmd);
     pthread_mutex_unlock(&editor_mutex);

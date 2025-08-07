@@ -228,8 +228,11 @@ void theme_load(const char* filename, Theme *theme) {
     parse_style(result.toptab, "content.line-number-active", &theme->content_line_number_active);
     parse_style(result.toptab, "content.line-number-sticky", &theme->content_line_number_sticky);
 
+    parse_style(result.toptab, "content.selection", &theme->content_selection);
+
     parse_style(result.toptab, "statusline.mode-insert", &theme->statusline_mode_insert);
     parse_style(result.toptab, "statusline.mode-normal", &theme->statusline_mode_normal);
+    parse_style(result.toptab, "statusline.mode-visual", &theme->statusline_mode_visual);
     parse_style(result.toptab, "statusline.text", &theme->statusline_text);
 
     parse_style(result.toptab, "popup.border", &theme->popup_border);

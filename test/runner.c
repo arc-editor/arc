@@ -2,6 +2,7 @@
 #include "../src/editor.h"
 #include "../src/buffer.h"
 #include "../src/normal.h"
+#include "../src/visual.h"
 #include <stdio.h>
 #include <unistd.h>
 
@@ -32,6 +33,33 @@ void test_helper(const char* test_name, const char* initial_content, int start_y
     remove(filename);
 }
 
+void test_visual_motion_helper(const char* test_name, const char* initial_content, int start_y, int start_x, const char* commands, int sel_start_y, int sel_start_x, int end_y, int end_x) {
+    printf("  - %s\n", test_name);
+
+    const char* filename = "test.txt";
+    FILE *fp = fopen(filename, "w");
+    fprintf(fp, "%s", initial_content);
+    fclose(fp);
+
+    editor_open((char*)filename);
+
+    Buffer *buffer = editor_get_active_buffer();
+    buffer->position_y = start_y;
+    buffer->position_x = start_x;
+
+    normal_handle_input('v');
+    for (int i = 0; commands[i] != '\0'; i++) {
+        visual_handle_input(commands[i]);
+    }
+
+    ASSERT_EQUAL(test_name, buffer->selection_start_y, sel_start_y);
+    ASSERT_EQUAL(test_name, buffer->selection_start_x, sel_start_x);
+    ASSERT_EQUAL(test_name, buffer->position_y, end_y);
+    ASSERT_EQUAL(test_name, buffer->position_x, end_x);
+
+    remove(filename);
+}
+
 void test_motion_helper(const char* test_name, const char* initial_content, int start_y, int start_x, const char* commands, int end_y, int end_x) {
     printf("  - %s\n", test_name);
 
@@ -53,6 +81,32 @@ void test_motion_helper(const char* test_name, const char* initial_content, int 
     ASSERT_EQUAL(test_name, buffer->position_y, end_y);
     ASSERT_EQUAL(test_name, buffer->position_x, end_x);
 
+    remove(filename);
+}
+
+void test_visual_action_helper(const char* test_name, const char* initial_content, int start_y, int start_x, const char* commands, const char* expected_content) {
+    printf("  - %s\n", test_name);
+
+    const char* filename = "test.txt";
+    FILE *fp = fopen(filename, "w");
+    fprintf(fp, "%s", initial_content);
+    fclose(fp);
+
+    editor_open((char*)filename);
+
+    Buffer *buffer = editor_get_active_buffer();
+    buffer->position_y = start_y;
+    buffer->position_x = start_x;
+
+    normal_handle_input('v');
+    for (int i = 0; commands[i] != '\0'; i++) {
+        visual_handle_input(commands[i]);
+    }
+
+    char *result = buffer_get_content(buffer);
+    ASSERT_STRING_EQUAL(test_name, result, expected_content);
+
+    free(result);
     remove(filename);
 }
 
@@ -111,6 +165,18 @@ int main(void) {
     test_helper("test_dF_motion", "hello world", 0, 5, "dFh", "world");
     test_helper("test_dt_motion", "hello world", 0, 0, "dtw", "world");
     test_helper("test_dT_motion", "hello world", 0, 5, "dTh", "hworld");
+
+    // ================ visual mode ================
+    test_visual_motion_helper("test_visual_enter_and_move_right", "hello world", 0, 0, "l", 0, 0, 0, 1);
+    test_visual_motion_helper("test_visual_enter_and_move_left", "hello world", 0, 5, "h", 0, 5, 0, 4);
+    test_visual_motion_helper("test_visual_enter_and_move_down", "hello\nworld", 0, 0, "j", 0, 0, 1, 0);
+    test_visual_motion_helper("test_visual_enter_and_move_up", "hello\nworld", 1, 0, "k", 1, 0, 0, 0);
+    test_visual_motion_helper("test_visual_w", "hello world", 0, 0, "w", 0, 0, 0, 6);
+    test_visual_motion_helper("test_visual_b", "hello world", 0, 6, "b", 0, 6, 0, 0);
+    test_visual_motion_helper("test_visual_e", "hello world", 0, 0, "e", 0, 0, 0, 4);
+    test_visual_motion_helper("test_visual_f", "hello world", 0, 0, "fl", 0, 0, 0, 2);
+    test_visual_action_helper("test_visual_delete", "hello world", 0, 0, "lld", "lo world");
+    test_visual_action_helper("test_visual_delete_backward", "hello world", 0, 3, "hhd", "ho world");
 
     if (g_test_failures == 0) {
         printf("All tests passed.\n");
