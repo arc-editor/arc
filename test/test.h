@@ -19,6 +19,14 @@
         exit(1); \
     }
 
+#define ASSERT_EQUAL(a, b) \
+    if ((a) != (b)) { \
+        fprintf(stderr, "Assertion failed: values are not equal.\n"); \
+        fprintf(stderr, "  Expected: %d\n", (b)); \
+        fprintf(stderr, "  Actual:   %d\n", (a)); \
+        exit(1); \
+    }
+
 void test_helper(const char* test_name, const char* initial_content, int start_y, int start_x, const char* commands, const char* expected_content);
 
 #endif // TEST_H

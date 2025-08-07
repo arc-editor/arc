@@ -1261,6 +1261,7 @@ static void get_target_range(EditorCommand *cmd, Range *range) {
                     range->x_end = line->char_count - 1;
                 }
             }
+            break;
         case 'w':
             if (cmd->action) {
                 if (!line->char_count || is_whitespace(line->chars[range->x_end].value)) {
@@ -1411,12 +1412,20 @@ int range_get_bottom_boundary(Range *range) {
     return range->y_start;
 }
 
-void range_delete(Buffer *b, Range *range) {
+void range_delete(Buffer *b, Range *range, EditorCommand *cmd) {
     int left = range_get_left_boundary(range);
     int right = range_get_right_boundary(range);
     int top = range_get_top_boundary(range);
     int bottom = range_get_bottom_boundary(range);
     if (left == right && top == bottom) return;
+
+    if (cmd->target == 'p' && top == bottom) {
+        buffer_line_destroy(b->lines[top]);
+        memmove(&b->lines[top], &b->lines[top + 1], (b->line_count - top - 1) * sizeof(BufferLine *));
+        b->line_count--;
+        return;
+    }
+
     // if (top == bottom && right == range->x_end) right++;
     TSInputEdit edit;
     if (b->parser) {
@@ -1460,7 +1469,7 @@ void range_delete(Buffer *b, Range *range) {
 
     // cut end line
     int trim_bottom = 1;
-    if (right == old_char_count) {
+    if (right == old_char_count && top != bottom) {
         bottom++;
         trim_bottom = 0;
     }
@@ -1510,7 +1519,7 @@ void editor_command_exec(EditorCommand *cmd) {
         case 'd':
             buffer->position_x = left;
             buffer->position_y = range_get_top_boundary(&range);
-            range_delete(buffer, &range);
+            range_delete(buffer, &range, cmd);
             buffer_reset_offset_x(buffer, screen_cols);
             buffer_reset_offset_y(buffer, screen_rows);
             buffer->needs_draw = 1;
