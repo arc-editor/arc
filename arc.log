@@ -1,0 +1,7 @@
+[2025-08-07 16:32:41.562] [INFO] perfect_hashmap.perfect_hashmap_create: Perfect hash map created successfully! Size: 37, Capacity: 107, Salt: 385
+[2025-08-07 16:32:41.568] [WARNING] config.config_load: cannot parse /home/jules/.config/arc/config.toml - fopen: /home/jules/.config/arc/config.toml
+[2025-08-07 16:32:41.568] [INFO] config.config_load_theme: loading theme from /home/jules/.config/arc/themes/default.toml
+[2025-08-07 16:32:41.568] [WARNING] theme.theme_load: cannot parse /home/jules/.config/arc/themes/default.toml - fopen: /home/jules/.config/arc/themes/default.toml
+[2025-08-07 16:32:41.568] [WARNING] config.load_language: dlopen failed: /home/jules/.config/arc/grammars/txt.so: cannot open shared object file: No such file or directory
+[2025-08-07 16:32:41.568] [INFO] get targ range: (0, 0), (0, 5)
+[2025-08-07 16:32:41.568] [INFO] range_delete: (0,0) to (0,5)

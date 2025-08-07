@@ -1434,18 +1434,8 @@ void range_delete(Buffer *b, Range *range) {
         edit.old_end_point.row = bottom;
         edit.old_end_point.column = right;
     }
-    BufferLine *line = b->lines[top];
-    if (top == bottom) {
-        memmove(&line->chars[left], &line->chars[right], (line->char_count - right + 1) * sizeof(Char));
-        int del_cnt = right - left;
-        if (line->char_count < del_cnt) del_cnt = line->char_count;
-        line->char_count -= del_cnt;
-        if (b->parser) {
-            line->needs_highlight = 1;
-            edit.old_end_byte += del_cnt;
-            ts_tree_edit(b->tree, &edit);
-        }
-        return;
+    if (top == bottom && left == 0 && right == b->lines[top]->char_count -1) {
+        right++;
     }
     if (b->parser) {
         for (int i = top; i < bottom; i++) {
@@ -1463,13 +1453,14 @@ void range_delete(Buffer *b, Range *range) {
     // trim top line
     int bottom_remaining_chars = b->lines[bottom]->char_count - right;
     int new_char_count = left + bottom_remaining_chars;
+    int old_char_count = b->lines[bottom]->char_count;
     buffer_line_realloc_for_capacity(b->lines[top], new_char_count);
-    memcpy(&b->lines[top]->chars[left], &b->lines[bottom]->chars[right], bottom_remaining_chars * sizeof(Char));
+    memmove(&b->lines[top]->chars[left], &b->lines[bottom]->chars[right], bottom_remaining_chars * sizeof(Char));
     b->lines[top]->char_count = new_char_count;
 
     // cut end line
     int trim_bottom = 1;
-    if (right == b->lines[bottom]->char_count) {
+    if (right == old_char_count) {
         bottom++;
         trim_bottom = 0;
     }
@@ -1484,7 +1475,7 @@ void range_delete(Buffer *b, Range *range) {
     }
     b->line_count -= lines_to_shift;
 
-    if (trim_bottom) {
+    if (trim_bottom && top != bottom) {
         memcpy(&b->lines[bottom]->chars[0], &b->lines[bottom]->chars[right], right * sizeof(Char));
         b->lines[bottom]->char_count = bottom_remaining_chars;
     }
