@@ -1213,6 +1213,9 @@ void range_expand_B(BufferLine *line, int count, Range *range) {
 }
 
 void get_target_range(EditorCommand *cmd, Range *range) {
+#ifdef TEST_BUILD
+    printf("get_target_range: action=%c, target=%c, count=%d, y=%d, x=%d\n", cmd->action, cmd->target, cmd->count, buffer->position_y, buffer->position_x);
+#endif
     BufferLine *line = buffer->lines[buffer->position_y];
     int count = cmd->count ? cmd->count : 1;
     range->x_start = buffer->position_x;
