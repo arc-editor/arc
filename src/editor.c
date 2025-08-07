@@ -1241,6 +1241,19 @@ void range_expand_B(BufferLine *line, int count, Range *range) {
 }
 
 static void get_target_range(EditorCommand *cmd, Range *range) {
+    if (editor_handle_input == visual_handle_input && cmd->action) {
+        range->x_start = buffer->selection_start_x;
+        range->y_start = buffer->selection_start_y;
+        range->x_end = buffer->position_x;
+        range->y_end = buffer->position_y;
+        if (range->x_end >= range->x_start) {
+            range->x_end++;
+        } else {
+            range->x_start++;
+        }
+        return;
+    }
+
     BufferLine *line = buffer->lines[buffer->position_y];
     int count = cmd->count ? cmd->count : 1;
     range->x_start = buffer->position_x;
@@ -1553,29 +1566,14 @@ void range_delete(Buffer *b, Range *range, EditorCommand *cmd) {
 void editor_command_exec(EditorCommand *cmd) {
     pthread_mutex_lock(&editor_mutex);
     Range range;
+    get_target_range(cmd, &range);
 
-    if (editor_handle_input == visual_handle_input) {
-        if (cmd->target == 'v') { // Action
-            range.x_start = buffer->selection_start_x;
-            range.y_start = buffer->selection_start_y;
-            range.x_end = buffer->position_x;
-            range.y_end = buffer->position_y;
-            if (range.x_end >= range.x_start) {
-                range.x_end++;
-            } else {
-                range.x_start++;
-            }
-        } else { // Motion
-            if (cmd->count == 0) cmd->count = 1;
-            get_target_range(cmd, &range);
-            buffer->position_x = range.x_end;
-            buffer->position_y = range.y_end;
-            editor_request_redraw();
-            pthread_mutex_unlock(&editor_mutex);
-            return;
-        }
-    } else { // Normal mode
-        get_target_range(cmd, &range);
+    if (editor_handle_input == visual_handle_input && !cmd->action) {
+        buffer->position_x = range.x_end;
+        buffer->position_y = range.y_end;
+        editor_request_redraw();
+        pthread_mutex_unlock(&editor_mutex);
+        return;
     }
 
     log_info("get targ range: (%d, %d), (%d, %d)", range.y_start, range.x_start, range.y_end, range.x_end);

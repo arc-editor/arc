@@ -60,7 +60,6 @@ int visual_handle_input(char ch) {
         case 'd':
         case 'c':
             cmd.action = ch;
-            cmd.target = 'v';
             editor_command_exec(&cmd);
             editor_command_reset(&cmd);
             break;
