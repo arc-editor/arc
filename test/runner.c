@@ -90,6 +90,9 @@ int main(void) {
 
     // ================ target only commands ================
     test_motion_helper("test_w_motion", "hello world", 0, 0, "w", 0, 6);
+    // test_motion_helper("test_e_motion", "hello world", 0, 0, "e", 0, 4);
+    test_motion_helper("test_b_motion", "hello world", 0, 8, "b", 0, 6);
+    test_motion_helper("test_b_motion", "hello world", 0, 6, "b", 0, 0);
 
     // ================ find commands ================
     test_motion_helper("test_f_motion", "hello world", 0, 0, "fl", 0, 2);
@@ -97,6 +100,8 @@ int main(void) {
     test_motion_helper("test_2f_motion", "hello world, hello", 0, 0, "2fl", 0, 3);
     test_motion_helper("test_F_motion", "hello world", 0, 5, "Fh", 0, 0);
     test_motion_helper("test_t_motion", "hello world", 0, 0, "tw", 0, 5);
+    test_motion_helper("test_2t_motion", "hello world", 0, 1, "tl", 0, 2);
+    test_motion_helper("test_2t_motion", "hello world", 0, 0, "2to", 0, 6);
     test_motion_helper("test_T_motion", "hello world", 0, 5, "Th", 0, 1);
 
     // ================ find with delete ================

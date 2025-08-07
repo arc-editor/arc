@@ -1400,7 +1400,7 @@ static void get_target_range(EditorCommand *cmd, Range *range) {
         case 't':
             for (int i = 0; i < count; i++) {
                 int found = 0;
-                for (int j = range->x_end + 1; j < line->char_count; j++) {
+                for (int j = range->x_end + 2; j < line->char_count; j++) {
                     if (line->chars[j].value == cmd->specifier) {
                         range->x_end = j - 1;
                         found = 1;
@@ -1413,7 +1413,7 @@ static void get_target_range(EditorCommand *cmd, Range *range) {
         case 'T':
             for (int i = 0; i < count; i++) {
                 int found = 0;
-                for (int j = range->x_end - 1; j >= 0; j--) {
+                for (int j = range->x_end - 2; j >= 0; j--) {
                     if (line->chars[j].value == cmd->specifier) {
                         range->x_end = j + 1;
                         found = 1;
