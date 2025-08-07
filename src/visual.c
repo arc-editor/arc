@@ -1,8 +1,6 @@
 #include "visual.h"
 #include "editor.h"
 #include "normal.h"
-#include "buffer.h"
-#include "insert.h"
 
 static EditorCommand cmd;
 static int is_waiting_for_specifier = 0;
