@@ -81,6 +81,7 @@ int picker_handle_input(const char *ch_str) {
     selection = 0;
     if ((ch_str[0] == 8 || ch_str[0] == 127) && ch_str[1] == '\0') { // Backspace
         if (search_len > 0) {
+            // This is not UTF-8 aware, but it's a start
             search_len--;
             search[search_len] = '\0';
         }

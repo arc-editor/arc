@@ -12,6 +12,10 @@
 #include "utf8.h"
 
 void buffer_set_line_num_width(Buffer *buffer) {
+    if (buffer->line_count == 0) {
+        buffer->line_num_width = 3;
+        return;
+    }
     buffer->line_num_width = (int)floor(log10(buffer->line_count)) + 3;
 }
 
@@ -23,7 +27,9 @@ char *buffer_get_content(Buffer *b) {
             total_len += strlen(line->chars[j].value);
         }
     }
-    total_len += b->line_count - 1; // for newlines
+    if (b->line_count > 0) {
+        total_len += b->line_count - 1; // for newlines
+    }
 
     char *content = malloc(total_len + 1);
     if (!content) {
@@ -103,7 +109,13 @@ void buffer_line_apply_syntax_highlighting(Buffer *b, BufferLine *line, uint32_t
         }
         return;
     }
-    ts_query_cursor_set_byte_range(b->cursor, start_byte, start_byte + line->char_count);
+
+    size_t line_byte_len = 0;
+    for (int i = 0; i < line->char_count; i++) {
+        line_byte_len += strlen(line->chars[i].value);
+    }
+
+    ts_query_cursor_set_byte_range(b->cursor, start_byte, start_byte + line_byte_len);
     ts_query_cursor_exec(b->cursor, b->query, b->root);
 
     TSQueryMatch match;
@@ -135,8 +147,9 @@ void buffer_line_apply_syntax_highlighting(Buffer *b, BufferLine *line, uint32_t
         capture_count++;
     }
 
+    uint32_t current_byte = start_byte;
     for (int char_idx = 0; char_idx < line->char_count; char_idx++) {
-        const char *best_capture = find_best_capture_for_position(captures, capture_count, start_byte + char_idx);
+        const char *best_capture = find_best_capture_for_position(captures, capture_count, current_byte);
         Char *ch = &line->chars[char_idx];
         Style *style = theme_get_capture_style(best_capture, theme);
         ch->r = style->fg_r;
@@ -144,6 +157,7 @@ void buffer_line_apply_syntax_highlighting(Buffer *b, BufferLine *line, uint32_t
         ch->b = style->fg_b;
         ch->bold = style->bold;
         ch->italic = style->italic;
+        current_byte += strlen(ch->value);
     }
 
     if (captures) {
@@ -160,13 +174,11 @@ const char *buffer_read(void *payload, uint32_t start_byte __attribute__((unused
     }
     BufferLine *line = buffer->lines[position.row];
 
-    // Calculate total bytes in the line
     size_t line_byte_len = 0;
     for (int i = 0; i < line->char_count; i++) {
         line_byte_len += strlen(line->chars[i].value);
     }
 
-    // +2 for potential newline and null terminator
     if (line_byte_len + 2 > buffer->read_buffer_capacity) {
         size_t new_capacity = line_byte_len + 2;
         char *new_buffer = realloc(buffer->read_buffer, new_capacity);
@@ -178,7 +190,6 @@ const char *buffer_read(void *payload, uint32_t start_byte __attribute__((unused
         buffer->read_buffer_capacity = new_capacity;
     }
 
-    // Copy line content to read_buffer
     char *p = buffer->read_buffer;
     for (int i = 0; i < line->char_count; i++) {
         const char *val = line->chars[i].value;
@@ -194,7 +205,7 @@ const char *buffer_read(void *payload, uint32_t start_byte __attribute__((unused
         return "";
     }
 
-    *bytes_read = line_byte_len - position.column + 1; // +1 for the newline
+    *bytes_read = line_byte_len - position.column + 1;
     return buffer->read_buffer + position.column;
 }
 
@@ -408,8 +419,8 @@ void buffer_init(Buffer *b, char *file_name) {
 
     FILE *fp = fopen(file_name, "r");
     if (fp == NULL) {
-        log_error("buffer.buffer_init: failed to allocate first BufferLine");
-        exit(1);
+        log_error("buffer.buffer_init: failed to open file");
+        return;
     }
         
     char utf8_buf[8];
@@ -488,4 +499,13 @@ int buffer_get_visual_x_for_line_pos(Buffer *buffer, int y, int logical_x) {
         }
     }
     return x_pos;
+}
+
+int buffer_get_byte_position_x(Buffer *buffer) {
+    BufferLine *line = buffer->lines[buffer->position_y];
+    int byte_pos = 0;
+    for (int i = 0; i < buffer->position_x; i++) {
+        byte_pos += strlen(line->chars[i].value);
+    }
+    return byte_pos;
 }

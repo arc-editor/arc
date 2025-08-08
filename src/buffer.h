@@ -53,6 +53,7 @@ void buffer_line_apply_syntax_highlighting(Buffer *b, BufferLine *line, uint32_t
 const char *buffer_read(void *payload, uint32_t, TSPoint position, uint32_t *bytes_read);
 void buffer_parse(Buffer *b);
 int buffer_get_visual_position_x(Buffer *buffer);
+int buffer_get_byte_position_x(Buffer *buffer);
 void buffer_line_realloc_for_capacity(BufferLine *line, int new_needed_capacity);
 void buffer_realloc_lines_for_capacity(Buffer *buffer);
 void buffer_reset_offset_y(Buffer *buffer, int screen_rows);

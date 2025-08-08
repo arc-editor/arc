@@ -65,30 +65,6 @@ int read_utf8_char(FILE *fp, char *buf, size_t buf_size) {
     return len;
 }
 
-int utf8_char_width(const char *s) {
-    init_utf8();
-
-    if (!s || !*s) {
-        return 0;
-    }
-
-    wchar_t wc;
-    int bytes_converted = mbtowc(&wc, s, MB_CUR_MAX);
-
-    if (bytes_converted <= 0) {
-        // Invalid or null character, treat as width 1 (e.g., for a replacement character)
-        return 1;
-    }
-
-    int width = wcwidth(wc);
-    if (width < 0) {
-        // E.g., for control characters
-        return 0;
-    }
-
-    return width;
-}
-
 int read_utf8_char_from_stdin(char *buf, size_t buf_size) {
     int c = getchar();
     if (c == EOF) {
@@ -132,4 +108,28 @@ int read_utf8_char_from_stdin(char *buf, size_t buf_size) {
     buf[len] = '\0';
 
     return len;
+}
+
+int utf8_char_width(const char *s) {
+    init_utf8();
+
+    if (!s || !*s) {
+        return 0;
+    }
+
+    wchar_t wc;
+    int bytes_converted = mbtowc(&wc, s, MB_CUR_MAX);
+
+    if (bytes_converted <= 0) {
+        // Invalid or null character, treat as width 1 (e.g., for a replacement character)
+        return 1;
+    }
+
+    int width = wcwidth(wc);
+    if (width < 0) {
+        // E.g., for control characters
+        return 0;
+    }
+
+    return width;
 }

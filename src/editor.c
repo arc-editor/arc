@@ -31,6 +31,10 @@
 #include "ui.h"
 #include "utf8.h"
 
+static int is_backward_motion(char target) {
+    return target == 'h' || target == 'b' || target == 'B' || target == 'F' || target == 'T';
+}
+
 static pthread_mutex_t editor_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 int (*editor_handle_input)(const char *);
@@ -243,7 +247,10 @@ void draw_buffer(Diagnostic *diagnostics, int diagnostics_count, int update_diag
     uint32_t start_byte = 0;
     for (int i = 0; i < buffer->offset_y; i++) {
         BufferLine *line = buffer->lines[i];
-        start_byte += line->char_count + (i < buffer->line_count - 1 ? 1 : 0); // Only add newline if not the last line
+        for (int j = 0; j < line->char_count; j++) {
+            start_byte += strlen(line->chars[j].value);
+        }
+        start_byte++; // for newline
     }
     for (int row = buffer->offset_y; row < buffer->offset_y + screen_rows - 1; row++) {
         int relative_y = row - buffer->offset_y;
@@ -348,7 +355,10 @@ void draw_buffer(Diagnostic *diagnostics, int diagnostics_count, int update_diag
             putchar(' ');
             chars_to_print--;
         }
-        start_byte += line->char_count + (row < buffer->line_count - 1 ? 1 : 0); // Only add newline if not the last line
+        for (int i = 0; i < line->char_count; i++) {
+            start_byte += strlen(line->chars[i].value);
+        }
+        start_byte++; // for newline
     }
     printf("\x1b[0m");
 }
@@ -465,22 +475,22 @@ void editor_insert_new_line() {
     pthread_mutex_lock(&editor_mutex);
     BufferLine *current_line = buffer->lines[buffer->position_y];
 
-    // Calculate byte position for the edit
     uint32_t start_byte = 0;
     for (int i = 0; i < buffer->position_y; i++) {
-        start_byte += buffer->lines[i]->char_count + (i < buffer->line_count - 1 ? 1 : 0);
+        for (int j = 0; j < buffer->lines[i]->char_count; j++) {
+            start_byte += strlen(buffer->lines[i]->chars[j].value);
+        }
+        start_byte++; // for newline
     }
-    start_byte += buffer->position_x;
+    int byte_pos_x = buffer_get_byte_position_x(buffer);
+    start_byte += byte_pos_x;
 
-    // Allocate space for a new line
     buffer_realloc_lines_for_capacity(buffer);
 
-    // Shift lines down to make room for the new line
     for (int i = buffer->line_count; i > buffer->position_y + 1; i--) {
         buffer->lines[i] = buffer->lines[i - 1];
     }
 
-    // Create the new line
     buffer->lines[buffer->position_y + 1] = (BufferLine *)malloc(sizeof(BufferLine));
     if (buffer->lines[buffer->position_y + 1] == NULL) {
         log_error("editor.editor_insert_new_line: failed to allocate BufferLine");
@@ -488,21 +498,16 @@ void editor_insert_new_line() {
     }
     buffer_line_init(buffer->lines[buffer->position_y + 1]);
 
-    // Split the current line at position_x
     int chars_to_move = current_line->char_count - buffer->position_x;
     if (chars_to_move > 0) {
-        // Allocate space for the new line’s content
         buffer_line_realloc_for_capacity(buffer->lines[buffer->position_y + 1], chars_to_move);
-        // Copy characters after position_x to the new line
         memcpy(buffer->lines[buffer->position_y + 1]->chars,
                &current_line->chars[buffer->position_x],
                chars_to_move * sizeof(Char));
         buffer->lines[buffer->position_y + 1]->char_count = chars_to_move;
-        // Truncate the current line
         current_line->char_count = buffer->position_x;
     }
 
-    // Mark both lines for rehighlighting
     if (buffer->parser) {
         current_line->needs_highlight = 1;
         buffer->lines[buffer->position_y + 1]->needs_highlight = 1;
@@ -513,9 +518,9 @@ void editor_insert_new_line() {
         ts_tree_edit(buffer->tree, &(TSInputEdit){
             .start_byte = start_byte,
             .old_end_byte = start_byte,
-            .new_end_byte = start_byte + 1, // Add one byte for the newline
-            .start_point = { (uint32_t)buffer->position_y, (uint32_t)buffer->position_x },
-            .old_end_point = { (uint32_t)buffer->position_y, (uint32_t)buffer->position_x },
+            .new_end_byte = start_byte + 1,
+            .start_point = { (uint32_t)buffer->position_y, (uint32_t)byte_pos_x },
+            .old_end_point = { (uint32_t)buffer->position_y, (uint32_t)byte_pos_x },
             .new_end_point = { (uint32_t)(buffer->position_y + 1), 0 }
         });
     }
@@ -561,13 +566,11 @@ void setup_terminal() {
     tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
 
     struct sigaction sa;
-    // SIGINT handler
     sa.sa_handler = handle_sigint;
     sa.sa_flags = 0;
     sigemptyset(&sa.sa_mask);
     sigaction(SIGINT, &sa, NULL);
 
-    // SIGPIPE handler
     sa.sa_handler = handle_sigpipe;
     sigaction(SIGPIPE, &sa, NULL);
 
@@ -611,7 +614,6 @@ void editor_open(char *file_name) {
     pthread_mutex_lock(&editor_mutex);
 
     if (buffer_count == 1 && buffers[0]->file_name == NULL) {
-        // Overwrite the initial empty buffer
         buffer_destroy(buffers[0]);
         buffer_init(buffers[0], file_name);
         buffer_set_line_num_width(buffer);
@@ -741,7 +743,6 @@ void editor_insert_char(const char *ch) {
     buffer_line_realloc_for_capacity(line, line->char_count + 1);
 
     int should_underline = 0;
-    // Predict underlining based on surrounding characters and their syntax node.
     if (buffer->parser && buffer->tree && buffer->position_x > 0 && buffer->position_x < line->char_count) {
         Char *prev_char = &line->chars[buffer->position_x - 1];
         Char *next_char = &line->chars[buffer->position_x];
@@ -782,16 +783,21 @@ void editor_insert_char(const char *ch) {
     if (buffer->parser) {
         uint32_t start_byte = 0;
         for (int i = 0; i < buffer->position_y; i++) {
-            start_byte += buffer->lines[i]->char_count + 1;
+            for (int j = 0; j < buffer->lines[i]->char_count; j++) {
+                start_byte += strlen(buffer->lines[i]->chars[j].value);
+            }
+            start_byte++; // for newline
         }
-        start_byte += buffer->position_x - 1;
+        int byte_pos_x = buffer_get_byte_position_x(buffer);
+        start_byte += byte_pos_x - strlen(ch);
+
         ts_tree_edit(buffer->tree, &(TSInputEdit){
             .start_byte = start_byte,
             .old_end_byte = start_byte,
-            .new_end_byte = start_byte + 1,
-            .start_point = {(uint32_t)buffer->position_y, (uint32_t)(buffer->position_x - 1)},
-            .old_end_point = {(uint32_t)buffer->position_y, (uint32_t)(buffer->position_x - 1)},
-            .new_end_point = {(uint32_t)buffer->position_y, (uint32_t)buffer->position_x}
+            .new_end_byte = start_byte + strlen(ch),
+            .start_point = {(uint32_t)buffer->position_y, (uint32_t)(byte_pos_x - strlen(ch))},
+            .old_end_point = {(uint32_t)buffer->position_y, (uint32_t)(byte_pos_x - strlen(ch))},
+            .new_end_point = {(uint32_t)buffer->position_y, (uint32_t)byte_pos_x}
         });
         line->needs_highlight = 1;
         buffer->needs_parse = 1;
@@ -900,19 +906,21 @@ void editor_delete() {
     pthread_mutex_lock(&editor_mutex);
     BufferLine *line = buffer->lines[buffer->position_y];
 
-    // Calculate byte position for the edit
     uint32_t start_byte = 0;
     for (int i = 0; i < buffer->position_y; i++) {
-        start_byte += buffer->lines[i]->char_count + (i < buffer->line_count - 1 ? 1 : 0);
+        for (int j = 0; j < buffer->lines[i]->char_count; j++) {
+            start_byte += strlen(buffer->lines[i]->chars[j].value);
+        }
+        start_byte++; // for newline
     }
-    start_byte += buffer->position_x;
+    int byte_pos_x = buffer_get_byte_position_x(buffer);
+    start_byte += byte_pos_x;
 
     if (buffer->position_x == line->char_count) {
         if (buffer->position_y == buffer->line_count - 1) {
             pthread_mutex_unlock(&editor_mutex);
             return;
         }
-        // Case 1: Merge current line with next line
         if (buffer->parser) {
             BufferLine *next_line = buffer->lines[buffer->position_y + 1];
             next_line->needs_highlight = 1;
@@ -924,7 +932,6 @@ void editor_delete() {
         line->char_count = new_char_count;
         buffer_line_destroy(next_line);
 
-        // Shift lines up
         for (int i = buffer->position_y + 1; i < buffer->line_count - 1; i++) {
             buffer->lines[i] = buffer->lines[i + 1];
         }
@@ -935,26 +942,26 @@ void editor_delete() {
                 .start_byte = start_byte,
                 .old_end_byte = start_byte + 1,
                 .new_end_byte = start_byte,
-                .start_point = { (uint32_t)buffer->position_y, (uint32_t)buffer->position_x },
+                .start_point = { (uint32_t)buffer->position_y, (uint32_t)byte_pos_x },
                 .old_end_point = { (uint32_t)(buffer->position_y + 1), 0 },
-                .new_end_point = { (uint32_t)buffer->position_y, (uint32_t)buffer->position_x }
+                .new_end_point = { (uint32_t)buffer->position_y, (uint32_t)byte_pos_x }
             });
         }
     } else {
-        // Case 2: Delete character within the current line
-        memmove(&line->chars[buffer->position_x], 
-                &line->chars[buffer->position_x + 1], 
+        Char deleted_char = line->chars[buffer->position_x];
+        memmove(&line->chars[buffer->position_x],
+                &line->chars[buffer->position_x + 1],
                 (line->char_count - buffer->position_x - 1) * sizeof(Char));
         line->char_count--;
         if (buffer->parser) {
             line->needs_highlight = 1;
             ts_tree_edit(buffer->tree, &(TSInputEdit){
                 .start_byte = start_byte,
-                .old_end_byte = start_byte + 1,
+                .old_end_byte = start_byte + strlen(deleted_char.value),
                 .new_end_byte = start_byte,
-                .start_point = { (uint32_t)buffer->position_y, (uint32_t)buffer->position_x },
-                .old_end_point = { (uint32_t)buffer->position_y, (uint32_t)(buffer->position_x + 1) },
-                .new_end_point = { (uint32_t)buffer->position_y, (uint32_t)buffer->position_x }
+                .start_point = { (uint32_t)buffer->position_y, (uint32_t)byte_pos_x },
+                .old_end_point = { (uint32_t)buffer->position_y, (uint32_t)(byte_pos_x + strlen(deleted_char.value)) },
+                .new_end_point = { (uint32_t)buffer->position_y, (uint32_t)byte_pos_x }
             });
         }
     }
@@ -967,19 +974,21 @@ void editor_backspace() {
     pthread_mutex_lock(&editor_mutex);
     BufferLine *line = buffer->lines[buffer->position_y];
 
-    // Calculate byte position for the edit
     uint32_t start_byte = 0;
     for (int i = 0; i < buffer->position_y; i++) {
-        start_byte += buffer->lines[i]->char_count + (i < buffer->line_count - 1 ? 1 : 0);
+        for (int j = 0; j < buffer->lines[i]->char_count; j++) {
+            start_byte += strlen(buffer->lines[i]->chars[j].value);
+        }
+        start_byte++; // for newline
     }
-    start_byte += buffer->position_x;
+    int byte_pos_x = buffer_get_byte_position_x(buffer);
+    start_byte += byte_pos_x;
 
     if (buffer->position_x == 0) {
         if (buffer->position_y == 0) {
             pthread_mutex_unlock(&editor_mutex);
             return;
         }
-        // Case 1: Merge current line with previous line
         BufferLine *prev_line = buffer->lines[buffer->position_y - 1];
         int new_char_count = prev_line->char_count + line->char_count;
         buffer_line_realloc_for_capacity(prev_line, new_char_count);
@@ -989,21 +998,23 @@ void editor_backspace() {
             prev_line->needs_highlight = 1;
         }
 
-        // Shift lines up
         for (int i = buffer->position_y; i < buffer->line_count - 1; i++) {
             buffer->lines[i] = buffer->lines[i + 1];
         }
         buffer->line_count--;
         buffer_set_line_num_width(buffer);
         if (buffer->parser) {
+            int prev_line_byte_len = 0;
+            for (int i = 0; i < prev_line->char_count; i++) {
+                prev_line_byte_len += strlen(prev_line->chars[i].value);
+            }
             ts_tree_edit(buffer->tree, &(TSInputEdit){
                 .start_byte = start_byte - 1,
                 .old_end_byte = start_byte,
                 .new_end_byte = start_byte - 1,
                 .start_point = { (uint32_t)buffer->position_y, 0 },
                 .old_end_point = { (uint32_t)buffer->position_y, 0 },
-                .new_end_point = { (uint32_t)(buffer->position_y - 1), (uint32_t)buffer->lines[buffer->position_y - 1]->char_count }
-                             
+                .new_end_point = { (uint32_t)(buffer->position_y - 1), (uint32_t)prev_line_byte_len }
             });
         }
         buffer->position_y--;
@@ -1012,21 +1023,21 @@ void editor_backspace() {
         buffer_line_destroy(line);
 
     } else {
-        // Case 2: Delete character within the current line
-        memmove(&line->chars[buffer->position_x - 1], 
-                &line->chars[buffer->position_x], 
+        Char deleted_char = line->chars[buffer->position_x - 1];
+        memmove(&line->chars[buffer->position_x - 1],
+                &line->chars[buffer->position_x],
                 (line->char_count - buffer->position_x) * sizeof(Char));
         line->char_count--;
         buffer->position_x--;
         if (buffer->parser) {
             line->needs_highlight = 1;
             ts_tree_edit(buffer->tree, &(TSInputEdit){
-                .start_byte = start_byte - 1,
+                .start_byte = start_byte - strlen(deleted_char.value),
                 .old_end_byte = start_byte,
-                .new_end_byte = start_byte - 1,
-                .start_point = { (uint32_t)buffer->position_y, (uint32_t)(buffer->position_x - 1) },
-                .old_end_point = { (uint32_t)buffer->position_y, (uint32_t)buffer->position_x },
-                .new_end_point = { (uint32_t)buffer->position_y, (uint32_t)(buffer->position_x - 1) }
+                .new_end_byte = start_byte - strlen(deleted_char.value),
+                .start_point = { (uint32_t)buffer->position_y, (uint32_t)(byte_pos_x - strlen(deleted_char.value)) },
+                .old_end_point = { (uint32_t)buffer->position_y, (uint32_t)byte_pos_x },
+                .new_end_point = { (uint32_t)buffer->position_y, (uint32_t)(byte_pos_x - strlen(deleted_char.value)) }
              });
         }
     }
@@ -1074,7 +1085,6 @@ void editor_move_n_lines_up(int n) {
     pthread_mutex_unlock(&editor_mutex);
 }
 
-// Helper function to check if character is a word character
 int is_word_char(char ch) {
     return (ch >= 'a' && ch <= 'z') || 
            (ch >= 'A' && ch <= 'Z') || 
@@ -1082,12 +1092,10 @@ int is_word_char(char ch) {
            ch == '_';
 }
 
-// Helper function to check if character is whitespace
 int is_whitespace(char ch) {
     return ch == ' ' || ch == '\t' || ch == '\n';
 }
 
-// returns 1 if changed lines, 0 otherwise
 int range_expand_right(BufferLine **line, Range *range) {
     if (range->x_end >= (*line)->char_count - 1) {
         if (range->y_end == buffer->line_count - 1) {
@@ -1102,7 +1110,6 @@ int range_expand_right(BufferLine **line, Range *range) {
     return 0;
 }
 
-// returns 1 if changed lines, 0 otherwise
 int range_expand_left(BufferLine **line, Range *range) {
     if (range->x_end == 0) {
         if (range->y_end == 0) {
@@ -1118,7 +1125,6 @@ int range_expand_left(BufferLine **line, Range *range) {
     return 0;
 }
 
-// returns 1 if changed lines, 0 otherwise
 int range_expand_down(BufferLine **line, Range *range) {
     if (range->y_end == buffer->line_count - 1) {
         return 0;
@@ -1130,7 +1136,6 @@ int range_expand_down(BufferLine **line, Range *range) {
 }
 
 
-// returns 1 if changed lines, 0 otherwise
 int range_expand_up(BufferLine **line, Range *range) {
     if (range->y_end == 0) {
         return 0;
@@ -1332,23 +1337,19 @@ static void get_target_range(EditorCommand *cmd, Range *range) {
             } else {
                 int original_y = range->y_start;
 
-                // If we are on an empty line, treat it as a paragraph of its own.
                 if (is_line_empty(buffer->lines[original_y])) {
                     range->y_start = original_y;
                     range->y_end = original_y;
                 } else {
-                    // Find the start of the paragraph (move up to first non-empty line after an empty one)
                     while (range->y_start > 0 && !is_line_empty(buffer->lines[range->y_start - 1])) {
                         range->y_start--;
                     }
 
-                    // Find the end of the paragraph (move down to last non-empty line before an empty one)
                     while (range->y_end < buffer->line_count - 1 && !is_line_empty(buffer->lines[range->y_end + 1])) {
                         range->y_end++;
                     }
                 }
 
-                // Include the trailing empty line if it exists
                 if (range->y_end < buffer->line_count - 1 && is_line_empty(buffer->lines[range->y_end + 1])) {
                     range->y_end++;
                 }
@@ -1568,6 +1569,12 @@ void range_delete(Buffer *b, Range *range, EditorCommand *cmd) {
     int bottom = range_get_bottom_boundary(range);
     if (left == right && top == bottom) return;
 
+    if (cmd->action == 'd' && is_backward_motion(cmd->target)) {
+        if (top == bottom) {
+            right++;
+        }
+    }
+
     if (cmd->target == 'p' && top == bottom) {
         buffer_line_destroy(b->lines[top]);
         memmove(&b->lines[top], &b->lines[top + 1], (b->line_count - top - 1) * sizeof(BufferLine *));
@@ -1575,37 +1582,50 @@ void range_delete(Buffer *b, Range *range, EditorCommand *cmd) {
         return;
     }
 
-    // if (top == bottom && right == range->x_end) right++;
-    TSInputEdit edit;
     if (b->parser) {
-        edit.start_byte = 0;
+        uint32_t start_byte = 0;
         for (int i = 0; i < top; i++) {
-            edit.start_byte += b->lines[i]->char_count + 1;
-        }
-        edit.start_byte += left;
-        edit.old_end_byte = edit.start_byte;
-        edit.new_end_byte = edit.start_byte;
-        edit.start_point.row = top;
-        edit.start_point.column = left;
-        edit.new_end_point.row = top;
-        edit.new_end_point.column = left;
-        edit.old_end_point.row = bottom;
-        edit.old_end_point.column = right;
-    }
-    if (top == bottom && left == 0 && right == b->lines[top]->char_count -1) {
-        right++;
-    }
-    if (b->parser) {
-        for (int i = top; i < bottom; i++) {
-            edit.old_end_byte += b->lines[i]->char_count + 1;
-            if (i == top) {
-                edit.old_end_byte -= left;
+            for (int j = 0; j < b->lines[i]->char_count; j++) {
+                start_byte += strlen(b->lines[i]->chars[j].value);
             }
-            b->lines[i]->needs_highlight = 1;
+            start_byte++; // newline
         }
-        b->lines[bottom]->needs_highlight = 1;
-        edit.old_end_byte += right;
-        ts_tree_edit(b->tree, &edit);
+        uint32_t start_byte_in_line = 0;
+        for (int i = 0; i < left; i++) {
+            start_byte_in_line += strlen(b->lines[top]->chars[i].value);
+        }
+        start_byte += start_byte_in_line;
+
+        uint32_t deleted_bytes = 0;
+        for (int i = top; i <= bottom; i++) {
+            BufferLine *line = b->lines[i];
+            int start_j = (i == top) ? left : 0;
+            int end_j = (i == bottom) ? right : line->char_count;
+            for (int j = start_j; j < end_j; j++) {
+                deleted_bytes += strlen(line->chars[j].value);
+            }
+            if (i < bottom) {
+                deleted_bytes++; // newline
+            }
+        }
+
+        uint32_t end_byte_in_line = 0;
+        if (top == bottom) {
+            end_byte_in_line = start_byte_in_line + deleted_bytes;
+        } else {
+            for (int i = 0; i < right; i++) {
+                end_byte_in_line += strlen(b->lines[bottom]->chars[i].value);
+            }
+        }
+
+        ts_tree_edit(b->tree, &(TSInputEdit){
+            .start_byte = start_byte,
+            .old_end_byte = start_byte + deleted_bytes,
+            .new_end_byte = start_byte,
+            .start_point = { (uint32_t)top, start_byte_in_line },
+            .old_end_point = { (uint32_t)bottom, end_byte_in_line },
+            .new_end_point = { (uint32_t)top, start_byte_in_line }
+        });
     }
 
     // trim top line
@@ -1617,13 +1637,10 @@ void range_delete(Buffer *b, Range *range, EditorCommand *cmd) {
 
     // destroy all completely removed lines and shift
     if (bottom > top) {
-        for (int i = top + 1; i < bottom; i++) {
+        for (int i = top + 1; i <= bottom; i++) {
             buffer_line_destroy(b->lines[i]);
             free(b->lines[i]);
         }
-
-        buffer_line_destroy(b->lines[bottom]);
-        free(b->lines[bottom]);
 
         int lines_to_remove = bottom - top;
         if (b->line_count > bottom) {

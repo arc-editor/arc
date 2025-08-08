@@ -1,9 +1,8 @@
 #include <termios.h>
 #include <unistd.h>
+#include <string.h>
 #include "editor.h"
 #include "normal.h"
-
-#include <string.h>
 
 int insert_handle_input(const char *ch_str) {
     if (ch_str[0] == 27 && ch_str[1] == '\0') { // ESC

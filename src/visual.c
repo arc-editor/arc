@@ -1,4 +1,5 @@
 #include "visual.h"
+#include <string.h>
 #include "editor.h"
 #include "normal.h"
 
@@ -8,8 +9,6 @@ static int is_waiting_for_specifier = 0;
 void visual_mode_enter() {
     editor_command_reset(&cmd);
 }
-
-#include <string.h>
 
 int visual_handle_input(const char *ch_str) {
     if (is_waiting_for_specifier) {
