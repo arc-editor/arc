@@ -208,6 +208,12 @@ int normal_handle_input(const char *ch_str) {
       editor_move_n_lines_up(cmd.count);
       editor_command_reset(&cmd);
       break;
+    case '/':
+      editor_enter_search_mode(1);
+      break;
+    case '?':
+      editor_enter_search_mode(-1);
+      break;
   }
   return 1;
 }

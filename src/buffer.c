@@ -509,3 +509,98 @@ int buffer_get_byte_position_x(Buffer *buffer) {
     }
     return byte_pos;
 }
+
+static char* line_to_string(BufferLine *line) {
+    int len = 0;
+    for (int i = 0; i < line->char_count; i++) {
+        len += strlen(line->chars[i].value);
+    }
+    char *str = malloc(len + 1);
+    if (!str) return NULL;
+
+    char *ptr = str;
+    for (int i = 0; i < line->char_count; i++) {
+        int char_len = strlen(line->chars[i].value);
+        memcpy(ptr, line->chars[i].value, char_len);
+        ptr += char_len;
+    }
+    *ptr = '\0';
+    return str;
+}
+
+int buffer_find_forward(Buffer *b, const char *term, int *y, int *x) {
+    int term_len = strlen(term);
+    if (term_len == 0) return 0;
+
+    for (int i = *y; i < b->line_count; i++) {
+        BufferLine *line = b->lines[i];
+        char *line_str = line_to_string(line);
+        if (!line_str) continue;
+
+        int start_char_pos = (i == *y) ? *x + 1 : 0;
+        if (start_char_pos >= line->char_count) {
+            free(line_str);
+            continue;
+        }
+
+        int start_byte_pos = 0;
+        for(int k=0; k<start_char_pos; k++) {
+            start_byte_pos += strlen(line->chars[k].value);
+        }
+
+        if (start_byte_pos >= (int)strlen(line_str)) {
+            free(line_str);
+            continue;
+        }
+
+        char* match = strstr(line_str + start_byte_pos, term);
+        if (match) {
+            int match_byte_pos = match - line_str;
+            int match_char_pos = 0;
+            int current_byte_pos = 0;
+            for (int k = 0; k < line->char_count; k++) {
+                if (current_byte_pos == match_byte_pos) {
+                    match_char_pos = k;
+                    break;
+                }
+                current_byte_pos += strlen(line->chars[k].value);
+            }
+            *y = i;
+            *x = match_char_pos;
+            free(line_str);
+            return 1;
+        }
+        free(line_str);
+    }
+    return 0;
+}
+
+int buffer_find_backward(Buffer *b, const char *term, int *y, int *x) {
+    int term_len = strlen(term);
+    if (term_len == 0) return 0;
+
+    for (int i = *y; i >= 0; i--) {
+        BufferLine *line = b->lines[i];
+        if (!line) continue;
+        char *line_str = line_to_string(line);
+        if (!line_str) continue;
+
+        int start_char_pos = (i == *y) ? *x - 1 : line->char_count - 1;
+
+        for (int j = start_char_pos; j >= 0; j--) {
+            int start_byte_pos = 0;
+            for(int k=0; k<j; k++) {
+                start_byte_pos += strlen(line->chars[k].value);
+            }
+
+            if (strncmp(line_str + start_byte_pos, term, term_len) == 0) {
+                *y = i;
+                *x = j;
+                free(line_str);
+                return 1;
+            }
+        }
+        free(line_str);
+    }
+    return 0;
+}

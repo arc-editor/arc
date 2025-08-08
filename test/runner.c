@@ -3,6 +3,7 @@
 #include "../src/buffer.h"
 #include "../src/normal.h"
 #include "../src/visual.h"
+#include "test_search.h"
 #include <stdio.h>
 #include <unistd.h>
 
@@ -194,6 +195,8 @@ int main(void) {
     test_visual_action_helper("test_visual_delete_backward", "hello world", 0, 3, "hhd", "ho world");
     test_visual_action_helper("test_visual_delete_backward_across_line", "foo\nbar", 1, 1, "kld", "for");
     test_visual_action_helper("test_visual_delete_forward_across_line", "foo\nbar", 0, 1, "jhd", "far");
+
+    run_search_tests();
 
     if (g_test_failures == 0) {
         printf("All tests passed.\n");
