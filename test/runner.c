@@ -160,6 +160,17 @@ int main(void) {
     test_motion_helper("test_2t_motion", "hello world", 0, 0, "2to", 0, 6);
     test_motion_helper("test_T_motion", "hello world", 0, 5, "Th", 0, 1);
 
+    // ================ paragraph motion ================
+    test_motion_helper("test_np_motion", "p1\n\np2", 0, 0, "np", 2, 0);
+    test_motion_helper("test_np_motion_mid_para", "p1 l1\np1 l2\n\np2", 1, 0, "np", 3, 0);
+    test_motion_helper("test_np_motion_end_of_file", "p1\n\np2", 2, 0, "np", 2, 0);
+    test_motion_helper("test_2np_motion", "p1\n\np2\n\np3", 0, 0, "2np", 4, 0);
+    test_motion_helper("test_pp_motion", "p1\n\np2", 2, 0, "pp", 0, 0);
+    test_motion_helper("test_pp_motion_mid_para", "p1\n\np2 l1\np2 l2", 3, 0, "pp", 2, 0);
+    test_motion_helper("test_pp_motion_start_of_para", "p1\n\np2", 2, 0, "pp", 0, 0);
+    test_motion_helper("test_pp_motion_start_of_file", "p1\n\np2", 0, 0, "pp", 0, 0);
+    test_motion_helper("test_2pp_motion", "p1\n\np2\n\np3", 4, 0, "2pp", 0, 0);
+
     // ================ find with delete ================
     test_helper("test_df_motion", "hello world", 0, 0, "dfl", "lo world");
     test_helper("test_dF_motion", "hello world", 0, 5, "dFh", "world");

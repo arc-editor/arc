@@ -1277,8 +1277,51 @@ static void get_target_range(EditorCommand *cmd, Range *range) {
         // range->x_end--;
     }
     switch (cmd->target) {
+        case 'n':
+            if (cmd->specifier == 'p') {
+                int y = buffer->position_y;
+                int count = cmd->count ? cmd->count : 1;
+                for (int i = 0; i < count; i++) {
+                    // find next empty line
+                    while (y < buffer->line_count - 1 && !is_line_empty(buffer->lines[y])) {
+                        y++;
+                    }
+                    // find next non-empty line
+                    while (y < buffer->line_count - 1 && is_line_empty(buffer->lines[y])) {
+                        y++;
+                    }
+                }
+
+                range->y_end = y;
+                range->x_end = 0;
+            }
+            break;
         case 'p':
-            {
+            if (cmd->action == 0) {
+                if (cmd->specifier == 'p') {
+                    int y = buffer->position_y;
+                    int count = cmd->count ? cmd->count : 1;
+                    for (int i = 0; i < count; i++) {
+                        int start_of_current = y;
+                        while (start_of_current > 0 && !is_line_empty(buffer->lines[start_of_current - 1])) {
+                            start_of_current--;
+                        }
+                        if (y != start_of_current && i == 0) {
+                            y = start_of_current;
+                        } else {
+                            if (y > 0) y--;
+                            while (y > 0 && is_line_empty(buffer->lines[y])) {
+                                y--;
+                            }
+                            while (y > 0 && !is_line_empty(buffer->lines[y-1])) {
+                                y--;
+                            }
+                        }
+                    }
+                    range->y_end = y;
+                    range->x_end = 0;
+                }
+            } else {
                 int original_y = range->y_start;
 
                 // If we are on an empty line, treat it as a paragraph of its own.

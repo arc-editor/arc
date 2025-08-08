@@ -180,6 +180,8 @@ int normal_handle_input(char ch) {
     case 'F':
     case 't':
     case 'T':
+    case 'n':
+    case 'p':
       cmd.target = ch;
       is_waiting_for_specifier = 1;
       break;
