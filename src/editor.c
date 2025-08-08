@@ -1727,11 +1727,6 @@ void editor_command_exec(EditorCommand *cmd) {
     pthread_mutex_unlock(&editor_mutex);
 }
 
-void editor_enter_search_mode(int direction) {
-    search_init(direction);
-    editor_needs_draw();
-}
-
 void editor_center_view(void) {
     buffer_reset_offset_y(buffer, screen_rows);
     buffer_reset_offset_x(buffer, screen_cols);

@@ -1,8 +1,6 @@
 #include "test.h"
 #include "../src/editor.h"
 #include "../src/buffer.h"
-#include "../src/search.h"
-#include "../src/normal.h"
 #include <stdio.h>
 #include <unistd.h>
 

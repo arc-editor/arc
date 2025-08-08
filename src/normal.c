@@ -210,10 +210,12 @@ int normal_handle_input(const char *ch_str) {
       editor_command_reset(&cmd);
       break;
     case '/':
-      editor_enter_search_mode(1);
+      search_init(1);
+      editor_needs_draw();
       break;
     case '?':
-      editor_enter_search_mode(-1);
+      search_init(-1);
+      editor_needs_draw();
       break;
     case '\x0d': {
       const char *last_term = search_get_last_term();
