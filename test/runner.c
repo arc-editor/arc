@@ -135,7 +135,7 @@ int main(void) {
     test_helper("test_partial_line_dl", "hello world\n", 0, 3, "dl", "hel\n");
     test_helper("test_whole_line_dl", "hello world\n", 0, 0, "dl", "\n");
     test_helper("test_partial_line_dh", "hello world\n", 0, 3, "dh", "lo world\n");
-    test_helper("test_whole_line_dh", "hello world\n", 0, 10, "dh", "d\n");
+    test_helper("test_whole_line_dh", "hello world\n", 0, 10, "dh", "\n");
     test_helper("test_whole_line_far_right_dh", "hello world\n", 0, 11, "dh", "\n");
 
     // p: paragraphs

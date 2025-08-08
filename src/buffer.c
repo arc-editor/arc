@@ -170,50 +170,36 @@ void buffer_line_apply_syntax_highlighting(Buffer *b, BufferLine *line, uint32_t
     line->needs_highlight = 0;
 }
 
-const char *buffer_read(void *payload, uint32_t byte, TSPoint point, uint32_t *bytes_read) {
+const char *buffer_read(void *payload, uint32_t byte, TSPoint position, uint32_t *bytes_read) {
     Buffer *buffer = (Buffer *)payload;
-
-    if (point.row >= (uint32_t)buffer->line_count) {
+    if (position.row >= (uint32_t)buffer->line_count) {
         *bytes_read = 0;
         return "";
     }
 
-    uint32_t line_start_byte = 0;
-    for (uint32_t i = 0; i < point.row; i++) {
-        BufferLine *line = buffer->lines[i];
-        for (int j = 0; j < line->char_count; j++) {
-            uint32_t codepoint = line->chars[j].value;
-            if (codepoint < 0x80) line_start_byte += 1;
-            else if (codepoint < 0x800) line_start_byte += 2;
-            else if (codepoint < 0x10000) line_start_byte += 3;
-            else line_start_byte += 4;
-        }
-        line_start_byte++; // for newline
-    }
-
-    uint32_t offset_in_line = byte - line_start_byte;
-    if (offset_in_line < 0) {
-        *bytes_read = 0;
-        return "";
-    }
-
-    BufferLine *line = buffer->lines[point.row];
-    char *p = buffer->read_buffer;
-    uint32_t current_offset = 0;
-
+    BufferLine *line = buffer->lines[position.row];
+    size_t line_byte_length = 0;
     for (int i = 0; i < line->char_count; i++) {
-        if (current_offset >= offset_in_line) {
-            p += utf8_encode(line->chars[i].value, p);
-        }
         uint32_t codepoint = line->chars[i].value;
-        if (codepoint < 0x80) current_offset += 1;
-        else if (codepoint < 0x800) current_offset += 2;
-        else if (codepoint < 0x10000) current_offset += 3;
-        else current_offset += 4;
+        if (codepoint < 0x80) line_byte_length += 1;
+        else if (codepoint < 0x800) line_byte_length += 2;
+        else if (codepoint < 0x10000) line_byte_length += 3;
+        else line_byte_length += 4;
     }
 
+    if (line_byte_length + 2 > buffer->read_buffer_capacity) {
+        buffer->read_buffer_capacity = line_byte_length + 2;
+        buffer->read_buffer = realloc(buffer->read_buffer, buffer->read_buffer_capacity);
+    }
+
+    char *p = buffer->read_buffer;
+    for (int i = 0; i < line->char_count; i++) {
+        p += utf8_encode(line->chars[i].value, p);
+    }
     *p++ = '\n';
-    *bytes_read = p - buffer->read_buffer;
+    *p = '\0';
+
+    *bytes_read = line_byte_length + 1;
     return buffer->read_buffer;
 }
 

@@ -243,16 +243,7 @@ void draw_buffer(Diagnostic *diagnostics, int diagnostics_count, int update_diag
     uint32_t start_byte = 0;
     for (int i = 0; i < buffer->offset_y; i++) {
         BufferLine *line = buffer->lines[i];
-        for (int j = 0; j < line->char_count; j++) {
-            uint32_t codepoint = line->chars[j].value;
-            if (codepoint < 0x80) start_byte += 1;
-            else if (codepoint < 0x800) start_byte += 2;
-            else if (codepoint < 0x10000) start_byte += 3;
-            else start_byte += 4;
-        }
-        if (i < buffer->line_count - 1) {
-            start_byte++; // for newline
-        }
+        start_byte += line->char_count + (i < buffer->line_count - 1 ? 1 : 0); // Only add newline if not the last line
     }
     for (int row = buffer->offset_y; row < buffer->offset_y + screen_rows - 1; row++) {
         int relative_y = row - buffer->offset_y;
@@ -481,26 +472,9 @@ void editor_insert_new_line() {
     // Calculate byte position for the edit
     uint32_t start_byte = 0;
     for (int i = 0; i < buffer->position_y; i++) {
-        BufferLine *line = buffer->lines[i];
-        for (int j = 0; j < line->char_count; j++) {
-            uint32_t codepoint = line->chars[j].value;
-            if (codepoint < 0x80) start_byte += 1;
-            else if (codepoint < 0x800) start_byte += 2;
-            else if (codepoint < 0x10000) start_byte += 3;
-            else start_byte += 4;
-        }
-        if (i < buffer->line_count - 1) {
-            start_byte++; // for newline
-        }
+        start_byte += buffer->lines[i]->char_count + (i < buffer->line_count - 1 ? 1 : 0);
     }
-    BufferLine *line = buffer->lines[buffer->position_y];
-    for (int j = 0; j < buffer->position_x; j++) {
-        uint32_t codepoint = line->chars[j].value;
-        if (codepoint < 0x80) start_byte += 1;
-        else if (codepoint < 0x800) start_byte += 2;
-        else if (codepoint < 0x10000) start_byte += 3;
-        else start_byte += 4;
-    }
+    start_byte += buffer->position_x;
 
     // Allocate space for a new line
     buffer_realloc_lines_for_capacity(buffer);
@@ -845,26 +819,9 @@ void editor_insert_char(int ch) {
     if (buffer->parser) {
         uint32_t start_byte = 0;
         for (int i = 0; i < buffer->position_y; i++) {
-            BufferLine *line = buffer->lines[i];
-            for (int j = 0; j < line->char_count; j++) {
-                uint32_t codepoint = line->chars[j].value;
-                if (codepoint < 0x80) start_byte += 1;
-                else if (codepoint < 0x800) start_byte += 2;
-                else if (codepoint < 0x10000) start_byte += 3;
-                else start_byte += 4;
-            }
-            if (i < buffer->line_count - 1) {
-                start_byte++; // for newline
-            }
+            start_byte += buffer->lines[i]->char_count + 1;
         }
-        BufferLine *current_line = buffer->lines[buffer->position_y];
-        for (int j = 0; j < buffer->position_x - 1; j++) {
-            uint32_t codepoint = current_line->chars[j].value;
-            if (codepoint < 0x80) start_byte += 1;
-            else if (codepoint < 0x800) start_byte += 2;
-            else if (codepoint < 0x10000) start_byte += 3;
-            else start_byte += 4;
-        }
+        start_byte += buffer->position_x - 1;
         ts_tree_edit(buffer->tree, &(TSInputEdit){
             .start_byte = start_byte,
             .old_end_byte = start_byte,
@@ -985,26 +942,9 @@ void editor_delete() {
     // Calculate byte position for the edit
     uint32_t start_byte = 0;
     for (int i = 0; i < buffer->position_y; i++) {
-        BufferLine *line = buffer->lines[i];
-        for (int j = 0; j < line->char_count; j++) {
-            uint32_t codepoint = line->chars[j].value;
-            if (codepoint < 0x80) start_byte += 1;
-            else if (codepoint < 0x800) start_byte += 2;
-            else if (codepoint < 0x10000) start_byte += 3;
-            else start_byte += 4;
-        }
-        if (i < buffer->line_count - 1) {
-            start_byte++; // for newline
-        }
+        start_byte += buffer->lines[i]->char_count + (i < buffer->line_count - 1 ? 1 : 0);
     }
-    BufferLine *current_line = buffer->lines[buffer->position_y];
-    for (int j = 0; j < buffer->position_x; j++) {
-        uint32_t codepoint = current_line->chars[j].value;
-        if (codepoint < 0x80) start_byte += 1;
-        else if (codepoint < 0x800) start_byte += 2;
-        else if (codepoint < 0x10000) start_byte += 3;
-        else start_byte += 4;
-    }
+    start_byte += buffer->position_x;
 
     if (buffer->position_x == line->char_count) {
         if (buffer->position_y == buffer->line_count - 1) {
@@ -1069,26 +1009,9 @@ void editor_backspace() {
     // Calculate byte position for the edit
     uint32_t start_byte = 0;
     for (int i = 0; i < buffer->position_y; i++) {
-        BufferLine *line = buffer->lines[i];
-        for (int j = 0; j < line->char_count; j++) {
-            uint32_t codepoint = line->chars[j].value;
-            if (codepoint < 0x80) start_byte += 1;
-            else if (codepoint < 0x800) start_byte += 2;
-            else if (codepoint < 0x10000) start_byte += 3;
-            else start_byte += 4;
-        }
-        if (i < buffer->line_count - 1) {
-            start_byte++; // for newline
-        }
+        start_byte += buffer->lines[i]->char_count + (i < buffer->line_count - 1 ? 1 : 0);
     }
-    BufferLine *current_line = buffer->lines[buffer->position_y];
-    for (int j = 0; j < buffer->position_x; j++) {
-        uint32_t codepoint = current_line->chars[j].value;
-        if (codepoint < 0x80) start_byte += 1;
-        else if (codepoint < 0x800) start_byte += 2;
-        else if (codepoint < 0x10000) start_byte += 3;
-        else start_byte += 4;
-    }
+    start_byte += buffer->position_x;
 
     if (buffer->position_x == 0) {
         if (buffer->position_y == 0) {
@@ -1653,44 +1576,10 @@ void range_delete(Buffer *b, Range *range, EditorCommand *cmd) {
     if (b->parser) {
         edit.start_byte = 0;
         for (int i = 0; i < top; i++) {
-            BufferLine *line = b->lines[i];
-            for (int j = 0; j < line->char_count; j++) {
-                uint32_t codepoint = line->chars[j].value;
-                if (codepoint < 0x80) edit.start_byte += 1;
-                else if (codepoint < 0x800) edit.start_byte += 2;
-                else if (codepoint < 0x10000) edit.start_byte += 3;
-                else edit.start_byte += 4;
-            }
-            if (i < b->line_count - 1) {
-                edit.start_byte++;
-            }
+            edit.start_byte += b->lines[i]->char_count + 1;
         }
-        BufferLine *top_line = b->lines[top];
-        for (int j = 0; j < left; j++) {
-            uint32_t codepoint = top_line->chars[j].value;
-            if (codepoint < 0x80) edit.start_byte += 1;
-            else if (codepoint < 0x800) edit.start_byte += 2;
-            else if (codepoint < 0x10000) edit.start_byte += 3;
-            else edit.start_byte += 4;
-        }
-
+        edit.start_byte += left;
         edit.old_end_byte = edit.start_byte;
-        for (int i = top; i <= bottom; i++) {
-            BufferLine *line = b->lines[i];
-            int start_j = (i == top) ? left : 0;
-            int end_j = (i == bottom) ? right : line->char_count;
-            for (int j = start_j; j < end_j; j++) {
-                uint32_t codepoint = line->chars[j].value;
-                if (codepoint < 0x80) edit.old_end_byte += 1;
-                else if (codepoint < 0x800) edit.old_end_byte += 2;
-                else if (codepoint < 0x10000) edit.old_end_byte += 3;
-                else edit.old_end_byte += 4;
-            }
-            if (i < bottom) {
-                edit.old_end_byte++;
-            }
-        }
-
         edit.new_end_byte = edit.start_byte;
         edit.start_point.row = top;
         edit.start_point.column = left;
@@ -1698,7 +1587,20 @@ void range_delete(Buffer *b, Range *range, EditorCommand *cmd) {
         edit.new_end_point.column = left;
         edit.old_end_point.row = bottom;
         edit.old_end_point.column = right;
-
+    }
+    if (top == bottom && left == 0 && right == b->lines[top]->char_count -1) {
+        right++;
+    }
+    if (b->parser) {
+        for (int i = top; i < bottom; i++) {
+            edit.old_end_byte += b->lines[i]->char_count + 1;
+            if (i == top) {
+                edit.old_end_byte -= left;
+            }
+            b->lines[i]->needs_highlight = 1;
+        }
+        b->lines[bottom]->needs_highlight = 1;
+        edit.old_end_byte += right;
         ts_tree_edit(b->tree, &edit);
     }
 
