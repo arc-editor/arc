@@ -217,7 +217,7 @@ void buffer_parse(Buffer *b) {
         .encoding = TSInputEncodingUTF8,
         .payload = b,
     };
-    if (b->cursor) {
+    if (b->parser) {
         b->tree = ts_parser_parse(b->parser, old_tree, ts_input);
         b->root = ts_tree_root_node(b->tree);
     }
