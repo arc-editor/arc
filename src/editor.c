@@ -155,7 +155,7 @@ void draw_statusline() {
         editor_set_style(&current_theme.statusline_mode_visual, 1, 1);
         mode = " VISUAL ";
     } else if (editor_handle_input == search_handle_input) {
-        editor_set_style(&current_theme.statusline_mode_normal, 1, 1);
+        editor_set_style(&current_theme.statusline_mode_command, 1, 1);
         mode = " COMMAND ";
     } else {
         editor_set_style(&current_theme.statusline_mode_normal, 1, 1);
@@ -188,7 +188,7 @@ void draw_statusline() {
     if (editor_handle_input == search_handle_input) {
         const char *search_term = search_get_term();
         char prompt_char = search_get_prompt_char();
-        int search_len = printf("search%c %s", prompt_char, search_term);
+        int search_len = printf(" %c%s", prompt_char, search_term);
         for (int i = 0; i < screen_cols - mode_len - search_len; i++) {
             putchar(' ');
         }

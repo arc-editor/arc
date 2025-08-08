@@ -19,6 +19,14 @@ void search_init(int direction) {
     editor_handle_input = search_handle_input;
 }
 
+const char *search_get_last_term(void) {
+    return last_search_term;
+}
+
+int search_get_last_direction(void) {
+    return last_search_direction;
+}
+
 const char *search_get_term(void) {
     return search_term;
 }

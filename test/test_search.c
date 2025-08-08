@@ -6,7 +6,7 @@
 #include <stdio.h>
 #include <unistd.h>
 
-void test_search_motion_helper(const char* test_name, const char* initial_content, int start_y, int start_x, const char* commands, int end_y, int end_x) {
+void test_generic_motion_helper(const char* test_name, const char* initial_content, int start_y, int start_x, const char* commands, int end_y, int end_x) {
     printf("  - %s\n", test_name);
 
     const char* filename = "test.txt";
@@ -22,14 +22,8 @@ void test_search_motion_helper(const char* test_name, const char* initial_conten
 
     for (int i = 0; commands[i] != '\0'; i++) {
         char ch_str[2] = {commands[i], '\0'};
-        if (editor_handle_input == search_handle_input) {
-            search_handle_input(ch_str);
-        } else {
-            normal_handle_input(ch_str);
-        }
+        editor_handle_input(ch_str);
     }
-    // handle enter to submit search
-    search_handle_input("\x0d");
 
     ASSERT_EQUAL(test_name, buffer->position_y, end_y);
     ASSERT_EQUAL(test_name, buffer->position_x, end_x);
@@ -38,10 +32,11 @@ void test_search_motion_helper(const char* test_name, const char* initial_conten
 }
 
 void run_search_tests() {
-    test_search_motion_helper("test_forward_search", "hello world\nhello there", 0, 0, "/hello", 1, 0);
-    test_search_motion_helper("test_forward_search_from_middle", "hello world\nhello there", 0, 5, "/hello", 1, 0);
-    test_search_motion_helper("test_backward_search", "hello world\nhello there", 1, 0, "?hello", 0, 0);
-    test_search_motion_helper("test_backward_search_from_middle", "hello world\nhello there", 1, 5, "?hello", 1, 0);
-    test_search_motion_helper("test_no_match_forward", "hello world", 0, 0, "/goodbye", 0, 0);
-    test_search_motion_helper("test_no_match_backward", "hello world", 0, 0, "?goodbye", 0, 0);
+    test_generic_motion_helper("test_forward_search", "hello world\nhello there", 0, 0, "/hello\x0d", 1, 0);
+    test_generic_motion_helper("test_forward_search_from_middle", "hello world\nhello there", 0, 5, "/hello\x0d", 1, 0);
+    test_generic_motion_helper("test_backward_search", "hello world\nhello there", 1, 0, "?hello\x0d", 0, 0);
+    test_generic_motion_helper("test_backward_search_from_middle", "hello world\nhello there", 1, 5, "?hello\x0d", 1, 0);
+    test_generic_motion_helper("test_no_match_forward", "hello world", 0, 0, "/goodbye\x0d", 0, 0);
+    test_generic_motion_helper("test_no_match_backward", "hello world", 0, 0, "?goodbye\x0d", 0, 0);
+    test_generic_motion_helper("test_repeat_search", "hello hello hello", 0, 0, "/hello\x0d\x0d", 0, 12);
 }

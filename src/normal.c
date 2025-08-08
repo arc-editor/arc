@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include "insert.h"
 #include "editor.h"
+#include "search.h"
 #include "picker_file.h"
 #include "picker_buffer.h"
 #include "visual.h"
@@ -214,6 +215,27 @@ int normal_handle_input(const char *ch_str) {
     case '?':
       editor_enter_search_mode(-1);
       break;
+    case '\x0d': {
+      const char *last_term = search_get_last_term();
+      if (last_term && last_term[0] != '\0') {
+        Buffer *buffer = editor_get_active_buffer();
+        int y = buffer->position_y;
+        int x = buffer->position_x;
+        if (search_get_last_direction() == 1) {
+          if (buffer_find_forward(buffer, last_term, &y, &x)) {
+            buffer->position_y = y;
+            buffer->position_x = x;
+          }
+        } else {
+          if (buffer_find_backward(buffer, last_term, &y, &x)) {
+            buffer->position_y = y;
+            buffer->position_x = x;
+          }
+        }
+        editor_needs_draw();
+      }
+      break;
+    }
   }
   return 1;
 }
