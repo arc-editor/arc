@@ -197,12 +197,12 @@ void draw_statusline() {
     } else {
         int left_len = mode_len + branch_name_len;
         int right_len = position_len + line_count_len;
-    char search_stats[32] = {0};
-    int search_stats_len = 0;
-    if (buffer->search_state.count > 0 && buffer->search_state.current != -1) {
-        search_stats_len = snprintf(search_stats, sizeof(search_stats), "[%d/%d]", buffer->search_state.current + 1, buffer->search_state.count);
-        right_len += search_stats_len;
-    }
+        char search_stats[32] = {0};
+        int search_stats_len = 0;
+        if (buffer->search_state.count > 0 && buffer->search_state.current != -1) {
+            search_stats_len = snprintf(search_stats, sizeof(search_stats), "[%d/%d]", buffer->search_state.current + 1, buffer->search_state.count);
+            right_len += search_stats_len + 1;
+        }
 
         int half_cols = screen_cols / 2;
         int half_file_name_len = file_name_len / 2;
