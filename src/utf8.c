@@ -36,10 +36,6 @@ int read_utf8_char(FILE *fp, char *buf, size_t buf_size) {
         len = 3;
     } else if ((first_byte & 0xF8) == 0xF0) { // 11110xxx
         len = 4;
-    } else if ((first_byte & 0xFC) == 0xF8) { // 111110xx
-        len = 5;
-    } else if ((first_byte & 0xFE) == 0xFC) { // 1111110x
-        len = 6;
     } else {
         // Invalid UTF-8 start byte. For simplicity, treat as a single byte.
         len = 1;
@@ -82,10 +78,6 @@ int read_utf8_char_from_stdin(char *buf, size_t buf_size) {
         len = 3;
     } else if ((first_byte & 0xF8) == 0xF0) { // 11110xxx
         len = 4;
-    } else if ((first_byte & 0xFC) == 0xF8) { // 111110xx
-        len = 5;
-    } else if ((first_byte & 0xFE) == 0xFC) { // 1111110x
-        len = 6;
     } else {
         // Invalid UTF-8 start byte. For simplicity, treat as a single byte.
         len = 1;
@@ -110,7 +102,7 @@ int read_utf8_char_from_stdin(char *buf, size_t buf_size) {
     return len;
 }
 
-int utf8_char_width(const char *s) {
+unsigned char utf8_char_width(const char *s) {
     init_utf8();
 
     if (!s || !*s) {
@@ -125,7 +117,7 @@ int utf8_char_width(const char *s) {
         return 1;
     }
 
-    int width = wcwidth(wc);
+    unsigned char width = wcwidth(wc);
     if (width < 0) {
         // E.g., for control characters
         return 0;
