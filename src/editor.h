@@ -4,6 +4,7 @@
 #define EDITOR_VERSION "debug"
 #include "theme.h"
 #include "buffer.h"
+#include "search.h"
 
 typedef struct {
     int x_start;
@@ -23,6 +24,9 @@ extern int (*editor_handle_input)(const char *);
 
 void editor_command_reset(EditorCommand *cmd);
 void editor_command_exec(EditorCommand *cmd);
+void editor_enter_search_mode(int direction);
+void editor_center_view(void);
+void editor_set_screen_size(int rows, int cols);
 void editor_draw();
 void editor_init(char *file_name);
 void editor_start(char *file_name);

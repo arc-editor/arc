@@ -231,6 +231,7 @@ void theme_load(const char* filename, Theme *theme) {
 
     parse_style(result.toptab, "statusline.mode-insert", &theme->statusline_mode_insert);
     parse_style(result.toptab, "statusline.mode-normal", &theme->statusline_mode_normal);
+    parse_style(result.toptab, "statusline.mode-command", &theme->statusline_mode_command);
     parse_style(result.toptab, "statusline.mode-visual", &theme->statusline_mode_visual);
     parse_style(result.toptab, "statusline.text", &theme->statusline_text);
 

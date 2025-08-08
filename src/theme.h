@@ -66,6 +66,7 @@ typedef struct {
 
     Style statusline_mode_insert;
     Style statusline_mode_normal;
+    Style statusline_mode_command;
     Style statusline_mode_visual;
     Style statusline_text;
 

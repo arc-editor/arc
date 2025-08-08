@@ -30,5 +30,8 @@ extern int g_test_failures;
     }
 
 void test_helper(const char* test_name, const char* initial_content, int start_y, int start_x, const char* commands, const char* expected_content);
+void test_motion_helper(const char* test_name, const char* initial_content, int start_y, int start_x, const char* commands, int end_y, int end_x);
+void test_visual_motion_helper(const char* test_name, const char* initial_content, int start_y, int start_x, const char* commands, int sel_start_y, int sel_start_x, int end_y, int end_x);
+void test_visual_action_helper(const char* test_name, const char* initial_content, int start_y, int start_x, const char* commands, const char* expected_content);
 
 #endif // TEST_H

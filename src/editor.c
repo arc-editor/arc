@@ -30,6 +30,7 @@
 #include "lsp.h"
 #include "ui.h"
 #include "utf8.h"
+#include "search.h"
 
 static pthread_mutex_t editor_mutex = PTHREAD_MUTEX_INITIALIZER;
 
@@ -153,6 +154,9 @@ void draw_statusline() {
     } else if (editor_handle_input == visual_handle_input) {
         editor_set_style(&current_theme.statusline_mode_visual, 1, 1);
         mode = " VISUAL ";
+    } else if (editor_handle_input == search_handle_input) {
+        editor_set_style(&current_theme.statusline_mode_command, 1, 1);
+        mode = " COMMAND ";
     } else {
         editor_set_style(&current_theme.statusline_mode_normal, 1, 1);
         mode = " NORMAL ";
@@ -180,33 +184,43 @@ void draw_statusline() {
         branch_name_len += 2;
     }
 
-    int left_len = mode_len + branch_name_len;
-    int right_len = position_len + line_count_len;
-    int half_cols = screen_cols / 2;
-    int half_file_name_len = file_name_len / 2;
-    int left_space = half_cols - left_len - half_file_name_len;
-    int right_space = (screen_cols - half_cols) - right_len - (file_name_len - half_file_name_len);
-
     printf("%s", mode);
     editor_set_style(&current_theme.statusline_text, 1, 1);
-    if (branch_name_len) {
-        printf(" %s ", branch_name);
-    }
-    for (int i = 0; i < left_space; i++) putchar(' ');
-    if (buffer->file_name) {
-        printf(" %s ", buffer->file_name);
-    }
-    if (buffer->dirty) {
-        if (buffer->file_name) {
-            printf("[+] ");
-        } else {
-            printf(" [+] ");
+
+    if (editor_handle_input == search_handle_input) {
+        const char *search_term = search_get_term();
+        char prompt_char = search_get_prompt_char();
+        int search_len = printf(" %c%s", prompt_char, search_term);
+        for (int i = 0; i < screen_cols - mode_len - search_len; i++) {
+            putchar(' ');
         }
+    } else {
+        int left_len = mode_len + branch_name_len;
+        int right_len = position_len + line_count_len;
+        int half_cols = screen_cols / 2;
+        int half_file_name_len = file_name_len / 2;
+        int left_space = half_cols - left_len - half_file_name_len;
+        int right_space = (screen_cols - half_cols) - right_len - (file_name_len - half_file_name_len);
+
+        if (branch_name_len) {
+            printf(" %s ", branch_name);
+        }
+        for (int i = 0; i < left_space; i++) putchar(' ');
+        if (buffer->file_name) {
+            printf(" %s ", buffer->file_name);
+        }
+        if (buffer->dirty) {
+            if (buffer->file_name) {
+                printf("[+] ");
+            } else {
+                printf(" [+] ");
+            }
+        }
+
+        for (int i = 0; i < right_space; i++) putchar(' ');
+
+        printf("%s%s", position, line_count);
     }
-
-    for (int i = 0; i < right_space; i++) putchar(' ');
-
-    printf("%s%s", position, line_count);
     printf("\x1b[0m");
 }
 
@@ -1711,6 +1725,21 @@ void editor_command_exec(EditorCommand *cmd) {
     }
     editor_command_reset(cmd);
     pthread_mutex_unlock(&editor_mutex);
+}
+
+void editor_enter_search_mode(int direction) {
+    search_init(direction);
+    editor_needs_draw();
+}
+
+void editor_center_view(void) {
+    buffer_reset_offset_y(buffer, screen_rows);
+    buffer_reset_offset_x(buffer, screen_cols);
+}
+
+void editor_set_screen_size(int rows, int cols) {
+    screen_rows = rows;
+    screen_cols = cols;
 }
 
 Buffer *editor_get_active_buffer(void) {
