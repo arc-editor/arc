@@ -217,7 +217,7 @@ void buffer_parse(Buffer *b) {
         .encoding = TSInputEncodingUTF8,
         .payload = b,
     };
-    if (b->cursor) {
+    if (b->parser) {
         b->tree = ts_parser_parse(b->parser, old_tree, ts_input);
         b->root = ts_tree_root_node(b->tree);
     }
@@ -407,48 +407,50 @@ void buffer_init(Buffer *b, char *file_name) {
         b->parser = ts_parser_new();
         ts_parser_set_language(b->parser, lang);
         b->query = config_load_highlights(lang, lang_name);
-        if (!b->query) {
-            return;
-        }
-        b->cursor = ts_query_cursor_new();
-        if (!b->cursor) {
-            log_error("buffer.buffer_init: failed to create query cursor");
-            exit(1);
+        if (b->query) {
+            b->cursor = ts_query_cursor_new();
+            if (!b->cursor) {
+                log_error("buffer.buffer_init: failed to create query cursor");
+                exit(1);
+            }
         }
     }
 
     FILE *fp = fopen(file_name, "r");
-    if (fp == NULL) {
-        log_error("buffer.buffer_init: failed to open file");
-        return;
-    }
-        
-    char utf8_buf[8];
-    int bytes_read;
-    while ((bytes_read = read_utf8_char(fp, utf8_buf, sizeof(utf8_buf))) > 0) {
-        if (strcmp(utf8_buf, "\n") == 0) {
-            buffer_realloc_lines_for_capacity(b);
-            b->lines[b->line_count] = (BufferLine *)malloc(sizeof(BufferLine));
-            if (b->lines[b->line_count] == NULL) {
-                log_error("buffer.buffer_init: failed to allocate BufferLine");
-                exit(1);
+    if (fp) {
+        char utf8_buf[8];
+        int bytes_read;
+        while ((bytes_read = read_utf8_char(fp, utf8_buf, sizeof(utf8_buf))) > 0) {
+            if (strcmp(utf8_buf, "\n") == 0) {
+                buffer_realloc_lines_for_capacity(b);
+                b->lines[b->line_count] = (BufferLine *)malloc(sizeof(BufferLine));
+                if (b->lines[b->line_count] == NULL) {
+                    log_error("buffer.buffer_init: failed to allocate BufferLine");
+                    exit(1);
+                }
+                buffer_line_init(b->lines[b->line_count]);
+                b->line_count++;
+            } else {
+                BufferLine *line = b->lines[b->line_count - 1];
+                buffer_line_realloc_for_capacity(line, line->char_count + 1);
+                Char new_char = { .underline = 0 };
+                strncpy(new_char.value, utf8_buf, sizeof(new_char.value));
+                new_char.width = utf8_char_width(utf8_buf);
+                line->chars[line->char_count] = new_char;
+                line->char_count++;
             }
-            buffer_line_init(b->lines[b->line_count]);
-            b->line_count++;
-        } else {
-            BufferLine *line = b->lines[b->line_count - 1];
-            buffer_line_realloc_for_capacity(line, line->char_count + 1);
-            Char new_char = { .underline = 0 };
-            strncpy(new_char.value, utf8_buf, sizeof(new_char.value));
-            new_char.width = utf8_char_width(utf8_buf);
-            line->chars[line->char_count] = new_char;
-            line->char_count++;
         }
+        if (bytes_read == -1) {
+            log_error("buffer.buffer_init: error reading UTF-8 character from file");
+        }
+        fclose(fp);
+    } else {
+        log_error("buffer.buffer_init: failed to open file");
     }
-    if (bytes_read == -1) {
-        log_error("buffer.buffer_init: error reading UTF-8 character from file");
+
+    if (b->parser) {
+        buffer_parse(b);
     }
-    fclose(fp);
 }
 
 void buffer_destroy(Buffer *b) {
