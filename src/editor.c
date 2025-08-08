@@ -329,27 +329,20 @@ void draw_buffer(Diagnostic *diagnostics, int diagnostics_count, int update_diag
                 style = &current_theme.content_selection;
             }
 
-            char style_str[64] = "";
-            char *p = style_str;
-            if (ch.style & STYLE_UNDERLINE) {
-                p += sprintf(p, "4;");
-            }
-            if (ch.style & STYLE_ITALIC) {
-                p += sprintf(p, "3;");
-            }
-            if (ch.style & STYLE_BOLD) {
-                p += sprintf(p, "1;");
-            }
+            Style char_style;
+            char_style.fg_r = ch.r;
+            char_style.fg_g = ch.g;
+            char_style.fg_b = ch.b;
+            char_style.bg_r = style->bg_r;
+            char_style.bg_g = style->bg_g;
+            char_style.bg_b = style->bg_b;
+            char_style.style = ch.style;
 
-            if (p != style_str) {
-                printf("\x1b[%s38;2;%d;%d;%d;48;2;%d;%d;%dm%s\x1b[0m", style_str, ch.r, ch.g, ch.b, style->bg_r, style->bg_g, style->bg_b, ch.value);
-                editor_set_style(line_style, 0, 1);
-            } else {
-                printf("\x1b[22;23;24;38;2;%d;%d;%d;48;2;%d;%d;%dm%s", ch.r, ch.g, ch.b, style->bg_r, style->bg_g, style->bg_b, ch.value);
-            }
+            editor_set_style(&char_style, 1, 1);
+            printf("%s", ch.value);
             chars_to_print--;
         }
-        editor_set_style(line_style, 0, 1);
+        editor_set_style(line_style, 1, 1);
         while (chars_to_print > 0) {
             putchar(' ');
             chars_to_print--;
