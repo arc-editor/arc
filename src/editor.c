@@ -185,6 +185,8 @@ void draw_statusline() {
     }
 
     printf("%s", mode);
+    editor_set_style(&current_theme.statusline_text, 1, 1);
+
     if (editor_handle_input == search_handle_input) {
         const char *search_term = search_get_term();
         char prompt_char = search_get_prompt_char();
@@ -200,7 +202,6 @@ void draw_statusline() {
         int left_space = half_cols - left_len - half_file_name_len;
         int right_space = (screen_cols - half_cols) - right_len - (file_name_len - half_file_name_len);
 
-        editor_set_style(&current_theme.statusline_text, 1, 1);
         if (branch_name_len) {
             printf(" %s ", branch_name);
         }
@@ -1729,6 +1730,16 @@ void editor_command_exec(EditorCommand *cmd) {
 void editor_enter_search_mode(int direction) {
     search_init(direction);
     editor_needs_draw();
+}
+
+void editor_center_view(void) {
+    buffer_reset_offset_y(buffer, screen_rows);
+    buffer_reset_offset_x(buffer, screen_cols);
+}
+
+void editor_set_screen_size(int rows, int cols) {
+    screen_rows = rows;
+    screen_cols = cols;
 }
 
 Buffer *editor_get_active_buffer(void) {

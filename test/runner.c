@@ -118,6 +118,7 @@ void test_visual_action_helper(const char* test_name, const char* initial_conten
 int main(void) {
     printf("Running tests...\n");
     editor_init(NULL);
+    editor_set_screen_size(24, 80);
 
     // ================ deletions ================
     // web: words

@@ -56,11 +56,13 @@ int search_handle_input(const char *ch_str) {
             if (buffer_find_forward(buffer, last_search_term, &y, &x)) {
                 buffer->position_y = y;
                 buffer->position_x = x;
+                editor_center_view();
             }
         } else {
             if (buffer_find_backward(buffer, last_search_term, &y, &x)) {
                 buffer->position_y = y;
                 buffer->position_x = x;
+                editor_center_view();
             }
         }
 
