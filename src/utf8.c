@@ -102,7 +102,7 @@ int read_utf8_char_from_stdin(char *buf, size_t buf_size) {
     return len;
 }
 
-unsigned char utf8_char_width(const char *s) {
+int utf8_char_width(const char *s) {
     init_utf8();
 
     if (!s || !*s) {
@@ -117,7 +117,7 @@ unsigned char utf8_char_width(const char *s) {
         return 1;
     }
 
-    unsigned char width = wcwidth(wc);
+    int width = wcwidth(wc);
     if (width < 0) {
         // E.g., for control characters
         return 0;

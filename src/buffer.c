@@ -418,7 +418,7 @@ void buffer_init(Buffer *b, char *file_name) {
 
     FILE *fp = fopen(file_name, "r");
     if (fp) {
-        char utf8_buf[8];
+        char utf8_buf[5];
         int bytes_read;
         while ((bytes_read = read_utf8_char(fp, utf8_buf, sizeof(utf8_buf))) > 0) {
             if (strcmp(utf8_buf, "\n") == 0) {
