@@ -23,7 +23,8 @@ void test_helper(const char* test_name, const char* initial_content, int start_y
     buffer->position_x = start_x;
 
     for (int i = 0; commands[i] != '\0'; i++) {
-        normal_handle_input(commands[i]);
+        char ch_str[2] = {commands[i], '\0'};
+        normal_handle_input(ch_str);
     }
 
     char *result = buffer_get_content(buffer);
@@ -47,9 +48,10 @@ void test_visual_motion_helper(const char* test_name, const char* initial_conten
     buffer->position_y = start_y;
     buffer->position_x = start_x;
 
-    normal_handle_input('v');
+    normal_handle_input("v");
     for (int i = 0; commands[i] != '\0'; i++) {
-        visual_handle_input(commands[i]);
+        char ch_str[2] = {commands[i], '\0'};
+        visual_handle_input(ch_str);
     }
 
     ASSERT_EQUAL(test_name, buffer->selection_start_y, sel_start_y);
@@ -75,7 +77,8 @@ void test_motion_helper(const char* test_name, const char* initial_content, int 
     buffer->position_x = start_x;
 
     for (int i = 0; commands[i] != '\0'; i++) {
-        normal_handle_input(commands[i]);
+        char ch_str[2] = {commands[i], '\0'};
+        normal_handle_input(ch_str);
     }
 
     ASSERT_EQUAL(test_name, buffer->position_y, end_y);
@@ -98,9 +101,10 @@ void test_visual_action_helper(const char* test_name, const char* initial_conten
     buffer->position_y = start_y;
     buffer->position_x = start_x;
 
-    normal_handle_input('v');
+    normal_handle_input("v");
     for (int i = 0; commands[i] != '\0'; i++) {
-        visual_handle_input(commands[i]);
+        char ch_str[2] = {commands[i], '\0'};
+        visual_handle_input(ch_str);
     }
 
     char *result = buffer_get_content(buffer);
