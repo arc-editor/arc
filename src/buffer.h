@@ -68,7 +68,5 @@ void buffer_set_line_num_width(Buffer *b);
 char *buffer_get_content(Buffer *b);
 int is_line_empty(BufferLine *line);
 int buffer_get_visual_x_for_line_pos(Buffer *buffer, int y, int logical_x);
-size_t buffer_line_get_byte_length(BufferLine *line, int char_count);
-size_t buffer_get_line_start_byte_offset(Buffer *b, int line_index);
 
 #endif

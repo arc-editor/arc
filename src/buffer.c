@@ -523,26 +523,3 @@ int buffer_get_visual_x_for_line_pos(Buffer *buffer, int y, int logical_x) {
     }
     return x_pos;
 }
-
-size_t buffer_line_get_byte_length(BufferLine *line, int char_count) {
-    size_t byte_length = 0;
-    for (int i = 0; i < char_count; i++) {
-        uint32_t codepoint = line->chars[i].value;
-        if (codepoint < 0x80) byte_length += 1;
-        else if (codepoint < 0x800) byte_length += 2;
-        else if (codepoint < 0x10000) byte_length += 3;
-        else byte_length += 4;
-    }
-    return byte_length;
-}
-
-size_t buffer_get_line_start_byte_offset(Buffer *b, int line_index) {
-    size_t byte_offset = 0;
-    for (int i = 0; i < line_index; i++) {
-        byte_offset += buffer_line_get_byte_length(b->lines[i], b->lines[i]->char_count);
-        if (i < b->line_count - 1) {
-            byte_offset++; // for newline
-        }
-    }
-    return byte_offset;
-}
