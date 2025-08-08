@@ -46,6 +46,8 @@ int search_handle_input(const char *ch_str) {
         if (search_term_len > 0) {
             strcpy(last_search_term, search_term);
             last_search_direction = search_direction;
+        } else {
+            last_search_term[0] = '\0';
         }
 
         Buffer *buffer = editor_get_active_buffer();
