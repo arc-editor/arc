@@ -31,10 +31,6 @@
 #include "ui.h"
 #include "utf8.h"
 
-static int is_backward_motion(char target) {
-    return target == 'h' || target == 'b' || target == 'B' || target == 'F' || target == 'T';
-}
-
 static pthread_mutex_t editor_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 int (*editor_handle_input)(const char *);
