@@ -165,29 +165,22 @@ void buffer_update_search_matches(Buffer *b, const char *term) {
 }
 
 void buffer_update_current_search_match(Buffer *b) {
-    if (b->search_state.count == 0) {
+    if (b->search_state.count == 0 || !b->search_state.term) {
         b->search_state.current = -1;
         return;
     }
 
-    // Find the first match that is at or after the cursor
+    size_t term_len = strlen(b->search_state.term);
     for (int i = 0; i < b->search_state.count; i++) {
-        if (b->search_state.matches[i].y > b->position_y ||
-            (b->search_state.matches[i].y == b->position_y && b->search_state.matches[i].x >= b->position_x)) {
-
-            // If the cursor is exactly on a match, we select it.
-            if (b->search_state.matches[i].y == b->position_y && b->search_state.matches[i].x == b->position_x) {
-                b->search_state.current = i;
-            } else {
-                // Otherwise, it's the previous one (wrapping around if necessary)
-                b->search_state.current = (i == 0) ? b->search_state.count - 1 : i - 1;
-            }
+        if (b->search_state.matches[i].y == b->position_y &&
+            b->position_x >= b->search_state.matches[i].x &&
+            b->position_x < b->search_state.matches[i].x + (int)term_len) {
+            b->search_state.current = i;
             return;
         }
     }
 
-    // If no match is at or after the cursor, it means the cursor is after the last match, so the last match is the current one.
-    b->search_state.current = b->search_state.count - 1;
+    b->search_state.current = -1;
 }
 
 void buffer_line_apply_syntax_highlighting(Buffer *b, BufferLine *line, uint32_t start_byte, Theme *theme) {

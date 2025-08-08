@@ -189,8 +189,12 @@ void draw_statusline() {
         int right_len = position_len + line_count_len;
         char search_stats[32] = {0};
         int search_stats_len = 0;
-        if (buffer->search_state.count > 0 && buffer->search_state.current != -1) {
-            search_stats_len = snprintf(search_stats, sizeof(search_stats), "[%d/%d]", buffer->search_state.current + 1, buffer->search_state.count);
+        if (buffer->search_state.count > 0) {
+            if (buffer->search_state.current != -1) {
+                search_stats_len = snprintf(search_stats, sizeof(search_stats), "[%d/%d]", buffer->search_state.current + 1, buffer->search_state.count);
+            } else {
+                search_stats_len = snprintf(search_stats, sizeof(search_stats), "[-/%d]", buffer->search_state.count);
+            }
             right_len += search_stats_len + 1;
         }
 
@@ -833,6 +837,7 @@ void editor_move_cursor_right() {
     } else {
         buffer_move_position_right(buffer, editor.screen_cols);
     }
+    buffer_update_current_search_match(buffer);
     buffer->needs_draw = 1;
     pthread_mutex_unlock(&editor_mutex);
 }
@@ -868,6 +873,7 @@ void editor_move_cursor_down() {
     buffer_reset_offset_y(buffer, editor.screen_rows);
     buffer_set_logical_position_x(buffer, visual_x);
     buffer_reset_offset_x(buffer, editor.screen_cols);
+    buffer_update_current_search_match(buffer);
     buffer->needs_draw = 1;
     pthread_mutex_unlock(&editor_mutex);
 }
@@ -883,6 +889,7 @@ void editor_move_cursor_up() {
     buffer_reset_offset_y(buffer, editor.screen_rows);
     buffer_set_logical_position_x(buffer, visual_x);
     buffer_reset_offset_x(buffer, editor.screen_cols);
+    buffer_update_current_search_match(buffer);
     buffer->needs_draw = 1;
     pthread_mutex_unlock(&editor_mutex);
 }
@@ -1720,6 +1727,7 @@ void editor_command_exec(EditorCommand *cmd) {
         buffer->position_y = range.y_end;
         buffer_reset_offset_x(buffer, editor.screen_cols);
         buffer_reset_offset_y(buffer, editor.screen_rows);
+        buffer_update_current_search_match(buffer);
         buffer->needs_draw = 1;
         editor_command_reset(cmd);
         pthread_mutex_unlock(&editor_mutex);
@@ -1731,6 +1739,7 @@ void editor_command_exec(EditorCommand *cmd) {
             buffer->position_y = range.y_end;
             buffer_reset_offset_x(buffer, editor.screen_cols);
             buffer_reset_offset_y(buffer, editor.screen_rows);
+            buffer_update_current_search_match(buffer);
             buffer->needs_draw = 1;
             break;
         case 'c':
@@ -1745,6 +1754,7 @@ void editor_command_exec(EditorCommand *cmd) {
                 range_delete(buffer, &range, cmd);
                 buffer_reset_offset_x(buffer, editor.screen_cols);
                 buffer_reset_offset_y(buffer, editor.screen_rows);
+                buffer_update_current_search_match(buffer);
                 buffer->needs_draw = 1;
                 if (left != right || top != bottom) {
                     editor_did_change_buffer();
@@ -1766,6 +1776,7 @@ void editor_command_exec(EditorCommand *cmd) {
 void editor_center_view(void) {
     buffer_reset_offset_y(buffer, editor.screen_rows);
     buffer_reset_offset_x(buffer, editor.screen_cols);
+    buffer_update_current_search_match(buffer);
 }
 
 void editor_set_screen_size(int rows, int cols) {
