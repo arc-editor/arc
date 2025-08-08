@@ -45,10 +45,10 @@ void picker_close() {
     editor_request_redraw();
 }
 
-int picker_handle_input(char ch) {
+int picker_handle_input(const char *ch_str) {
     if (!delegate) return 0;
 
-    if (ch == 13) { // Enter key
+    if (strcmp(ch_str, "\r") == 0 || strcmp(ch_str, "\n") == 0) { // Enter key
         if (delegate->get_results_count() > 0) {
             int close_picker = 1;
             delegate->on_select(selection, &close_picker);
@@ -58,17 +58,19 @@ int picker_handle_input(char ch) {
         }
         return 1;
     }
-    if (ch == 27) { // Escape key
+
+    if (ch_str[0] == 27 && ch_str[1] == '\0') { // Escape key
         picker_close();
         return 1;
     }
-    if (ch == 14) { // Down arrow
+
+    if (ch_str[0] == 14 && ch_str[1] == '\0') { // Down arrow
         if (selection < delegate->get_results_count() - 1) {
             selection++;
             editor_request_redraw();
         }
         return 1;
-    } else if (ch == 16) { // Up arrow
+    } else if (ch_str[0] == 16 && ch_str[1] == '\0') { // Up arrow
         if (selection > 0) {
             selection--;
             editor_request_redraw();
@@ -77,15 +79,15 @@ int picker_handle_input(char ch) {
     }
     
     selection = 0;
-    if (ch == 8 || ch == 127) { // Backspace
+    if ((ch_str[0] == 8 || ch_str[0] == 127) && ch_str[1] == '\0') { // Backspace
         if (search_len > 0) {
             search_len--;
             search[search_len] = '\0';
         }
-    } else if ((ch >= 32 && ch <= 126)) {
-        if (search_len < sizeof(search) - 1) {
-            search[search_len++] = ch;
-            search[search_len] = '\0';
+    } else {
+        if (search_len + strlen(ch_str) < sizeof(search) - 1) {
+            strcat(search, ch_str);
+            search_len += strlen(ch_str);
         }
     }
 

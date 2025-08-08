@@ -9,6 +9,7 @@
 #include "log.h"
 #include "config.h"
 #include "theme.h"
+#include "utf8.h"
 
 void buffer_set_line_num_width(Buffer *buffer) {
     buffer->line_num_width = (int)floor(log10(buffer->line_count)) + 3;
@@ -17,9 +18,12 @@ void buffer_set_line_num_width(Buffer *buffer) {
 char *buffer_get_content(Buffer *b) {
     size_t total_len = 0;
     for (int i = 0; i < b->line_count; i++) {
-        total_len += b->lines[i]->char_count;
+        BufferLine *line = b->lines[i];
+        for (int j = 0; j < line->char_count; j++) {
+            total_len += strlen(line->chars[j].value);
+        }
     }
-    total_len += b->line_count -1; // for newlines
+    total_len += b->line_count - 1; // for newlines
 
     char *content = malloc(total_len + 1);
     if (!content) {
@@ -31,7 +35,10 @@ char *buffer_get_content(Buffer *b) {
     for (int i = 0; i < b->line_count; i++) {
         BufferLine *line = b->lines[i];
         for (int j = 0; j < line->char_count; j++) {
-            *p++ = line->chars[j].value;
+            const char *val = line->chars[j].value;
+            size_t len = strlen(val);
+            memcpy(p, val, len);
+            p += len;
         }
         if (i < b->line_count - 1) {
             *p++ = '\n';
@@ -152,25 +159,43 @@ const char *buffer_read(void *payload, uint32_t start_byte __attribute__((unused
         return "";
     }
     BufferLine *line = buffer->lines[position.row];
-    int remaining = line->char_count - (int)position.column;
-    if (remaining < 0) remaining = 0;
-    size_t needed = (size_t)remaining + 1;
-    if (needed > buffer->read_buffer_capacity) {
-        size_t new_capacity = needed * 2;
+
+    // Calculate total bytes in the line
+    size_t line_byte_len = 0;
+    for (int i = 0; i < line->char_count; i++) {
+        line_byte_len += strlen(line->chars[i].value);
+    }
+
+    // +2 for potential newline and null terminator
+    if (line_byte_len + 2 > buffer->read_buffer_capacity) {
+        size_t new_capacity = line_byte_len + 2;
         char *new_buffer = realloc(buffer->read_buffer, new_capacity);
         if (!new_buffer) {
-            log_error("buffer.buffer_read: malloc read buffer");
+            log_error("buffer.buffer_read: realloc read buffer failed");
             exit(1);
         }
         buffer->read_buffer = new_buffer;
         buffer->read_buffer_capacity = new_capacity;
     }
-    for (int i = 0; i < remaining; i++) {
-        buffer->read_buffer[i] = line->chars[position.column + i].value;
+
+    // Copy line content to read_buffer
+    char *p = buffer->read_buffer;
+    for (int i = 0; i < line->char_count; i++) {
+        const char *val = line->chars[i].value;
+        size_t len = strlen(val);
+        memcpy(p, val, len);
+        p += len;
     }
-    buffer->read_buffer[remaining] = '\n';
-    *bytes_read = remaining + 1;
-    return buffer->read_buffer;
+    *p = '\n';
+    *(p + 1) = '\0';
+
+    if (position.column > line_byte_len) {
+        *bytes_read = 0;
+        return "";
+    }
+
+    *bytes_read = line_byte_len - position.column + 1; // +1 for the newline
+    return buffer->read_buffer + position.column;
 }
 
 
@@ -203,10 +228,12 @@ void buffer_parse(Buffer *b) {
 
 int buffer_get_visual_position_x(Buffer *buffer) {
     BufferLine *line = buffer->lines[buffer->position_y];
-    int x = buffer->position_x + buffer->line_num_width + 1;
+    int x = buffer->line_num_width + 1;
     for (int i = 0; i < buffer->position_x; i++) {
-        if (line->chars[i].value == '\t') {
-            x += buffer->tab_width - 1;
+        if (strcmp(line->chars[i].value, "\t") == 0) {
+            x += buffer->tab_width;
+        } else {
+            x += line->chars[i].width;
         }
     }
     return x - buffer->offset_x;
@@ -385,9 +412,10 @@ void buffer_init(Buffer *b, char *file_name) {
         exit(1);
     }
         
-    char ch;
-    while ((ch = fgetc(fp)) != EOF) {
-        if (ch == '\n') {
+    char utf8_buf[8];
+    int bytes_read;
+    while ((bytes_read = read_utf8_char(fp, utf8_buf, sizeof(utf8_buf))) > 0) {
+        if (strcmp(utf8_buf, "\n") == 0) {
             buffer_realloc_lines_for_capacity(b);
             b->lines[b->line_count] = (BufferLine *)malloc(sizeof(BufferLine));
             if (b->lines[b->line_count] == NULL) {
@@ -399,10 +427,15 @@ void buffer_init(Buffer *b, char *file_name) {
         } else {
             BufferLine *line = b->lines[b->line_count - 1];
             buffer_line_realloc_for_capacity(line, line->char_count + 1);
-            Char new_char = { .value = ch, .underline = 0 };
+            Char new_char = { .underline = 0 };
+            strncpy(new_char.value, utf8_buf, sizeof(new_char.value));
+            new_char.width = utf8_char_width(utf8_buf);
             line->chars[line->char_count] = new_char;
             line->char_count++;
         }
+    }
+    if (bytes_read == -1) {
+        log_error("buffer.buffer_init: error reading UTF-8 character from file");
     }
     fclose(fp);
 }
@@ -436,7 +469,7 @@ int is_line_empty(BufferLine *line) {
         return 1;
     }
     for (int i = 0; i < line->char_count; i++) {
-        if (line->chars[i].value != ' ' && line->chars[i].value != '\t') {
+        if (strcmp(line->chars[i].value, " ") != 0 && strcmp(line->chars[i].value, "\t") != 0) {
             return 0;
         }
     }
@@ -446,10 +479,12 @@ int is_line_empty(BufferLine *line) {
 int buffer_get_visual_x_for_line_pos(Buffer *buffer, int y, int logical_x) {
     if (y >= buffer->line_count) return 0;
     BufferLine *line = buffer->lines[y];
-    int x_pos = logical_x + buffer->line_num_width + 1;
+    int x_pos = buffer->line_num_width + 1;
     for (int i = 0; i < logical_x && i < line->char_count; i++) {
-        if (line->chars[i].value == '\t') {
-            x_pos += buffer->tab_width - 1;
+        if (strcmp(line->chars[i].value, "\t") == 0) {
+            x_pos += buffer->tab_width;
+        } else {
+            x_pos += line->chars[i].width;
         }
     }
     return x_pos;

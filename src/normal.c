@@ -1,3 +1,4 @@
+#include <string.h>
 #include <termios.h>
 #include <unistd.h>
 #include "insert.h"
@@ -37,11 +38,26 @@ void dispatch_command() {
     editor_command_exec(&cmd);
 }
 
-int normal_handle_input(char ch) {
-  if (ch == 27) {
+int normal_handle_input(const char *ch_str) {
+  if (ch_str[0] == 27 && ch_str[1] == '\0') {
       editor_command_reset(&cmd);
       return 1;
   }
+
+  if (is_waiting_for_specifier) {
+    strncpy(cmd.specifier, ch_str, sizeof(cmd.specifier) - 1);
+    cmd.specifier[sizeof(cmd.specifier) - 1] = '\0';
+    dispatch_command();
+    is_waiting_for_specifier = 0;
+    return 1;
+  }
+
+  if (ch_str[1] != '\0') {
+      // Not a single byte character, ignore for now for other commands
+      return 1;
+  }
+  char ch = ch_str[0];
+
   if (!command_inited) {
     editor_command_reset(&cmd);
     editor_command_reset(&prev_cmd);
@@ -71,13 +87,6 @@ int normal_handle_input(char ch) {
       break;
     }
     is_space_mode = 0;
-    return 1;
-  }
-
-  if (is_waiting_for_specifier) {
-    cmd.specifier = ch;
-    dispatch_command();
-    is_waiting_for_specifier = 0;
     return 1;
   }
 
@@ -123,7 +132,8 @@ int normal_handle_input(char ch) {
     if (is_change) {
       is_insertion_bufferable = 0;
       for (int i = 0; i < buff_count; i++) {
-        insert_handle_input(insertion_buffer[i]);
+        // This is broken for utf8
+        // insert_handle_input(insertion_buffer[i]);
       }
       is_insertion_bufferable = 1;
       editor_handle_input = normal_handle_input;
@@ -201,4 +211,3 @@ int normal_handle_input(char ch) {
   }
   return 1;
 }
-

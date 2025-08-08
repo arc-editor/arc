@@ -5,7 +5,8 @@
 #include "theme.h"
 
 typedef struct {
-    char value;
+    char value[8];
+    int width;
     unsigned char r;
     unsigned char g;
     unsigned char b;

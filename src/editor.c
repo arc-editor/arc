@@ -29,10 +29,11 @@
 #include "picker_file.h"
 #include "lsp.h"
 #include "ui.h"
+#include "utf8.h"
 
 static pthread_mutex_t editor_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-int (*editor_handle_input)(char);
+int (*editor_handle_input)(const char *);
 
 static int screen_rows;
 static int screen_cols;
@@ -300,7 +301,7 @@ void draw_buffer(Diagnostic *diagnostics, int diagnostics_count, int update_diag
         // Iterate over characters in the line
         for (int ch_idx = 0; ch_idx < line->char_count && chars_to_print > 0; ch_idx++) {
             Char ch = line->chars[ch_idx];
-            if (ch.value == '\t') {
+            if (strcmp(ch.value, "\t") == 0) {
                 if (cols_to_skip >= buffer->tab_width) {
                     cols_to_skip -= buffer->tab_width;
                     continue;
@@ -329,13 +330,13 @@ void draw_buffer(Diagnostic *diagnostics, int diagnostics_count, int update_diag
                 printf("\x1b[4m");
             }
             if (ch.italic && ch.bold) {
-                printf("\x1b[1;3;38;2;%d;%d;%d;48;2;%d;%d;%dm%c", ch.r, ch.g, ch.b, style->bg_r, style->bg_g, style->bg_b, ch.value);
+                printf("\x1b[1;3;38;2;%d;%d;%d;48;2;%d;%d;%dm%s", ch.r, ch.g, ch.b, style->bg_r, style->bg_g, style->bg_b, ch.value);
             } else if (ch.italic) {
-                printf("\x1b[3;38;2;%d;%d;%d;48;2;%d;%d;%dm%c", ch.r, ch.g, ch.b, style->bg_r, style->bg_g, style->bg_b, ch.value);
+                printf("\x1b[3;38;2;%d;%d;%d;48;2;%d;%d;%dm%s", ch.r, ch.g, ch.b, style->bg_r, style->bg_g, style->bg_b, ch.value);
             } else if (ch.bold) {
-                printf("\x1b[1;38;2;%d;%d;%d;48;2;%d;%d;%dm%c", ch.r, ch.g, ch.b, style->bg_r, style->bg_g, style->bg_b, ch.value);
+                printf("\x1b[1;38;2;%d;%d;%d;48;2;%d;%d;%dm%s", ch.r, ch.g, ch.b, style->bg_r, style->bg_g, style->bg_b, ch.value);
             } else {
-                printf("\x1b[22;23;38;2;%d;%d;%d;48;2;%d;%d;%dm%c", ch.r, ch.g, ch.b, style->bg_r, style->bg_g, style->bg_b, ch.value);
+                printf("\x1b[22;23;38;2;%d;%d;%d;48;2;%d;%d;%dm%s", ch.r, ch.g, ch.b, style->bg_r, style->bg_g, style->bg_b, ch.value);
             }
             if (ch.underline) {
                 printf("\x1b[24m");
@@ -725,11 +726,16 @@ void editor_start(char *file_name) {
         log_error("editor.editor_start: unable to create render thread");
         exit(1);
     }
-    while (editor_handle_input(getchar())) {}
+    char utf8_buf[8];
+    while (read_utf8_char_from_stdin(utf8_buf, sizeof(utf8_buf)) > 0) {
+        if (!editor_handle_input(utf8_buf)) {
+            break;
+        }
+    }
     editor_clear_screen();
 }
 
-void editor_insert_char(int ch) {
+void editor_insert_char(const char *ch) {
     pthread_mutex_lock(&editor_mutex);
     BufferLine *line = buffer->lines[buffer->position_y];
     buffer_line_realloc_for_capacity(line, line->char_count + 1);
@@ -754,10 +760,12 @@ void editor_insert_char(int ch) {
         }
     }
 
-    Char new = (Char){
-        .value = ch,
-        .underline = should_underline,
-    };
+    Char new;
+    strncpy(new.value, ch, sizeof(new.value));
+    new.width = utf8_char_width(ch);
+    new.underline = should_underline;
+    new.r = 255; new.g = 255; new.b = 255;
+    new.italic = 0; new.bold = 0;
 
     if (buffer->position_x < line->char_count) {
         memmove(&line->chars[buffer->position_x + 1],
@@ -876,7 +884,7 @@ void editor_write() {
     for (int line_idx = 0; line_idx < buffer->line_count; line_idx++) {
         BufferLine *line = buffer->lines[line_idx];
         for (int char_idx = 0; char_idx < line->char_count; char_idx++) {
-            fputc(line->chars[char_idx].value, fp);
+            fputs(line->chars[char_idx].value, fp);
         }
         if (line_idx < buffer->line_count - 1) {
             fputc('\n', fp);
@@ -1146,16 +1154,16 @@ void range_expand_e(BufferLine *line, int count, Range *range) {
         if (!line->char_count) {
             continue;
         }
-        while (is_whitespace(line->chars[range->x_end].value)) {
+        while (is_whitespace(line->chars[range->x_end].value[0])) {
             range_expand_right(&line, range);
             moved = 1;
         }
         int touched = 0;
-        if (!is_word_char(line->chars[range->x_end].value)) {
+        if (!is_word_char(line->chars[range->x_end].value[0])) {
             if (moved) {
                 continue;
             }
-            while (range->x_end < line->char_count - 1 && !is_word_char(line->chars[range->x_end + 1].value) && !is_whitespace(line->chars[range->x_end + 1].value)) {
+            while (range->x_end < line->char_count - 1 && !is_word_char(line->chars[range->x_end + 1].value[0]) && !is_whitespace(line->chars[range->x_end + 1].value[0])) {
                 touched = 1;
                 range_expand_right(&line, range);
             }
@@ -1163,10 +1171,10 @@ void range_expand_e(BufferLine *line, int count, Range *range) {
         if (touched) {
             continue;
         }
-        if (!is_word_char(line->chars[range->x_end].value)) {
+        if (!is_word_char(line->chars[range->x_end].value[0])) {
             continue;
         }
-        while (range->x_end < line->char_count - 1 && is_word_char(line->chars[range->x_end + 1].value)) {
+        while (range->x_end < line->char_count - 1 && is_word_char(line->chars[range->x_end + 1].value[0])) {
             range_expand_right(&line, range);
         }
     }
@@ -1183,10 +1191,10 @@ void range_expand_E(BufferLine *line, int count, Range *range) {
         if (!line->char_count) {
             continue;
         }
-        while (is_whitespace(line->chars[range->x_end].value)) {
+        while (is_whitespace(line->chars[range->x_end].value[0])) {
             range_expand_right(&line, range);
         }
-        while (range->x_end < line->char_count - 1 && !is_whitespace(line->chars[range->x_end + 1].value)) {
+        while (range->x_end < line->char_count - 1 && !is_whitespace(line->chars[range->x_end + 1].value[0])) {
             range_expand_right(&line, range);
         }
     }
@@ -1203,12 +1211,12 @@ void range_expand_b(BufferLine *line, int count, Range *range) {
         if (!line->char_count) {
             continue;
         }
-        while (is_whitespace(line->chars[range->x_end].value)) {
+        while (is_whitespace(line->chars[range->x_end].value[0])) {
             range_expand_left(&line, range);
         }
         int touched = 0;
-        if (!is_word_char(line->chars[range->x_end].value)) {
-            while (range->x_end > 0 && !is_word_char(line->chars[range->x_end - 1].value) && !is_whitespace(line->chars[range->x_end - 1].value)) {
+        if (!is_word_char(line->chars[range->x_end].value[0])) {
+            while (range->x_end > 0 && !is_word_char(line->chars[range->x_end - 1].value[0]) && !is_whitespace(line->chars[range->x_end - 1].value[0])) {
                 touched = 1;
                 range_expand_left(&line, range);
             }
@@ -1216,10 +1224,10 @@ void range_expand_b(BufferLine *line, int count, Range *range) {
         if (touched) {
             continue;
         }
-        if (!is_word_char(line->chars[range->x_end].value)) {
+        if (!is_word_char(line->chars[range->x_end].value[0])) {
             continue;
         }
-        while (range->x_end > 0 && is_word_char(line->chars[range->x_end - 1].value)) {
+        while (range->x_end > 0 && is_word_char(line->chars[range->x_end - 1].value[0])) {
             range_expand_left(&line, range);
         }
     }
@@ -1233,10 +1241,10 @@ void range_expand_B(BufferLine *line, int count, Range *range) {
                 break;
             }
         }
-        while (is_whitespace(line->chars[range->x_end].value)) {
+        while (is_whitespace(line->chars[range->x_end].value[0])) {
             range_expand_left(&line, range);
         }
-        while (range->x_end > 0 && !is_whitespace(line->chars[range->x_end - 1].value)) {
+        while (range->x_end > 0 && !is_whitespace(line->chars[range->x_end - 1].value[0])) {
             range_expand_left(&line, range);
         }
     }
@@ -1278,7 +1286,7 @@ static void get_target_range(EditorCommand *cmd, Range *range) {
     }
     switch (cmd->target) {
         case 'n':
-            if (cmd->specifier == 'p') {
+            if (strcmp(cmd->specifier, "p") == 0) {
                 int y = buffer->position_y;
                 int count = cmd->count ? cmd->count : 1;
                 for (int i = 0; i < count; i++) {
@@ -1298,7 +1306,7 @@ static void get_target_range(EditorCommand *cmd, Range *range) {
             break;
         case 'p':
             if (cmd->action == 0) {
-                if (cmd->specifier == 'p') {
+                if (strcmp(cmd->specifier, "p") == 0) {
                     int y = buffer->position_y;
                     int count = cmd->count ? cmd->count : 1;
                     for (int i = 0; i < count; i++) {
@@ -1351,10 +1359,10 @@ static void get_target_range(EditorCommand *cmd, Range *range) {
             break;
         case 'w':
             if (cmd->action) {
-                if (!line->char_count || is_whitespace(line->chars[range->x_end].value)) {
+                if (!line->char_count || is_whitespace(line->chars[range->x_end].value[0])) {
                     return;
                 }
-                if (range->x_start && is_word_char(line->chars[range->x_start - 1].value)) {
+                if (range->x_start && is_word_char(line->chars[range->x_start - 1].value[0])) {
                     range_expand_b(line, count, range);
                     int tmp = range->x_end;
                     range->x_end = range->x_start;
@@ -1369,31 +1377,31 @@ static void get_target_range(EditorCommand *cmd, Range *range) {
                 if (range->x_end >= line->char_count - 1) {
                     range_expand_right(&line, range);
                     if (line->char_count) {
-                        while (is_whitespace(line->chars[range->x_end].value)) {
+                        while (is_whitespace(line->chars[range->x_end].value[0])) {
                             range_expand_right(&line, range);
                         }
                     }
                     continue;
                 }
                 int touched = 0;
-                while (!is_word_char(line->chars[range->x_end].value) && !is_whitespace(line->chars[range->x_end].value)) {
+                while (!is_word_char(line->chars[range->x_end].value[0]) && !is_whitespace(line->chars[range->x_end].value[0])) {
                     touched = 1;
                     if (range_expand_right(&line, range)) break;
                 }
                 if (!touched) {
-                    while (is_word_char(line->chars[range->x_end].value)) {
+                    while (is_word_char(line->chars[range->x_end].value[0])) {
                         if (range_expand_right(&line, range)) break;
                     }
                 }
 
-                while (range->x_end < line->char_count && is_whitespace(line->chars[range->x_end].value)) {
+                while (range->x_end < line->char_count && is_whitespace(line->chars[range->x_end].value[0])) {
                     if (range_expand_right(&line, range) && !line->char_count) break;
                 }
             }
             break;
         case 'W':
             if (cmd->action) {
-                if (!line->char_count || is_whitespace(line->chars[range->x_end].value)) {
+                if (!line->char_count || is_whitespace(line->chars[range->x_end].value[0])) {
                     return;
                 }
                 range_expand_B(line, count, range);
@@ -1409,17 +1417,17 @@ static void get_target_range(EditorCommand *cmd, Range *range) {
                 if (range->x_end >= line->char_count - 1) {
                     range_expand_right(&line, range);
                     if (line->char_count) {
-                        while (is_whitespace(line->chars[range->x_end].value)) {
+                        while (is_whitespace(line->chars[range->x_end].value[0])) {
                             range_expand_right(&line, range);
                         }
                     }
                     continue;
                 }
-                while (!is_whitespace(line->chars[range->x_end].value)) {
+                while (!is_whitespace(line->chars[range->x_end].value[0])) {
                     if (range_expand_right(&line, range)) break;
                 }
 
-                while (range->x_end < line->char_count && is_whitespace(line->chars[range->x_end].value)) {
+                while (range->x_end < line->char_count && is_whitespace(line->chars[range->x_end].value[0])) {
                     if (range_expand_right(&line, range) && !line->char_count) break;
                 }
             }
@@ -1464,7 +1472,7 @@ static void get_target_range(EditorCommand *cmd, Range *range) {
             for (int i = 0; i < count; i++) {
                 int found = 0;
                 for (int j = range->x_end + 1; j < line->char_count; j++) {
-                    if (line->chars[j].value == cmd->specifier) {
+                    if (strcmp(line->chars[j].value, cmd->specifier) == 0) {
                         range->x_end = j;
                         found = 1;
                         break;
@@ -1477,7 +1485,7 @@ static void get_target_range(EditorCommand *cmd, Range *range) {
             for (int i = 0; i < count; i++) {
                 int found = 0;
                 for (int j = range->x_end - 1; j >= 0; j--) {
-                    if (line->chars[j].value == cmd->specifier) {
+                    if (strcmp(line->chars[j].value, cmd->specifier) == 0) {
                         range->x_end = j;
                         found = 1;
                         break;
@@ -1490,7 +1498,7 @@ static void get_target_range(EditorCommand *cmd, Range *range) {
             for (int i = 0; i < count; i++) {
                 int found = 0;
                 for (int j = range->x_end + 2; j < line->char_count; j++) {
-                    if (line->chars[j].value == cmd->specifier) {
+                    if (strcmp(line->chars[j].value, cmd->specifier) == 0) {
                         range->x_end = j - 1;
                         found = 1;
                         break;
@@ -1503,7 +1511,7 @@ static void get_target_range(EditorCommand *cmd, Range *range) {
             for (int i = 0; i < count; i++) {
                 int found = 0;
                 for (int j = range->x_end - 2; j >= 0; j--) {
-                    if (line->chars[j].value == cmd->specifier) {
+                    if (strcmp(line->chars[j].value, cmd->specifier) == 0) {
                         range->x_end = j + 1;
                         found = 1;
                         break;

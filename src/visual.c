@@ -9,14 +9,23 @@ void visual_mode_enter() {
     editor_command_reset(&cmd);
 }
 
-int visual_handle_input(char ch) {
+#include <string.h>
+
+int visual_handle_input(const char *ch_str) {
     if (is_waiting_for_specifier) {
-        cmd.specifier = ch;
+        strncpy(cmd.specifier, ch_str, sizeof(cmd.specifier) - 1);
+        cmd.specifier[sizeof(cmd.specifier) - 1] = '\0';
         editor_command_exec(&cmd);
         is_waiting_for_specifier = 0;
         editor_command_reset(&cmd);
         return 1;
     }
+
+    if (ch_str[1] != '\0') {
+        // Not a single byte character, ignore for now.
+        return 1;
+    }
+    char ch = ch_str[0];
 
     if (ch >= '0' && ch <= '9') {
         if (cmd.count) {

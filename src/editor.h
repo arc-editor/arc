@@ -16,10 +16,10 @@ typedef struct {
   int count; // 1, 10
   char action; // 'c', 'd'
   char target; // 'w', 'e', 'B'
-  char specifier; // '(', '}'
+  char specifier[8]; // '(', '}'
 } EditorCommand;
 
-extern int (*editor_handle_input)(char);
+extern int (*editor_handle_input)(const char *);
 
 void editor_command_reset(EditorCommand *cmd);
 void editor_command_exec(EditorCommand *cmd);
@@ -37,7 +37,7 @@ void editor_move_cursor_right();
 void editor_move_cursor_left();
 void editor_move_cursor_down();
 void editor_move_cursor_up();
-void editor_insert_char(int);
+void editor_insert_char(const char *ch);
 void editor_insert_new_line();
 void editor_write();
 void editor_delete();
