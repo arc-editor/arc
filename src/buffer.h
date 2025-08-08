@@ -10,10 +10,12 @@ typedef struct __attribute__((packed)) {
     unsigned char r;
     unsigned char g;
     unsigned char b;
-    unsigned char italic;
-    unsigned char bold;
-    unsigned char underline;
+    unsigned char style;
 } Char;
+
+#define STYLE_ITALIC 1
+#define STYLE_BOLD 2
+#define STYLE_UNDERLINE 4
 
 typedef struct {
     int char_count;

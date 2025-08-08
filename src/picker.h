@@ -5,8 +5,7 @@
 
 typedef struct {
     char flag;
-    int bold;
-    int italic;
+    unsigned char style;
 } PickerItemStyle;
 
 typedef struct {

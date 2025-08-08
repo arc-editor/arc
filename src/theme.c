@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include "perfect_hashmap.h"
 #include "tomlc17.h"
+#include "buffer.h"
 #include "theme.h"
 #include "log.h"
 
@@ -130,9 +131,7 @@ static void set_default_style(Style* style) {
     style->bg_r = 0;
     style->bg_g = 0;
     style->bg_b = 0;
-    style->bold = 0;
-    style->italic = 0;
-    style->underline = 0;
+    style->style = 0;
 }
 
 static void parse_style(toml_datum_t root, const char* key, Style* style) {
@@ -157,20 +156,20 @@ static void parse_style(toml_datum_t root, const char* key, Style* style) {
 
     snprintf(full_key, sizeof(full_key), "%s.italic", key);
     toml_datum_t italic_data = toml_seek(root, full_key);
-    if (italic_data.type == TOML_BOOLEAN) {
-        style->italic = italic_data.u.boolean ? 1 : 0; 
+    if (italic_data.type == TOML_BOOLEAN && italic_data.u.boolean) {
+        style->style |= STYLE_ITALIC;
     }
 
     snprintf(full_key, sizeof(full_key), "%s.bold", key);
     toml_datum_t bold_data = toml_seek(root, full_key);
-    if (bold_data.type == TOML_BOOLEAN) {
-        style->bold = bold_data.u.boolean ? 1 : 0; 
+    if (bold_data.type == TOML_BOOLEAN && bold_data.u.boolean) {
+        style->style |= STYLE_BOLD;
     }
 
     snprintf(full_key, sizeof(full_key), "%s.underline", key);
     toml_datum_t underline_data = toml_seek(root, full_key);
-    if (underline_data.type == TOML_BOOLEAN) {
-        style->underline = underline_data.u.boolean ? 1 : 0;
+    if (underline_data.type == TOML_BOOLEAN && underline_data.u.boolean) {
+        style->style |= STYLE_UNDERLINE;
     }
 }
 

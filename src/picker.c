@@ -149,13 +149,12 @@ void picker_draw(int screen_cols, int screen_rows, Theme *theme) {
             style.bg_b = theme->content_background.bg_b;
         }
 
-        PickerItemStyle item_style = { .flag = ' ', .bold = 0, .italic = 0 };
+        PickerItemStyle item_style = { .flag = ' ', .style = 0 };
         if (delegate->get_item_style) {
             delegate->get_item_style(item_index, &item_style);
         }
 
-        style.bold = item_style.bold;
-        style.italic = item_style.italic;
+        style.style |= item_style.style;
         editor_set_style(&style, 1, 1);
 
         printf(" %c", item_style.flag);
@@ -179,9 +178,7 @@ void picker_draw(int screen_cols, int screen_rows, Theme *theme) {
                 highlight_style.fg_r = theme->picker_item_text_highlight.fg_r;
                 highlight_style.fg_g = theme->picker_item_text_highlight.fg_g;
                 highlight_style.fg_b = theme->picker_item_text_highlight.fg_b;
-                highlight_style.bold = theme->picker_item_text_highlight.bold;
-                highlight_style.italic = theme->picker_item_text_highlight.italic;
-                highlight_style.underline = theme->picker_item_text_highlight.underline;
+                highlight_style.style = theme->picker_item_text_highlight.style;
                 editor_set_style(&highlight_style, 1, 1);
                 printf("%c", truncated_item_text[j]);
                 editor_set_style(&style, 1, 1);

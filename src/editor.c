@@ -57,17 +57,17 @@ void editor_set_style(Style *style, int fg, int bg) {
     char *p = escape_seq;
     p += sprintf(p, "\x1b[");
 
-    if (style->bold) {
+    if (style->style & STYLE_BOLD) {
         p += sprintf(p, "1;");
     } else {
         p += sprintf(p, "22;");
     }
-    if (style->italic) {
+    if (style->style & STYLE_ITALIC) {
         p += sprintf(p, "3;");
     } else {
         p += sprintf(p, "23;");
     }
-    if (style->underline) {
+    if (style->style & STYLE_UNDERLINE) {
         p += sprintf(p, "4;");
     } else {
         p += sprintf(p, "24;");
@@ -267,13 +267,13 @@ void draw_buffer(Diagnostic *diagnostics, int diagnostics_count, int update_diag
         }
         if (update_diagnostics) {
             for (int j = 0; j < line->char_count; j++) {
-                line->chars[j].underline = 0;
+                line->chars[j].style &= ~STYLE_UNDERLINE;
             }
             for (int i = 0; i < diagnostics_count; i++) {
                 Diagnostic d = diagnostics[i];
                 if (d.line == row) {
                     for (int j = d.col_start; j < d.col_end && j < line->char_count; j++) {
-                        line->chars[j].underline = 1;
+                        line->chars[j].style |= STYLE_UNDERLINE;
                     }
                 }
             }
@@ -329,20 +329,23 @@ void draw_buffer(Diagnostic *diagnostics, int diagnostics_count, int update_diag
                 style = &current_theme.content_selection;
             }
 
-            if (ch.underline) {
-                printf("\x1b[4m");
+            char style_str[64] = "";
+            char *p = style_str;
+            if (ch.style & STYLE_UNDERLINE) {
+                p += sprintf(p, "4;");
             }
-            if (ch.italic && ch.bold) {
-                printf("\x1b[1;3;38;2;%d;%d;%d;48;2;%d;%d;%dm%s", ch.r, ch.g, ch.b, style->bg_r, style->bg_g, style->bg_b, ch.value);
-            } else if (ch.italic) {
-                printf("\x1b[3;38;2;%d;%d;%d;48;2;%d;%d;%dm%s", ch.r, ch.g, ch.b, style->bg_r, style->bg_g, style->bg_b, ch.value);
-            } else if (ch.bold) {
-                printf("\x1b[1;38;2;%d;%d;%d;48;2;%d;%d;%dm%s", ch.r, ch.g, ch.b, style->bg_r, style->bg_g, style->bg_b, ch.value);
+            if (ch.style & STYLE_ITALIC) {
+                p += sprintf(p, "3;");
+            }
+            if (ch.style & STYLE_BOLD) {
+                p += sprintf(p, "1;");
+            }
+
+            if (p != style_str) {
+                printf("\x1b[%s38;2;%d;%d;%d;48;2;%d;%d;%dm%s\x1b[0m", style_str, ch.r, ch.g, ch.b, style->bg_r, style->bg_g, style->bg_b, ch.value);
+                editor_set_style(line_style, 0, 1);
             } else {
-                printf("\x1b[22;23;38;2;%d;%d;%d;48;2;%d;%d;%dm%s", ch.r, ch.g, ch.b, style->bg_r, style->bg_g, style->bg_b, ch.value);
-            }
-            if (ch.underline) {
-                printf("\x1b[24m");
+                printf("\x1b[22;23;24;38;2;%d;%d;%d;48;2;%d;%d;%dm%s", ch.r, ch.g, ch.b, style->bg_r, style->bg_g, style->bg_b, ch.value);
             }
             chars_to_print--;
         }
@@ -738,12 +741,12 @@ void editor_insert_char(const char *ch) {
     BufferLine *line = buffer->lines[buffer->position_y];
     buffer_line_realloc_for_capacity(line, line->char_count + 1);
 
-    int should_underline = 0;
+    unsigned char new_style = 0;
     if (buffer->parser && buffer->tree && buffer->position_x > 0 && buffer->position_x < line->char_count) {
         Char *prev_char = &line->chars[buffer->position_x - 1];
         Char *next_char = &line->chars[buffer->position_x];
 
-        if (prev_char->underline && next_char->underline) {
+        if ((prev_char->style & STYLE_UNDERLINE) && (next_char->style & STYLE_UNDERLINE)) {
             TSNode root_node = ts_tree_root_node(buffer->tree);
             TSPoint prev_point = {(uint32_t)buffer->position_y, (uint32_t)buffer->position_x - 1};
             TSPoint next_point = {(uint32_t)buffer->position_y, (uint32_t)buffer->position_x};
@@ -752,7 +755,7 @@ void editor_insert_char(const char *ch) {
             TSNode next_leaf = ts_node_named_descendant_for_point_range(root_node, next_point, next_point);
 
             if (!ts_node_is_null(prev_leaf) && ts_node_eq(prev_leaf, next_leaf)) {
-                should_underline = 1;
+                new_style |= STYLE_UNDERLINE;
             }
         }
     }
@@ -760,9 +763,8 @@ void editor_insert_char(const char *ch) {
     Char new;
     strncpy(new.value, ch, sizeof(new.value));
     new.width = utf8_char_width(ch);
-    new.underline = should_underline;
+    new.style = new_style;
     new.r = 255; new.g = 255; new.b = 255;
-    new.italic = 0; new.bold = 0;
 
     if (buffer->position_x < line->char_count) {
         memmove(&line->chars[buffer->position_x + 1],

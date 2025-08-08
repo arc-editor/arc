@@ -90,11 +90,11 @@ static void get_item_style(int index, PickerItemStyle *style) {
             style->flag = ' ';
         }
         if (index == editor_get_active_buffer_idx()) {
-            style->bold = 1;
+            style->style |= STYLE_BOLD;
         } else {
-            style->bold = 0;
+            style->style &= ~STYLE_BOLD;
         }
-        style->italic = 0;
+        style->style &= ~STYLE_ITALIC;
     }
 }
 

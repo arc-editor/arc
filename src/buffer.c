@@ -104,8 +104,7 @@ void buffer_line_apply_syntax_highlighting(Buffer *b, BufferLine *line, uint32_t
             ch->r = style->fg_r;
             ch->g = style->fg_g;
             ch->b = style->fg_b;
-            ch->bold = style->bold;
-            ch->italic = style->italic;
+            ch->style = style->style;
         }
         return;
     }
@@ -155,8 +154,7 @@ void buffer_line_apply_syntax_highlighting(Buffer *b, BufferLine *line, uint32_t
         ch->r = style->fg_r;
         ch->g = style->fg_g;
         ch->b = style->fg_b;
-        ch->bold = style->bold;
-        ch->italic = style->italic;
+        ch->style = style->style;
         current_byte += strlen(ch->value);
     }
 
@@ -433,7 +431,7 @@ void buffer_init(Buffer *b, char *file_name) {
             } else {
                 BufferLine *line = b->lines[b->line_count - 1];
                 buffer_line_realloc_for_capacity(line, line->char_count + 1);
-                Char new_char = { .underline = 0 };
+                Char new_char = { .style = 0 };
                 strncpy(new_char.value, utf8_buf, sizeof(new_char.value));
                 new_char.width = utf8_char_width(utf8_buf);
                 line->chars[line->char_count] = new_char;

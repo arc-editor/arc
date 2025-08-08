@@ -6,9 +6,7 @@
 typedef struct {
     unsigned char fg_r, fg_g, fg_b;
     unsigned char bg_r, bg_g, bg_b;
-    unsigned char bold;
-    unsigned char italic;
-    unsigned char underline;
+    unsigned char style;
 } Style;
 
 typedef struct {
