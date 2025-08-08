@@ -1,6 +1,5 @@
 #include <termios.h>
 #include <unistd.h>
-#include <stdint.h>
 #include "insert.h"
 #include "editor.h"
 #include "picker_file.h"
@@ -10,15 +9,15 @@
 EditorCommand cmd;
 EditorCommand prev_cmd;
 int command_inited = 0;
-uint32_t insertion_buffer[64];
+char insertion_buffer[64];
 int insertion_buffer_count = 0;
 int is_insertion_bufferable = 1;
 int is_space_mode = 0;
 int is_waiting_for_specifier = 0;
 
-void normal_register_insertion(uint32_t ch) {
+void normal_register_insertion(char ch) {
     if (is_insertion_bufferable) {
-      if (insertion_buffer_count == sizeof(insertion_buffer) / sizeof(uint32_t)) {
+      if (insertion_buffer_count == sizeof(insertion_buffer)) {
         is_insertion_bufferable = 0;
         insertion_buffer_count = 0;
         return;
@@ -38,7 +37,7 @@ void dispatch_command() {
     editor_command_exec(&cmd);
 }
 
-int normal_handle_input(uint32_t ch) {
+int normal_handle_input(char ch) {
   if (ch == 27) {
       editor_command_reset(&cmd);
       return 1;

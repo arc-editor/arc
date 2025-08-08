@@ -1,10 +1,9 @@
 #include <termios.h>
 #include <unistd.h>
-#include <stdint.h>
 #include "editor.h"
 #include "normal.h"
 
-int insert_handle_input(uint32_t ch) {
+int insert_handle_input(char ch) {
   if (ch == 27) {
       editor_handle_input = normal_handle_input;
       editor_needs_draw();
@@ -18,11 +17,11 @@ int insert_handle_input(uint32_t ch) {
   if (ch == '\r') {
       ch = '\n';
   }
-
+  if ((ch >= 32 && ch <= 126) || ch == '\t') {
+      editor_insert_char(ch);
+  }
   if (ch == '\n') {
       editor_insert_new_line();
-  } else if (ch == '\t' || ch >= 32) {
-      editor_insert_char(ch);
   }
   return 1;
 }

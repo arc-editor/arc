@@ -29,11 +29,10 @@
 #include "picker_file.h"
 #include "lsp.h"
 #include "ui.h"
-#include "utf8.h"
 
 static pthread_mutex_t editor_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-int (*editor_handle_input)(uint32_t);
+int (*editor_handle_input)(char);
 
 static int screen_rows;
 static int screen_cols;
@@ -326,21 +325,17 @@ void draw_buffer(Diagnostic *diagnostics, int diagnostics_count, int update_diag
                 style = &current_theme.content_selection;
             }
 
-            char utf8_buf[5];
-            int len = utf8_encode(ch.value, utf8_buf);
-            utf8_buf[len] = '\0';
-
             if (ch.underline) {
                 printf("\x1b[4m");
             }
             if (ch.italic && ch.bold) {
-                printf("\x1b[1;3;38;2;%d;%d;%d;48;2;%d;%d;%dm%s", ch.r, ch.g, ch.b, style->bg_r, style->bg_g, style->bg_b, utf8_buf);
+                printf("\x1b[1;3;38;2;%d;%d;%d;48;2;%d;%d;%dm%c", ch.r, ch.g, ch.b, style->bg_r, style->bg_g, style->bg_b, ch.value);
             } else if (ch.italic) {
-                printf("\x1b[3;38;2;%d;%d;%d;48;2;%d;%d;%dm%s", ch.r, ch.g, ch.b, style->bg_r, style->bg_g, style->bg_b, utf8_buf);
+                printf("\x1b[3;38;2;%d;%d;%d;48;2;%d;%d;%dm%c", ch.r, ch.g, ch.b, style->bg_r, style->bg_g, style->bg_b, ch.value);
             } else if (ch.bold) {
-                printf("\x1b[1;38;2;%d;%d;%d;48;2;%d;%d;%dm%s", ch.r, ch.g, ch.b, style->bg_r, style->bg_g, style->bg_b, utf8_buf);
+                printf("\x1b[1;38;2;%d;%d;%d;48;2;%d;%d;%dm%c", ch.r, ch.g, ch.b, style->bg_r, style->bg_g, style->bg_b, ch.value);
             } else {
-                printf("\x1b[22;23;38;2;%d;%d;%d;48;2;%d;%d;%dm%s", ch.r, ch.g, ch.b, style->bg_r, style->bg_g, style->bg_b, utf8_buf);
+                printf("\x1b[22;23;38;2;%d;%d;%d;48;2;%d;%d;%dm%c", ch.r, ch.g, ch.b, style->bg_r, style->bg_g, style->bg_b, ch.value);
             }
             if (ch.underline) {
                 printf("\x1b[24m");
@@ -722,40 +717,6 @@ int editor_get_active_buffer_idx(void) {
     return active_buffer_idx;
 }
 
-static int read_key(uint32_t *codepoint) {
-    int c = getchar();
-    if (c == EOF) return 0;
-
-    unsigned char s[4];
-    s[0] = c;
-
-    // Determine expected length from the first byte
-    int expected_len = 1;
-    if ((s[0] & 0xE0) == 0xC0) {
-        expected_len = 2;
-    } else if ((s[0] & 0xF0) == 0xE0) {
-        expected_len = 3;
-    } else if ((s[0] & 0xF8) == 0xF0) {
-        expected_len = 4;
-    }
-
-    // Read subsequent bytes
-    for (int i = 1; i < expected_len; i++) {
-        int next_c = getchar();
-        if (next_c == EOF) {
-            *codepoint = s[0]; // Return the first byte if EOF is encountered mid-sequence
-            return 1;
-        }
-        s[i] = next_c;
-    }
-
-    if (utf8_decode(s, codepoint) == 0) {
-        // Invalid sequence, return the first byte as a character
-        *codepoint = s[0];
-    }
-    return 1;
-}
-
 void editor_start(char *file_name) {
     editor_init(file_name);
     pthread_t render_thread_id;
@@ -764,13 +725,7 @@ void editor_start(char *file_name) {
         log_error("editor.editor_start: unable to create render thread");
         exit(1);
     }
-
-    uint32_t ch;
-    while (read_key(&ch)) {
-        if (!editor_handle_input(ch)) {
-            break;
-        }
-    }
+    while (editor_handle_input(getchar())) {}
     editor_clear_screen();
 }
 
@@ -921,9 +876,7 @@ void editor_write() {
     for (int line_idx = 0; line_idx < buffer->line_count; line_idx++) {
         BufferLine *line = buffer->lines[line_idx];
         for (int char_idx = 0; char_idx < line->char_count; char_idx++) {
-            char utf8_buf[5];
-            int len = utf8_encode(line->chars[char_idx].value, utf8_buf);
-            fwrite(utf8_buf, 1, len, fp);
+            fputc(line->chars[char_idx].value, fp);
         }
         if (line_idx < buffer->line_count - 1) {
             fputc('\n', fp);
@@ -1114,7 +1067,7 @@ void editor_move_n_lines_up(int n) {
 }
 
 // Helper function to check if character is a word character
-int is_word_char(uint32_t ch) {
+int is_word_char(char ch) {
     return (ch >= 'a' && ch <= 'z') || 
            (ch >= 'A' && ch <= 'Z') || 
            (ch >= '0' && ch <= '9') || 
@@ -1122,7 +1075,7 @@ int is_word_char(uint32_t ch) {
 }
 
 // Helper function to check if character is whitespace
-int is_whitespace(uint32_t ch) {
+int is_whitespace(char ch) {
     return ch == ' ' || ch == '\t' || ch == '\n';
 }
 
