@@ -240,11 +240,7 @@ static int is_in_selection(int y, int x) {
 }
 
 void draw_buffer(Diagnostic *diagnostics, int diagnostics_count, int update_diagnostics) {
-    uint32_t start_byte = 0;
-    for (int i = 0; i < buffer->offset_y; i++) {
-        BufferLine *line = buffer->lines[i];
-        start_byte += line->char_count + (i < buffer->line_count - 1 ? 1 : 0); // Only add newline if not the last line
-    }
+    uint32_t start_byte = buffer_get_line_start_byte_offset(buffer, buffer->offset_y);
     for (int row = buffer->offset_y; row < buffer->offset_y + screen_rows - 1; row++) {
         int relative_y = row - buffer->offset_y;
         printf("\x1b[%d;1H", relative_y + 1);
@@ -470,11 +466,8 @@ void editor_insert_new_line() {
     BufferLine *current_line = buffer->lines[buffer->position_y];
 
     // Calculate byte position for the edit
-    uint32_t start_byte = 0;
-    for (int i = 0; i < buffer->position_y; i++) {
-        start_byte += buffer->lines[i]->char_count + (i < buffer->line_count - 1 ? 1 : 0);
-    }
-    start_byte += buffer->position_x;
+    uint32_t start_byte = buffer_get_line_start_byte_offset(buffer, buffer->position_y);
+    start_byte += buffer_line_get_byte_length(buffer->lines[buffer->position_y], buffer->position_x);
 
     // Allocate space for a new line
     buffer_realloc_lines_for_capacity(buffer);
@@ -817,11 +810,8 @@ void editor_insert_char(int ch) {
     editor_did_change_buffer();
 
     if (buffer->parser) {
-        uint32_t start_byte = 0;
-        for (int i = 0; i < buffer->position_y; i++) {
-            start_byte += buffer->lines[i]->char_count + 1;
-        }
-        start_byte += buffer->position_x - 1;
+        uint32_t start_byte = buffer_get_line_start_byte_offset(buffer, buffer->position_y);
+        start_byte += buffer_line_get_byte_length(buffer->lines[buffer->position_y], buffer->position_x - 1);
         ts_tree_edit(buffer->tree, &(TSInputEdit){
             .start_byte = start_byte,
             .old_end_byte = start_byte,
@@ -940,11 +930,8 @@ void editor_delete() {
     BufferLine *line = buffer->lines[buffer->position_y];
 
     // Calculate byte position for the edit
-    uint32_t start_byte = 0;
-    for (int i = 0; i < buffer->position_y; i++) {
-        start_byte += buffer->lines[i]->char_count + (i < buffer->line_count - 1 ? 1 : 0);
-    }
-    start_byte += buffer->position_x;
+    uint32_t start_byte = buffer_get_line_start_byte_offset(buffer, buffer->position_y);
+    start_byte += buffer_line_get_byte_length(buffer->lines[buffer->position_y], buffer->position_x);
 
     if (buffer->position_x == line->char_count) {
         if (buffer->position_y == buffer->line_count - 1) {
@@ -1007,11 +994,8 @@ void editor_backspace() {
     BufferLine *line = buffer->lines[buffer->position_y];
 
     // Calculate byte position for the edit
-    uint32_t start_byte = 0;
-    for (int i = 0; i < buffer->position_y; i++) {
-        start_byte += buffer->lines[i]->char_count + (i < buffer->line_count - 1 ? 1 : 0);
-    }
-    start_byte += buffer->position_x;
+    uint32_t start_byte = buffer_get_line_start_byte_offset(buffer, buffer->position_y);
+    start_byte += buffer_line_get_byte_length(buffer->lines[buffer->position_y], buffer->position_x);
 
     if (buffer->position_x == 0) {
         if (buffer->position_y == 0) {
@@ -1574,12 +1558,20 @@ void range_delete(Buffer *b, Range *range, EditorCommand *cmd) {
     // if (top == bottom && right == range->x_end) right++;
     TSInputEdit edit;
     if (b->parser) {
-        edit.start_byte = 0;
-        for (int i = 0; i < top; i++) {
-            edit.start_byte += b->lines[i]->char_count + 1;
-        }
-        edit.start_byte += left;
+        edit.start_byte = buffer_get_line_start_byte_offset(b, top);
+        edit.start_byte += buffer_line_get_byte_length(b->lines[top], left);
+
         edit.old_end_byte = edit.start_byte;
+        for (int i = top; i <= bottom; i++) {
+            BufferLine *line = b->lines[i];
+            int start_j = (i == top) ? left : 0;
+            int end_j = (i == bottom) ? right : line->char_count;
+            edit.old_end_byte += buffer_line_get_byte_length(line, end_j) - buffer_line_get_byte_length(line, start_j);
+            if (i < bottom) {
+                edit.old_end_byte++;
+            }
+        }
+
         edit.new_end_byte = edit.start_byte;
         edit.start_point.row = top;
         edit.start_point.column = left;
@@ -1587,20 +1579,7 @@ void range_delete(Buffer *b, Range *range, EditorCommand *cmd) {
         edit.new_end_point.column = left;
         edit.old_end_point.row = bottom;
         edit.old_end_point.column = right;
-    }
-    if (top == bottom && left == 0 && right == b->lines[top]->char_count -1) {
-        right++;
-    }
-    if (b->parser) {
-        for (int i = top; i < bottom; i++) {
-            edit.old_end_byte += b->lines[i]->char_count + 1;
-            if (i == top) {
-                edit.old_end_byte -= left;
-            }
-            b->lines[i]->needs_highlight = 1;
-        }
-        b->lines[bottom]->needs_highlight = 1;
-        edit.old_end_byte += right;
+
         ts_tree_edit(b->tree, &edit);
     }
 
