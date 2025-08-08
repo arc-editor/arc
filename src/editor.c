@@ -1569,12 +1569,6 @@ void range_delete(Buffer *b, Range *range, EditorCommand *cmd) {
     int bottom = range_get_bottom_boundary(range);
     if (left == right && top == bottom) return;
 
-    if (cmd->action == 'd' && is_backward_motion(cmd->target)) {
-        if (top == bottom) {
-            right++;
-        }
-    }
-
     if (cmd->target == 'p' && top == bottom) {
         buffer_line_destroy(b->lines[top]);
         memmove(&b->lines[top], &b->lines[top + 1], (b->line_count - top - 1) * sizeof(BufferLine *));
