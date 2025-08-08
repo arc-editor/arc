@@ -101,6 +101,7 @@ int search_handle_input(const char *ch_str) {
         if (editor.search_term_len > 0) {
             editor.search_term_len--;
             editor.search_term[editor.search_term_len] = '\0';
+            buffer_update_search_matches(editor_get_active_buffer(), editor.search_term);
             editor_needs_draw();
         }
         return 1;
@@ -110,6 +111,7 @@ int search_handle_input(const char *ch_str) {
     if (strlen(ch_str) == 1 && editor.search_term_len < SEARCH_TERM_MAX_LEN - 1) {
         editor.search_term[editor.search_term_len++] = ch_str[0];
         editor.search_term[editor.search_term_len] = '\0';
+        buffer_update_search_matches(editor_get_active_buffer(), editor.search_term);
         editor_needs_draw();
     }
 
