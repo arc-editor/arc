@@ -1665,8 +1665,6 @@ void editor_command_exec(EditorCommand *cmd) {
                 break;
         }
     }
-    int left = range_get_left_boundary(&range);
-    int right = range_get_right_boundary(&range);
     if (!cmd->action) { // target only
         buffer->position_x = range.x_end;
         buffer->position_y = range.y_end;
@@ -1687,17 +1685,20 @@ void editor_command_exec(EditorCommand *cmd) {
             break;
         case 'c':
         case 'd':
-            buffer->position_x = left;
-            buffer->position_y = range_get_top_boundary(&range);
-            range_delete(buffer, &range, cmd);
-            buffer_reset_offset_x(buffer, screen_cols);
-            buffer_reset_offset_y(buffer, screen_rows);
-            buffer->needs_draw = 1;
-            if (left != right) {
-                if (buffer->parser) {
-                    buffer->needs_parse = 1;
+            {
+                int left = range_get_left_boundary(&range);
+                int right = range_get_right_boundary(&range);
+                int top = range_get_top_boundary(&range);
+                int bottom = range_get_bottom_boundary(&range);
+                buffer->position_x = left;
+                buffer->position_y = range_get_top_boundary(&range);
+                range_delete(buffer, &range, cmd);
+                buffer_reset_offset_x(buffer, screen_cols);
+                buffer_reset_offset_y(buffer, screen_rows);
+                buffer->needs_draw = 1;
+                if (left != right || top != bottom) {
+                    editor_did_change_buffer();
                 }
-                editor_did_change_buffer();
             }
             break;
     }
