@@ -31,10 +31,9 @@
 #include "ui.h"
 #include "utf8.h"
 #include "search.h"
-#include "editor_state.h"
 
 static pthread_mutex_t editor_mutex = PTHREAD_MUTEX_INITIALIZER;
-EditorState editor;
+Editor editor;
 
 int (*editor_handle_input)(const char *);
 

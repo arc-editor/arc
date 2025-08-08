@@ -3,9 +3,8 @@
 #include "search.h"
 #include "normal.h"
 #include "buffer.h"
-#include "editor_state.h"
 
-extern EditorState editor;
+extern Editor editor;
 
 void search_init(int direction) {
     editor.search_direction = direction;
