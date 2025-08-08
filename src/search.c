@@ -2,6 +2,7 @@
 #include "editor.h"
 #include "search.h"
 #include "normal.h"
+#include "buffer.h"
 
 #define SEARCH_TERM_MAX_LEN 256
 
@@ -17,6 +18,8 @@ void search_init(int direction) {
     search_term_len = 0;
     search_term[0] = '\0';
     editor_handle_input = search_handle_input;
+    Buffer *buffer = editor_get_active_buffer();
+    buffer_clear_search_state(buffer);
 }
 
 const char *search_get_last_term(void) {
@@ -67,6 +70,7 @@ int search_handle_input(const char *ch_str) {
                 editor_center_view();
             }
         }
+        buffer_update_search_matches(buffer);
 
         editor_handle_input = normal_handle_input;
         editor_needs_draw();

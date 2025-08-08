@@ -10,6 +10,9 @@
 #include "config.h"
 #include "theme.h"
 #include "utf8.h"
+#include "search.h"
+
+static char* line_to_string(BufferLine *line);
 
 void buffer_set_line_num_width(Buffer *buffer) {
     if (buffer->line_count == 0) {
@@ -94,6 +97,98 @@ int get_capture_priority(const char* capture_name) {
         log_warning("buffer.get_capture_priority: unrecognized capture_name %s", capture_name);
     }
     return 0;
+}
+
+void buffer_clear_search_state(Buffer *b) {
+    if (b->search_state.term) {
+        free(b->search_state.term);
+        b->search_state.term = NULL;
+    }
+    if (b->search_state.matches) {
+        free(b->search_state.matches);
+        b->search_state.matches = NULL;
+    }
+    b->search_state.count = 0;
+    b->search_state.current = -1;
+}
+
+void buffer_update_search_matches(Buffer *b) {
+    buffer_clear_search_state(b);
+    const char* term = search_get_last_term();
+    if (!term || term[0] == '\0') {
+        return;
+    }
+    b->search_state.term = strdup(term);
+
+    int capacity = 10;
+    b->search_state.matches = malloc(capacity * sizeof(*b->search_state.matches));
+
+    for (int i = 0; i < b->line_count; i++) {
+        BufferLine *line = b->lines[i];
+        char *line_str = line_to_string(line);
+        if (!line_str) continue;
+
+        char *match = strstr(line_str, term);
+        while (match) {
+            if (b->search_state.count == capacity) {
+                capacity *= 2;
+                b->search_state.matches = realloc(b->search_state.matches, capacity * sizeof(*b->search_state.matches));
+            }
+
+            int match_byte_pos = match - line_str;
+            int match_char_pos = 0;
+            int current_byte_pos = 0;
+            for (int k = 0; k < line->char_count; k++) {
+                if (current_byte_pos == match_byte_pos) {
+                    match_char_pos = k;
+                    break;
+                }
+                current_byte_pos += strlen(line->chars[k].value);
+            }
+
+            b->search_state.matches[b->search_state.count].y = i;
+            b->search_state.matches[b->search_state.count].x = match_char_pos;
+            b->search_state.count++;
+
+            match = strstr(match + 1, term);
+        }
+        free(line_str);
+    }
+
+    b->search_state.current = -1;
+    for (int i = 0; i < b->search_state.count; i++) {
+        if (b->search_state.matches[i].y > b->position_y ||
+            (b->search_state.matches[i].y == b->position_y && b->search_state.matches[i].x >= b->position_x)) {
+            b->search_state.current = i;
+            break;
+        }
+    }
+}
+
+void buffer_update_current_search_match(Buffer *b) {
+    if (b->search_state.count == 0) {
+        b->search_state.current = -1;
+        return;
+    }
+
+    // Find the first match that is at or after the cursor
+    for (int i = 0; i < b->search_state.count; i++) {
+        if (b->search_state.matches[i].y > b->position_y ||
+            (b->search_state.matches[i].y == b->position_y && b->search_state.matches[i].x >= b->position_x)) {
+
+            // If the cursor is exactly on a match, we select it.
+            if (b->search_state.matches[i].y == b->position_y && b->search_state.matches[i].x == b->position_x) {
+                b->search_state.current = i;
+            } else {
+                // Otherwise, it's the previous one (wrapping around if necessary)
+                b->search_state.current = (i == 0) ? b->search_state.count - 1 : i - 1;
+            }
+            return;
+        }
+    }
+
+    // If no match is at or after the cursor, it means the cursor is after the last match, so the last match is the current one.
+    b->search_state.current = b->search_state.count - 1;
 }
 
 void buffer_line_apply_syntax_highlighting(Buffer *b, BufferLine *line, uint32_t start_byte, Theme *theme) {
@@ -379,6 +474,10 @@ void buffer_init(Buffer *b, char *file_name) {
     b->offset_y = 0;
     b->offset_x = 0;
     b->version = 1;
+    b->search_state.term = NULL;
+    b->search_state.matches = NULL;
+    b->search_state.count = 0;
+    b->search_state.current = -1;
     b->lines = (BufferLine **)malloc(sizeof(BufferLine *) * b->capacity);
     if (b->lines == NULL) {
         log_error("buffer.buffer_init: failed to allocate lines for buffer");

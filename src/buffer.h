@@ -49,6 +49,16 @@ typedef struct {
     TSQuery *query;
     TSQueryCursor *cursor;
     int diagnostics_version;
+
+    struct {
+        char *term;
+        int current;
+        int count;
+        struct {
+            int y;
+            int x;
+        } *matches;
+    } search_state;
 } Buffer;
 
 void buffer_line_apply_syntax_highlighting(Buffer *b, BufferLine *line, uint32_t start_byte, Theme *theme);
@@ -73,5 +83,8 @@ int is_line_empty(BufferLine *line);
 int buffer_get_visual_x_for_line_pos(Buffer *buffer, int y, int logical_x);
 int buffer_find_forward(Buffer *b, const char *term, int *y, int *x);
 int buffer_find_backward(Buffer *b, const char *term, int *y, int *x);
+void buffer_update_search_matches(Buffer *b);
+void buffer_clear_search_state(Buffer *b);
+void buffer_update_current_search_match(Buffer *b);
 
 #endif

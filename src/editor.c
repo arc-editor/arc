@@ -197,6 +197,13 @@ void draw_statusline() {
     } else {
         int left_len = mode_len + branch_name_len;
         int right_len = position_len + line_count_len;
+    char search_stats[32] = {0};
+    int search_stats_len = 0;
+    if (buffer->search_state.count > 0 && buffer->search_state.current != -1) {
+        search_stats_len = snprintf(search_stats, sizeof(search_stats), "[%d/%d]", buffer->search_state.current + 1, buffer->search_state.count);
+        right_len += search_stats_len;
+    }
+
         int half_cols = screen_cols / 2;
         int half_file_name_len = file_name_len / 2;
         int left_space = half_cols - left_len - half_file_name_len;
@@ -219,6 +226,9 @@ void draw_statusline() {
 
         for (int i = 0; i < right_space; i++) putchar(' ');
 
+        if (search_stats_len > 0) {
+            printf("%s ", search_stats);
+        }
         printf("%s%s", position, line_count);
     }
     printf("\x1b[0m");
@@ -460,6 +470,7 @@ void editor_did_change_buffer() {
             free(content);
         }
     }
+    buffer_clear_search_state(buffer);
 }
 
 void *render_loop(void * arg __attribute__((unused))) {
@@ -1654,18 +1665,25 @@ void editor_search_next(int direction) {
     if (last_term && last_term[0] != '\0') {
         int y = buffer->position_y;
         int x = buffer->position_x;
+        int found = 0;
         if (direction == 1) {
             if (buffer_find_forward(buffer, last_term, &y, &x)) {
-                buffer->position_y = y;
-                buffer->position_x = x;
-                editor_center_view();
+                found = 1;
             }
         } else {
             if (buffer_find_backward(buffer, last_term, &y, &x)) {
-                buffer->position_y = y;
-                buffer->position_x = x;
-                editor_center_view();
+                found = 1;
             }
+        }
+
+        if (found) {
+            buffer->position_y = y;
+            buffer->position_x = x;
+            editor_center_view();
+            if (buffer->search_state.count == 0) {
+                buffer_update_search_matches(buffer);
+            }
+            buffer_update_current_search_match(buffer);
         }
         editor_needs_draw();
     }
