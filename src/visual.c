@@ -1,6 +1,7 @@
 #include "visual.h"
 #include "editor.h"
 #include "normal.h"
+#include <stdint.h>
 
 static EditorCommand cmd;
 static int is_waiting_for_specifier = 0;
@@ -9,7 +10,7 @@ void visual_mode_enter() {
     editor_command_reset(&cmd);
 }
 
-int visual_handle_input(char ch) {
+int visual_handle_input(uint32_t ch) {
     if (is_waiting_for_specifier) {
         cmd.specifier = ch;
         editor_command_exec(&cmd);

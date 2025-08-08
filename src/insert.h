@@ -1,6 +1,8 @@
 #ifndef INSERT_H
 #define INSERT_H
 
-int insert_handle_input(char ch);
+#include <stdint.h>
+
+int insert_handle_input(uint32_t ch);
 
 #endif

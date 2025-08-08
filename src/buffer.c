@@ -5,10 +5,12 @@
 #include <unistd.h>
 #include <sys/ioctl.h>
 #include <math.h>
+#include <stdlib.h>
 #include "buffer.h"
 #include "log.h"
 #include "config.h"
 #include "theme.h"
+#include "utf8.h"
 
 void buffer_set_line_num_width(Buffer *buffer) {
     buffer->line_num_width = (int)floor(log10(buffer->line_count)) + 3;
@@ -17,9 +19,15 @@ void buffer_set_line_num_width(Buffer *buffer) {
 char *buffer_get_content(Buffer *b) {
     size_t total_len = 0;
     for (int i = 0; i < b->line_count; i++) {
-        total_len += b->lines[i]->char_count;
+        for (int j = 0; j < b->lines[i]->char_count; j++) {
+            uint32_t codepoint = b->lines[i]->chars[j].value;
+            if (codepoint < 0x80) total_len += 1;
+            else if (codepoint < 0x800) total_len += 2;
+            else if (codepoint < 0x10000) total_len += 3;
+            else total_len += 4;
+        }
     }
-    total_len += b->line_count -1; // for newlines
+    total_len += b->line_count > 0 ? b->line_count - 1 : 0;
 
     char *content = malloc(total_len + 1);
     if (!content) {
@@ -31,7 +39,7 @@ char *buffer_get_content(Buffer *b) {
     for (int i = 0; i < b->line_count; i++) {
         BufferLine *line = b->lines[i];
         for (int j = 0; j < line->char_count; j++) {
-            *p++ = line->chars[j].value;
+            p += utf8_encode(line->chars[j].value, p);
         }
         if (i < b->line_count - 1) {
             *p++ = '\n';
@@ -96,7 +104,17 @@ void buffer_line_apply_syntax_highlighting(Buffer *b, BufferLine *line, uint32_t
         }
         return;
     }
-    ts_query_cursor_set_byte_range(b->cursor, start_byte, start_byte + line->char_count);
+
+    size_t line_byte_length = 0;
+    for (int i = 0; i < line->char_count; i++) {
+        uint32_t codepoint = line->chars[i].value;
+        if (codepoint < 0x80) line_byte_length += 1;
+        else if (codepoint < 0x800) line_byte_length += 2;
+        else if (codepoint < 0x10000) line_byte_length += 3;
+        else line_byte_length += 4;
+    }
+
+    ts_query_cursor_set_byte_range(b->cursor, start_byte, start_byte + line_byte_length);
     ts_query_cursor_exec(b->cursor, b->query, b->root);
 
     TSQueryMatch match;
@@ -128,8 +146,9 @@ void buffer_line_apply_syntax_highlighting(Buffer *b, BufferLine *line, uint32_t
         capture_count++;
     }
 
+    uint32_t byte_offset = 0;
     for (int char_idx = 0; char_idx < line->char_count; char_idx++) {
-        const char *best_capture = find_best_capture_for_position(captures, capture_count, start_byte + char_idx);
+        const char *best_capture = find_best_capture_for_position(captures, capture_count, start_byte + byte_offset);
         Char *ch = &line->chars[char_idx];
         Style *style = theme_get_capture_style(best_capture, theme);
         ch->r = style->fg_r;
@@ -137,6 +156,12 @@ void buffer_line_apply_syntax_highlighting(Buffer *b, BufferLine *line, uint32_t
         ch->b = style->fg_b;
         ch->bold = style->bold;
         ch->italic = style->italic;
+
+        uint32_t codepoint = ch->value;
+        if (codepoint < 0x80) byte_offset += 1;
+        else if (codepoint < 0x800) byte_offset += 2;
+        else if (codepoint < 0x10000) byte_offset += 3;
+        else byte_offset += 4;
     }
 
     if (captures) {
@@ -145,31 +170,36 @@ void buffer_line_apply_syntax_highlighting(Buffer *b, BufferLine *line, uint32_t
     line->needs_highlight = 0;
 }
 
-const char *buffer_read(void *payload, uint32_t start_byte __attribute__((unused)), TSPoint position, uint32_t *bytes_read) {
+const char *buffer_read(void *payload, uint32_t byte, TSPoint position, uint32_t *bytes_read) {
     Buffer *buffer = (Buffer *)payload;
-    if ((int)position.row >= buffer->line_count) {
+    if (position.row >= (uint32_t)buffer->line_count) {
         *bytes_read = 0;
         return "";
     }
+
     BufferLine *line = buffer->lines[position.row];
-    int remaining = line->char_count - (int)position.column;
-    if (remaining < 0) remaining = 0;
-    size_t needed = (size_t)remaining + 1;
-    if (needed > buffer->read_buffer_capacity) {
-        size_t new_capacity = needed * 2;
-        char *new_buffer = realloc(buffer->read_buffer, new_capacity);
-        if (!new_buffer) {
-            log_error("buffer.buffer_read: malloc read buffer");
-            exit(1);
-        }
-        buffer->read_buffer = new_buffer;
-        buffer->read_buffer_capacity = new_capacity;
+    size_t line_byte_length = 0;
+    for (int i = 0; i < line->char_count; i++) {
+        uint32_t codepoint = line->chars[i].value;
+        if (codepoint < 0x80) line_byte_length += 1;
+        else if (codepoint < 0x800) line_byte_length += 2;
+        else if (codepoint < 0x10000) line_byte_length += 3;
+        else line_byte_length += 4;
     }
-    for (int i = 0; i < remaining; i++) {
-        buffer->read_buffer[i] = line->chars[position.column + i].value;
+
+    if (line_byte_length + 2 > buffer->read_buffer_capacity) {
+        buffer->read_buffer_capacity = line_byte_length + 2;
+        buffer->read_buffer = realloc(buffer->read_buffer, buffer->read_buffer_capacity);
     }
-    buffer->read_buffer[remaining] = '\n';
-    *bytes_read = remaining + 1;
+
+    char *p = buffer->read_buffer;
+    for (int i = 0; i < line->char_count; i++) {
+        p += utf8_encode(line->chars[i].value, p);
+    }
+    *p++ = '\n';
+    *p = '\0';
+
+    *bytes_read = line_byte_length + 1;
     return buffer->read_buffer;
 }
 
@@ -381,13 +411,36 @@ void buffer_init(Buffer *b, char *file_name) {
 
     FILE *fp = fopen(file_name, "r");
     if (fp == NULL) {
-        log_error("buffer.buffer_init: failed to allocate first BufferLine");
+        return;
+    }
+
+    fseek(fp, 0, SEEK_END);
+    long fsize = ftell(fp);
+    fseek(fp, 0, SEEK_SET);
+
+    unsigned char *content = malloc(fsize);
+    if (content == NULL) {
+        log_error("buffer.buffer_init: failed to allocate content buffer");
+        fclose(fp);
         exit(1);
     }
-        
-    char ch;
-    while ((ch = fgetc(fp)) != EOF) {
-        if (ch == '\n') {
+    fread(content, 1, fsize, fp);
+    fclose(fp);
+
+    unsigned char *p = content;
+    unsigned char *end = content + fsize;
+
+    while (p < end) {
+        uint32_t codepoint;
+        int len = utf8_decode(p, &codepoint);
+
+        if (len == 0) {
+            // Invalid UTF-8 sequence, treat as a single byte
+            codepoint = *p;
+            len = 1;
+        }
+
+        if (codepoint == '\n') {
             buffer_realloc_lines_for_capacity(b);
             b->lines[b->line_count] = (BufferLine *)malloc(sizeof(BufferLine));
             if (b->lines[b->line_count] == NULL) {
@@ -399,12 +452,14 @@ void buffer_init(Buffer *b, char *file_name) {
         } else {
             BufferLine *line = b->lines[b->line_count - 1];
             buffer_line_realloc_for_capacity(line, line->char_count + 1);
-            Char new_char = { .value = ch, .underline = 0 };
+            Char new_char = { .value = codepoint, .underline = 0 };
             line->chars[line->char_count] = new_char;
             line->char_count++;
         }
+        p += len;
     }
-    fclose(fp);
+
+    free(content);
 }
 
 void buffer_destroy(Buffer *b) {

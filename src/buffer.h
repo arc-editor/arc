@@ -1,11 +1,12 @@
 #ifndef BUFFER_H
 #define BUFFER_H
 
+#include <stdint.h>
 #include "tree_sitter/api.h"
 #include "theme.h"
 
 typedef struct {
-    char value;
+    uint32_t value;
     unsigned char r;
     unsigned char g;
     unsigned char b;

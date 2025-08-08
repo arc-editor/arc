@@ -1,11 +1,13 @@
 #include <string.h>
 #include <stdio.h>
+#include <stdint.h>
 #include "picker.h"
 #include "ui.h"
 #include "editor.h"
 #include "normal.h"
 #include "theme.h"
 #include "fuzzy.h"
+#include "utf8.h"
 
 static int selection = 0;
 static char search[256];
@@ -45,7 +47,7 @@ void picker_close() {
     editor_request_redraw();
 }
 
-int picker_handle_input(char ch) {
+int picker_handle_input(uint32_t ch) {
     if (!delegate) return 0;
 
     if (ch == 13) { // Enter key
@@ -79,13 +81,16 @@ int picker_handle_input(char ch) {
     selection = 0;
     if (ch == 8 || ch == 127) { // Backspace
         if (search_len > 0) {
-            search_len--;
+            int i = search_len - 1;
+            while (i > 0 && (search[i] & 0xC0) == 0x80) {
+                i--;
+            }
+            search_len = i;
             search[search_len] = '\0';
         }
-    } else if ((ch >= 32 && ch <= 126)) {
-        if (search_len < sizeof(search) - 1) {
-            search[search_len++] = ch;
-            search[search_len] = '\0';
+    } else if (ch >= 32) {
+        if (search_len < sizeof(search) - 4) {
+            search_len += utf8_encode(ch, &search[search_len]);
         }
     }
 

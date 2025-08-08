@@ -1,6 +1,7 @@
 #ifndef PICKER_H
 #define PICKER_H
 
+#include <stdint.h>
 #include "theme.h"
 
 typedef struct {
@@ -25,7 +26,7 @@ void picker_set_delegate(PickerDelegate *delegate);
 void picker_open();
 int picker_is_open();
 void picker_close();
-int picker_handle_input(char ch);
+int picker_handle_input(uint32_t ch);
 void picker_draw(int screen_cols, int screen_rows, Theme *theme);
 
 #endif // PICKER_H

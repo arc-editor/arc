@@ -16,10 +16,12 @@ typedef struct {
   int count; // 1, 10
   char action; // 'c', 'd'
   char target; // 'w', 'e', 'B'
-  char specifier; // '(', '}'
+  uint32_t specifier; // '(', '}'
 } EditorCommand;
 
-extern int (*editor_handle_input)(char);
+#include <stdint.h>
+
+extern int (*editor_handle_input)(uint32_t);
 
 void editor_command_reset(EditorCommand *cmd);
 void editor_command_exec(EditorCommand *cmd);
@@ -53,8 +55,8 @@ int range_get_left_boundary(Range *range);
 int range_get_right_boundary(Range *range);
 int range_get_top_boundary(Range *range);
 int range_get_bottom_boundary(Range *range);
-int is_word_char(char ch);
-int is_whitespace(char ch);
+int is_word_char(uint32_t ch);
+int is_whitespace(uint32_t ch);
 int range_expand_right(BufferLine **line, Range *range);
 int range_expand_left(BufferLine **line, Range *range);
 void range_expand_e(BufferLine *line, int count, Range *range);
