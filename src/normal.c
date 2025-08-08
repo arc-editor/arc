@@ -191,11 +191,29 @@ int normal_handle_input(const char *ch_str) {
     case 'F':
     case 't':
     case 'T':
-    case 'n':
-    case 'p':
       cmd.target = ch;
       is_waiting_for_specifier = 1;
       break;
+    case 'n': {
+      const char *last_term = search_get_last_term();
+      if (last_term && last_term[0] != '\0') {
+        editor_search_next(search_get_last_direction());
+      } else {
+        cmd.target = ch;
+        is_waiting_for_specifier = 1;
+      }
+      break;
+    }
+    case 'p': {
+      const char *last_term = search_get_last_term();
+      if (last_term && last_term[0] != '\0') {
+        editor_search_next(-search_get_last_direction());
+      } else {
+        cmd.target = ch;
+        is_waiting_for_specifier = 1;
+      }
+      break;
+    }
     case 'c':
     case 'd':
     case 'g':
@@ -217,29 +235,9 @@ int normal_handle_input(const char *ch_str) {
       search_init(-1);
       editor_needs_draw();
       break;
-    case '\x0d': {
-      const char *last_term = search_get_last_term();
-      if (last_term && last_term[0] != '\0') {
-        Buffer *buffer = editor_get_active_buffer();
-        int y = buffer->position_y;
-        int x = buffer->position_x;
-        if (search_get_last_direction() == 1) {
-          if (buffer_find_forward(buffer, last_term, &y, &x)) {
-            buffer->position_y = y;
-            buffer->position_x = x;
-            editor_center_view();
-          }
-        } else {
-          if (buffer_find_backward(buffer, last_term, &y, &x)) {
-            buffer->position_y = y;
-            buffer->position_x = x;
-            editor_center_view();
-          }
-        }
-        editor_needs_draw();
-      }
+    case '\x0d':
+      editor_search_next(search_get_last_direction());
       break;
-    }
   }
   return 1;
 }

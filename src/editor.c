@@ -1649,6 +1649,28 @@ void range_delete(Buffer *b, Range *range, EditorCommand *cmd) {
     }
 }
 
+void editor_search_next(int direction) {
+    const char *last_term = search_get_last_term();
+    if (last_term && last_term[0] != '\0') {
+        int y = buffer->position_y;
+        int x = buffer->position_x;
+        if (direction == 1) {
+            if (buffer_find_forward(buffer, last_term, &y, &x)) {
+                buffer->position_y = y;
+                buffer->position_x = x;
+                editor_center_view();
+            }
+        } else {
+            if (buffer_find_backward(buffer, last_term, &y, &x)) {
+                buffer->position_y = y;
+                buffer->position_x = x;
+                editor_center_view();
+            }
+        }
+        editor_needs_draw();
+    }
+}
+
 void editor_command_exec(EditorCommand *cmd) {
     pthread_mutex_lock(&editor_mutex);
     Range range;
