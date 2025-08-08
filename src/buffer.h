@@ -4,9 +4,9 @@
 #include "tree_sitter/api.h"
 #include "theme.h"
 
-typedef struct {
+typedef struct __attribute__((packed)) {
     char value[5];
-    int width;
+    unsigned char width;
     unsigned char r;
     unsigned char g;
     unsigned char b;
