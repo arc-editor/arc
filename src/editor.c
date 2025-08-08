@@ -629,6 +629,7 @@ void editor_open(char *file_name) {
         buffer_init(editor.buffers[0], file_name);
         buffer_set_line_num_width(buffer);
         editor_handle_input = normal_handle_input;
+        buffer_update_search_matches(buffer, editor.last_search_term);
         
         char absolute_path[PATH_MAX];
         if (realpath(file_name, absolute_path) != NULL) {
@@ -663,6 +664,7 @@ void editor_open(char *file_name) {
     buffer_init(buffer, file_name);
     buffer_set_line_num_width(buffer);
     editor_handle_input = normal_handle_input;
+    buffer_update_search_matches(buffer, editor.last_search_term);
 
     char absolute_path[PATH_MAX];
     if (realpath(file_name, absolute_path) != NULL) {
