@@ -31,23 +31,14 @@
 #include "ui.h"
 #include "utf8.h"
 #include "search.h"
+#include "editor_state.h"
 
 static pthread_mutex_t editor_mutex = PTHREAD_MUTEX_INITIALIZER;
+EditorState editor;
 
 int (*editor_handle_input)(const char *);
 
-static int screen_rows;
-static int screen_cols;
-static atomic_int resize_requested = 0;
-static atomic_int redraw_requested = 0;
-static Buffer **buffers;
-static int buffer_count = 0;
-static int buffer_capacity = 0;
-static int active_buffer_idx = 0;
-
-#define buffer (buffers[active_buffer_idx])
-static Theme current_theme;
-static Config config;
+#define buffer (editor.buffers[editor.active_buffer_idx])
 
 void editor_command_reset(EditorCommand *cmd) {
     memset(cmd, 0, sizeof(EditorCommand));
@@ -91,7 +82,7 @@ void editor_set_style(Style *style, int fg, int bg) {
 }
 
 void handle_sigwinch(int arg __attribute__((unused))) {
-    atomic_store(&resize_requested, 1);
+    atomic_store(&editor.resize_requested, 1);
 }
 
 #ifndef TEST_BUILD
@@ -101,8 +92,8 @@ void init_terminal_size() {
         log_error("editor.init_terminal_size: ioctl");
         exit(1);
     }
-    screen_rows = ws.ws_row;
-    screen_cols = ws.ws_col;
+    editor.screen_rows = ws.ws_row;
+    editor.screen_cols = ws.ws_col;
 
     struct sigaction sa;
     sa.sa_handler = handle_sigwinch;
@@ -118,12 +109,12 @@ void init_terminal_size() {}
 #endif
 
 void check_for_resize() {
-    if (atomic_exchange(&resize_requested, 0)) {
+    if (atomic_exchange(&editor.resize_requested, 0)) {
         struct winsize ws;
         if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) != -1) {
             if (ws.ws_row > 0 && ws.ws_col > 0) {
-                screen_rows = ws.ws_row;
-                screen_cols = ws.ws_col;
+                editor.screen_rows = ws.ws_row;
+                editor.screen_cols = ws.ws_col;
                 buffer->needs_draw = 1;
             }
         }
@@ -131,7 +122,7 @@ void check_for_resize() {
 }
 
 void check_for_redraw_request() {
-    if (atomic_exchange(&redraw_requested, 0)) {
+    if (atomic_exchange(&editor.redraw_requested, 0)) {
         buffer->needs_draw = 1;
     }
 }
@@ -145,20 +136,20 @@ void editor_set_cursor_shape(int shape_code) {
 }
 
 void draw_statusline() {
-    printf("\x1b[%d;1H", screen_rows);
+    printf("\x1b[%d;1H", editor.screen_rows);
 
     const char *mode;
     if (editor_handle_input == insert_handle_input) {
-        editor_set_style(&current_theme.statusline_mode_insert, 1, 1);
+        editor_set_style(&editor.current_theme.statusline_mode_insert, 1, 1);
         mode = " INSERT ";
     } else if (editor_handle_input == visual_handle_input) {
-        editor_set_style(&current_theme.statusline_mode_visual, 1, 1);
+        editor_set_style(&editor.current_theme.statusline_mode_visual, 1, 1);
         mode = " VISUAL ";
     } else if (editor_handle_input == search_handle_input) {
-        editor_set_style(&current_theme.statusline_mode_command, 1, 1);
+        editor_set_style(&editor.current_theme.statusline_mode_command, 1, 1);
         mode = " COMMAND ";
     } else {
-        editor_set_style(&current_theme.statusline_mode_normal, 1, 1);
+        editor_set_style(&editor.current_theme.statusline_mode_normal, 1, 1);
         mode = " NORMAL ";
     }
 
@@ -185,13 +176,13 @@ void draw_statusline() {
     }
 
     printf("%s", mode);
-    editor_set_style(&current_theme.statusline_text, 1, 1);
+    editor_set_style(&editor.current_theme.statusline_text, 1, 1);
 
     if (editor_handle_input == search_handle_input) {
         const char *search_term = search_get_term();
         char prompt_char = search_get_prompt_char();
         int search_len = printf(" %c%s", prompt_char, search_term);
-        for (int i = 0; i < screen_cols - mode_len - search_len; i++) {
+        for (int i = 0; i < editor.screen_cols - mode_len - search_len; i++) {
             putchar(' ');
         }
     } else {
@@ -204,10 +195,10 @@ void draw_statusline() {
             right_len += search_stats_len + 1;
         }
 
-        int half_cols = screen_cols / 2;
+        int half_cols = editor.screen_cols / 2;
         int half_file_name_len = file_name_len / 2;
         int left_space = half_cols - left_len - half_file_name_len;
-        int right_space = (screen_cols - half_cols) - right_len - (file_name_len - half_file_name_len);
+        int right_space = (editor.screen_cols - half_cols) - right_len - (file_name_len - half_file_name_len);
 
         if (branch_name_len) {
             printf(" %s ", branch_name);
@@ -272,12 +263,12 @@ void draw_buffer(Diagnostic *diagnostics, int diagnostics_count, int update_diag
         }
         start_byte++; // for newline
     }
-    for (int row = buffer->offset_y; row < buffer->offset_y + screen_rows - 1; row++) {
+    for (int row = buffer->offset_y; row < buffer->offset_y + editor.screen_rows - 1; row++) {
         int relative_y = row - buffer->offset_y;
         printf("\x1b[%d;1H", relative_y + 1);
         if (row >= buffer->line_count) {
-            int chars_to_print = screen_cols;
-            editor_set_style(&current_theme.content_background, 0, 1);
+            int chars_to_print = editor.screen_cols;
+            editor_set_style(&editor.current_theme.content_background, 0, 1);
             while (chars_to_print > 0) {
                 putchar(' ');
                 chars_to_print--;
@@ -287,7 +278,7 @@ void draw_buffer(Diagnostic *diagnostics, int diagnostics_count, int update_diag
         BufferLine *line = buffer->lines[row];
 
         if (line->needs_highlight) {
-            buffer_line_apply_syntax_highlighting(buffer, line, start_byte, &current_theme);
+            buffer_line_apply_syntax_highlighting(buffer, line, start_byte, &editor.current_theme);
         }
         if (update_diagnostics) {
             for (int j = 0; j < line->char_count; j++) {
@@ -305,25 +296,25 @@ void draw_buffer(Diagnostic *diagnostics, int diagnostics_count, int update_diag
         char line_num_str[16];
         int line_num_len = snprintf(line_num_str, sizeof(line_num_str), "%*d ", buffer->line_num_width - 1, row + 1);
         if (buffer->offset_x) {
-            editor_set_style(&current_theme.content_line_number_sticky, 1, 1);
+            editor_set_style(&editor.current_theme.content_line_number_sticky, 1, 1);
         } else if (row == buffer->position_y) {
-            editor_set_style(&current_theme.content_line_number_active, 1, 1);
+            editor_set_style(&editor.current_theme.content_line_number_active, 1, 1);
         } else {
-            editor_set_style(&current_theme.content_line_number, 1, 1);
+            editor_set_style(&editor.current_theme.content_line_number, 1, 1);
         }
         printf("%.*s", line_num_len, line_num_str);
 
         int is_visual_mode = editor_handle_input == visual_handle_input;
         Style *line_style;
         if (row == buffer->position_y) {
-            line_style = &current_theme.content_cursor_line;
+            line_style = &editor.current_theme.content_cursor_line;
         } else {
-            line_style = &current_theme.content_background;
+            line_style = &editor.current_theme.content_background;
         }
         editor_set_style(line_style, 0, 1);
 
         int cols_to_skip = buffer->offset_x;
-        int chars_to_print = screen_cols - buffer->line_num_width;
+        int chars_to_print = editor.screen_cols - buffer->line_num_width;
 
         // Iterate over characters in the line
         for (int ch_idx = 0; ch_idx < line->char_count && chars_to_print > 0; ch_idx++) {
@@ -350,7 +341,7 @@ void draw_buffer(Diagnostic *diagnostics, int diagnostics_count, int update_diag
             int in_selection = is_visual_mode && is_in_selection(row, ch_idx);
 
             if (in_selection) {
-                style = &current_theme.content_selection;
+                style = &editor.current_theme.content_selection;
             }
 
             Style char_style;
@@ -397,7 +388,7 @@ void draw_diagnostics(const Diagnostic *diagnostics, int diagnostics_count) {
         if (d.line != buffer->position_y) continue;
         if (d.col_start == d.col_end || (d.col_start <= buffer->position_x && d.col_end > buffer->position_x)) {
             int y = buffer->position_y - buffer->offset_y + 1;
-            ui_draw_popup(&current_theme, d.severity, d.message, y, screen_cols, screen_rows);
+            ui_draw_popup(&editor.current_theme, d.severity, d.message, y, editor.screen_cols, editor.screen_rows);
         }
     }
 }
@@ -424,7 +415,7 @@ void editor_draw() {
     draw_buffer(diagnostics, diagnostic_count, update_diagnostics);
     draw_statusline();
     if (picker_is_open()) {
-        picker_draw(screen_cols, screen_rows, &current_theme);
+        picker_draw(editor.screen_cols, editor.screen_rows, &editor.current_theme);
     }
     if (editor_handle_input == normal_handle_input) {
         draw_diagnostics(diagnostics, diagnostic_count);
@@ -441,7 +432,7 @@ void editor_draw() {
 }
 
 void editor_request_redraw(void) {
-    atomic_store(&redraw_requested, 1);
+    atomic_store(&editor.redraw_requested, 1);
 }
 
 void editor_needs_draw() {
@@ -542,7 +533,7 @@ void editor_insert_new_line() {
         });
     }
     buffer->position_y++;
-    buffer_reset_offset_y(buffer, screen_rows);
+    buffer_reset_offset_y(buffer, editor.screen_rows);
     buffer->position_x = 0;
     editor_did_change_buffer();
     buffer_set_line_num_width(buffer);
@@ -601,16 +592,16 @@ void setup_terminal() {}
 void editor_init(char *file_name) {
     init_terminal_size();
     setup_terminal();
-    buffer_capacity = 1;
-    buffers = malloc(sizeof(Buffer*) * buffer_capacity);
-    if (!buffers) {
+    editor.buffer_capacity = 1;
+    editor.buffers = malloc(sizeof(Buffer*) * editor.buffer_capacity);
+    if (!editor.buffers) {
         log_error("editor.editor_init: alloc buffers failed");
         exit(1);
     }
-    buffer_count = 1;
-    active_buffer_idx = 0;
-    buffers[0] = (Buffer *)malloc(sizeof(Buffer));
-    if (buffers[0] == NULL) {
+    editor.buffer_count = 1;
+    editor.active_buffer_idx = 0;
+    editor.buffers[0] = (Buffer *)malloc(sizeof(Buffer));
+    if (editor.buffers[0] == NULL) {
         log_error("editor.editor_init: alloc current buffer failed");
         exit(1);
     }
@@ -623,16 +614,19 @@ void editor_init(char *file_name) {
     }
     editor_set_cursor_shape(2);
     buffer_set_line_num_width(buffer);
-    config_load(&config);
-    config_load_theme(config.theme, &current_theme);
+    config_load(&editor.config);
+    config_load_theme(editor.config.theme, &editor.current_theme);
+
+    editor.last_search_term[0] = '\0';
+    editor.last_search_direction = 1;
 }
 
 void editor_open(char *file_name) {
     pthread_mutex_lock(&editor_mutex);
 
-    if (buffer_count == 1 && buffers[0]->file_name == NULL) {
-        buffer_destroy(buffers[0]);
-        buffer_init(buffers[0], file_name);
+    if (editor.buffer_count == 1 && editor.buffers[0]->file_name == NULL) {
+        buffer_destroy(editor.buffers[0]);
+        buffer_init(editor.buffers[0], file_name);
         buffer_set_line_num_width(buffer);
         editor_handle_input = normal_handle_input;
         
@@ -651,18 +645,18 @@ void editor_open(char *file_name) {
         return;
     }
 
-    if (buffer_count == buffer_capacity) {
-        buffer_capacity *= 2;
-        buffers = realloc(buffers, sizeof(Buffer*) * buffer_capacity);
-        if (!buffers) {
+    if (editor.buffer_count == editor.buffer_capacity) {
+        editor.buffer_capacity *= 2;
+        editor.buffers = realloc(editor.buffers, sizeof(Buffer*) * editor.buffer_capacity);
+        if (!editor.buffers) {
             log_error("editor.editor_open: realloc buffers failed");
             exit(1);
         }
     }
-    buffer_count++;
-    active_buffer_idx = buffer_count - 1;
-    buffers[active_buffer_idx] = (Buffer *)malloc(sizeof(Buffer));
-    if (buffers[active_buffer_idx] == NULL) {
+    editor.buffer_count++;
+    editor.active_buffer_idx = editor.buffer_count - 1;
+    editor.buffers[editor.active_buffer_idx] = (Buffer *)malloc(sizeof(Buffer));
+    if (editor.buffers[editor.active_buffer_idx] == NULL) {
         log_error("editor.editor_open: alloc current buffer failed");
         exit(1);
     }
@@ -685,47 +679,48 @@ void editor_open(char *file_name) {
 }
 
 Buffer **editor_get_buffers(int *count) {
-    *count = buffer_count;
-    return buffers;
+    *count = editor.buffer_count;
+    return editor.buffers;
 }
 
 void editor_set_active_buffer(int index) {
-    if (index >= 0 && index < buffer_count) {
-        active_buffer_idx = index;
+    if (index >= 0 && index < editor.buffer_count) {
+        editor.active_buffer_idx = index;
     }
     editor_handle_input = normal_handle_input;
+    buffer_update_search_matches(buffer, editor.last_search_term);
     buffer->needs_draw = 1;
 }
 
 void editor_close_buffer(int buffer_index) {
     pthread_mutex_lock(&editor_mutex);
-    if (buffer_index < 0 || buffer_index >= buffer_count) {
+    if (buffer_index < 0 || buffer_index >= editor.buffer_count) {
         pthread_mutex_unlock(&editor_mutex);
         return;
     }
 
-    buffer_destroy(buffers[buffer_index]);
-    free(buffers[buffer_index]);
+    buffer_destroy(editor.buffers[buffer_index]);
+    free(editor.buffers[buffer_index]);
 
-    for (int i = buffer_index; i < buffer_count - 1; i++) {
-        buffers[i] = buffers[i + 1];
+    for (int i = buffer_index; i < editor.buffer_count - 1; i++) {
+        editor.buffers[i] = editor.buffers[i + 1];
     }
-    buffer_count--;
+    editor.buffer_count--;
 
-    if (buffer_count == 0) {
-        buffer_capacity = 1;
-        buffers = realloc(buffers, sizeof(Buffer*) * buffer_capacity);
-        buffers[0] = (Buffer *)malloc(sizeof(Buffer));
-        buffer_init(buffers[0], NULL);
-        buffer_count = 1;
-        active_buffer_idx = 0;
+    if (editor.buffer_count == 0) {
+        editor.buffer_capacity = 1;
+        editor.buffers = realloc(editor.buffers, sizeof(Buffer*) * editor.buffer_capacity);
+        editor.buffers[0] = (Buffer *)malloc(sizeof(Buffer));
+        buffer_init(editor.buffers[0], NULL);
+        editor.buffer_count = 1;
+        editor.active_buffer_idx = 0;
         buffer->needs_draw = 1;
         pthread_mutex_unlock(&editor_mutex);
         picker_file_show();
         return;
-    } else if (active_buffer_idx >= buffer_index) {
-        if (active_buffer_idx > 0) {
-            active_buffer_idx--;
+    } else if (editor.active_buffer_idx >= buffer_index) {
+        if (editor.active_buffer_idx > 0) {
+            editor.active_buffer_idx--;
         }
     }
     
@@ -734,7 +729,7 @@ void editor_close_buffer(int buffer_index) {
 }
 
 int editor_get_active_buffer_idx(void) {
-    return active_buffer_idx;
+    return editor.active_buffer_idx;
 }
 
 void editor_start(char *file_name) {
@@ -793,7 +788,7 @@ void editor_insert_char(const char *ch) {
     line->chars[buffer->position_x] = new;
     line->char_count++;
     buffer->position_x++;
-    buffer_reset_offset_x(buffer, screen_cols);
+    buffer_reset_offset_x(buffer, editor.screen_cols);
     editor_did_change_buffer();
 
     if (buffer->parser) {
@@ -832,10 +827,10 @@ void editor_move_cursor_right() {
     if ((buffer->position_x >= line->char_count) && (buffer->position_y != buffer->line_count - 1)) {
         buffer->position_x = 0;
         buffer->position_y++;
-        buffer_reset_offset_y(buffer, screen_rows);
+        buffer_reset_offset_y(buffer, editor.screen_rows);
         buffer->offset_x = 0;
     } else {
-        buffer_move_position_right(buffer, screen_cols);
+        buffer_move_position_right(buffer, editor.screen_cols);
     }
     buffer->needs_draw = 1;
     pthread_mutex_unlock(&editor_mutex);
@@ -851,10 +846,10 @@ void editor_move_cursor_left() {
             return;
         }
         buffer->position_y--;
-        buffer_reset_offset_y(buffer, screen_rows);
+        buffer_reset_offset_y(buffer, editor.screen_rows);
         line = buffer->lines[buffer->position_y];
         buffer->position_x = line->char_count + 1;
-        buffer_reset_offset_x(buffer, screen_cols);
+        buffer_reset_offset_x(buffer, editor.screen_cols);
     }
     buffer_move_position_left(buffer);
     buffer->needs_draw = 1;
@@ -869,9 +864,9 @@ void editor_move_cursor_down() {
     }
     int visual_x = buffer_get_visual_position_x(buffer);
     buffer->position_y++;
-    buffer_reset_offset_y(buffer, screen_rows);
+    buffer_reset_offset_y(buffer, editor.screen_rows);
     buffer_set_logical_position_x(buffer, visual_x);
-    buffer_reset_offset_x(buffer, screen_cols);
+    buffer_reset_offset_x(buffer, editor.screen_cols);
     buffer->needs_draw = 1;
     pthread_mutex_unlock(&editor_mutex);
 }
@@ -884,9 +879,9 @@ void editor_move_cursor_up() {
     }
     int visual_x = buffer_get_visual_position_x(buffer);
     buffer->position_y--;
-    buffer_reset_offset_y(buffer, screen_rows);
+    buffer_reset_offset_y(buffer, editor.screen_rows);
     buffer_set_logical_position_x(buffer, visual_x);
-    buffer_reset_offset_x(buffer, screen_cols);
+    buffer_reset_offset_x(buffer, editor.screen_cols);
     buffer->needs_draw = 1;
     pthread_mutex_unlock(&editor_mutex);
 }
@@ -1034,7 +1029,7 @@ void editor_backspace() {
             });
         }
         buffer->position_y--;
-        buffer_reset_offset_y(buffer, screen_rows);
+        buffer_reset_offset_y(buffer, editor.screen_rows);
         buffer->position_x = buffer->lines[buffer->position_y]->char_count - line->char_count;
         buffer_line_destroy(line);
 
@@ -1066,7 +1061,7 @@ void editor_move_n_lines_down(int n) {
     pthread_mutex_lock(&editor_mutex);
     int cnt;
     if (n <= 0) {
-        cnt = screen_rows / 2;
+        cnt = editor.screen_rows / 2;
     } else {
         cnt = n;
     }
@@ -1075,9 +1070,9 @@ void editor_move_n_lines_down(int n) {
     int visual_x = buffer_get_visual_position_x(buffer);
     buffer->position_y += cnt;
     buffer->offset_y += cnt;
-    buffer_reset_offset_y(buffer, screen_rows);
+    buffer_reset_offset_y(buffer, editor.screen_rows);
     buffer_set_logical_position_x(buffer, visual_x);
-    buffer_reset_offset_x(buffer, screen_cols);
+    buffer_reset_offset_x(buffer, editor.screen_cols);
     buffer->needs_draw = 1;
     pthread_mutex_unlock(&editor_mutex);
 }
@@ -1086,7 +1081,7 @@ void editor_move_n_lines_up(int n) {
     pthread_mutex_lock(&editor_mutex);
     int cnt;
     if (n <= 0) {
-        cnt = screen_rows / 2;
+        cnt = editor.screen_rows / 2;
     } else {
         cnt = n;
     }
@@ -1094,9 +1089,9 @@ void editor_move_n_lines_up(int n) {
     int visual_x = buffer_get_visual_position_x(buffer);
     buffer->position_y -= cnt;
     buffer->offset_y -= cnt;
-    buffer_reset_offset_y(buffer, screen_rows);
+    buffer_reset_offset_y(buffer, editor.screen_rows);
     buffer_set_logical_position_x(buffer, visual_x);
-    buffer_reset_offset_x(buffer, screen_cols);
+    buffer_reset_offset_x(buffer, editor.screen_cols);
     buffer->needs_draw = 1;
     pthread_mutex_unlock(&editor_mutex);
 }
@@ -1681,7 +1676,7 @@ void editor_search_next(int direction) {
             buffer->position_x = x;
             editor_center_view();
             if (buffer->search_state.count == 0) {
-                buffer_update_search_matches(buffer);
+                buffer_update_search_matches(buffer, last_term);
             }
             buffer_update_current_search_match(buffer);
         }
@@ -1722,8 +1717,8 @@ void editor_command_exec(EditorCommand *cmd) {
     if (!cmd->action) { // target only
         buffer->position_x = range.x_end;
         buffer->position_y = range.y_end;
-        buffer_reset_offset_x(buffer, screen_cols);
-        buffer_reset_offset_y(buffer, screen_rows);
+        buffer_reset_offset_x(buffer, editor.screen_cols);
+        buffer_reset_offset_y(buffer, editor.screen_rows);
         buffer->needs_draw = 1;
         editor_command_reset(cmd);
         pthread_mutex_unlock(&editor_mutex);
@@ -1733,8 +1728,8 @@ void editor_command_exec(EditorCommand *cmd) {
         case 'g':
             buffer->position_x = range.x_end;
             buffer->position_y = range.y_end;
-            buffer_reset_offset_x(buffer, screen_cols);
-            buffer_reset_offset_y(buffer, screen_rows);
+            buffer_reset_offset_x(buffer, editor.screen_cols);
+            buffer_reset_offset_y(buffer, editor.screen_rows);
             buffer->needs_draw = 1;
             break;
         case 'c':
@@ -1747,8 +1742,8 @@ void editor_command_exec(EditorCommand *cmd) {
                 buffer->position_x = left;
                 buffer->position_y = range_get_top_boundary(&range);
                 range_delete(buffer, &range, cmd);
-                buffer_reset_offset_x(buffer, screen_cols);
-                buffer_reset_offset_y(buffer, screen_rows);
+                buffer_reset_offset_x(buffer, editor.screen_cols);
+                buffer_reset_offset_y(buffer, editor.screen_rows);
                 buffer->needs_draw = 1;
                 if (left != right || top != bottom) {
                     editor_did_change_buffer();
@@ -1768,13 +1763,13 @@ void editor_command_exec(EditorCommand *cmd) {
 }
 
 void editor_center_view(void) {
-    buffer_reset_offset_y(buffer, screen_rows);
-    buffer_reset_offset_x(buffer, screen_cols);
+    buffer_reset_offset_y(buffer, editor.screen_rows);
+    buffer_reset_offset_x(buffer, editor.screen_cols);
 }
 
 void editor_set_screen_size(int rows, int cols) {
-    screen_rows = rows;
-    screen_cols = cols;
+    editor.screen_rows = rows;
+    editor.screen_cols = cols;
 }
 
 Buffer *editor_get_active_buffer(void) {

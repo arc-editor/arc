@@ -112,9 +112,8 @@ void buffer_clear_search_state(Buffer *b) {
     b->search_state.current = -1;
 }
 
-void buffer_update_search_matches(Buffer *b) {
+void buffer_update_search_matches(Buffer *b, const char *term) {
     buffer_clear_search_state(b);
-    const char* term = search_get_last_term();
     if (!term || term[0] == '\0') {
         return;
     }

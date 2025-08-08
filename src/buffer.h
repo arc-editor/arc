@@ -83,7 +83,7 @@ int is_line_empty(BufferLine *line);
 int buffer_get_visual_x_for_line_pos(Buffer *buffer, int y, int logical_x);
 int buffer_find_forward(Buffer *b, const char *term, int *y, int *x);
 int buffer_find_backward(Buffer *b, const char *term, int *y, int *x);
-void buffer_update_search_matches(Buffer *b);
+void buffer_update_search_matches(Buffer *b, const char *term);
 void buffer_clear_search_state(Buffer *b);
 void buffer_update_current_search_match(Buffer *b);
 
