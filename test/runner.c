@@ -146,10 +146,15 @@ int main(void) {
     test_helper("test_whole_line_far_right_dh", "hello world\n", 0, 11, "dh", "\n");
 
     // p: paragraphs
-    test_helper("test_mid_file_single_line_dp", "foo\n\nbar\n\nbat", 2, 0, "dp", "foo\n\n\nbat");
-    test_helper("test_mid_file_multi_line_from_top_dp", "foo\n\nbar\nbaz\n\nbat", 2, 0, "dp", "foo\n\n\nbat");
-    test_helper("test_mid_file_multi_line_from_middle_dp", "foo\n\nbar\nbaz\nbat\n\nbam", 3, 0, "dp", "foo\n\n\nbam");
-    test_helper("test_mid_file_multi_line_from_bottom_dp", "foo\n\nbar\nbaz\n\nbat", 3, 0, "dp", "foo\n\n\nbat");
+    test_helper("test_mid_file_single_line_dp_noop", "foo\n\nbar\n\nbat", 2, 0, "dp", "foo\n\nbar\n\nbat");
+    test_helper("test_mid_file_single_line_dip", "foo\n\nbar\n\nbat", 2, 0, "dip", "foo\n\n\nbat");
+    test_helper("test_mid_file_multi_line_from_toip_dp", "foo\n\nbar\nbaz\n\nbat", 2, 0, "dip", "foo\n\n\nbat");
+    test_helper("test_mid_file_multi_line_from_middle_dip", "foo\n\nbar\nbaz\nbat\n\nbam", 3, 0, "dip", "foo\n\n\nbam");
+    test_helper("test_mid_file_multi_line_from_bottom_dip", "foo\n\nbar\nbaz\n\nbat", 3, 0, "dip", "foo\n\n\nbat");
+    test_helper("test_mid_file_single_line_dap", "foo\n\nbar\n\nbat", 2, 0, "dap", "foo\n\nbat");
+    test_helper("test_mid_file_multi_line_from_toip_dp", "foo\n\nbar\nbaz\n\nbat", 2, 0, "dap", "foo\n\nbat");
+    test_helper("test_mid_file_multi_line_from_middle_dap", "foo\n\nbar\nbaz\nbat\n\nbam", 3, 0, "dap", "foo\n\nbam");
+    test_helper("test_mid_file_multi_line_from_bottom_dap", "foo\n\nbar\nbaz\n\nbat", 3, 0, "dap", "foo\n\nbat");
 
     run_normal_tests();
 
