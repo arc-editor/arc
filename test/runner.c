@@ -6,6 +6,7 @@
 #include "test_search.h"
 #include "test_normal.h"
 #include "test_undo.h"
+#include "test_picker.h"
 #include <stdio.h>
 #include <unistd.h>
 
@@ -159,6 +160,7 @@ int main(void) {
 
     run_normal_tests();
     run_undo_tests();
+    test_picker_suite();
 
     // ================ target only commands ================
     test_motion_helper("test_w_motion", "hello world", 0, 0, "w", 0, 6);
