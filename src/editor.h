@@ -2,7 +2,6 @@
 #define EDITOR_H
 
 #define EDITOR_VERSION "debug"
-#include <time.h>
 #include "theme.h"
 #include "buffer.h"
 #include "config.h"
@@ -30,10 +29,6 @@ typedef struct {
     int search_start_x;
     char last_search_term[SEARCH_TERM_MAX_LEN];
     int last_search_direction;
-
-    // Status message
-    char status_message[128];
-    time_t status_message_time;
 } Editor;
 
 typedef struct {
@@ -82,7 +77,6 @@ void editor_backspace();
 void editor_move_n_lines_down(int n);
 void editor_move_n_lines_up(int n);
 void editor_search_next(int direction);
-void editor_set_status_message(const char *fmt, ...);
 void editor_set_style(Style *style, int fg, int bg);
 void editor_set_cursor_shape(int shape_code);
 void editor_request_redraw(void);
