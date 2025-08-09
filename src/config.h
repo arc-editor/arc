@@ -13,6 +13,8 @@ typedef enum {
 typedef struct {
     WhitespaceRender space;
     WhitespaceRender tab;
+    char *space_char;
+    char *tab_char;
 } WhitespaceConfig;
 
 typedef struct {

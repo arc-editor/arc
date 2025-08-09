@@ -345,14 +345,19 @@ void draw_buffer(Diagnostic *diagnostics, int diagnostics_count, int update_diag
                 }
                 int width = buffer->tab_width - (cols_to_skip % buffer->tab_width);
                 cols_to_skip = 0;
-                for (int i = 0; i < width && chars_to_print > 0; i++) {
-                    if (editor.config.whitespace.tab == WHITESPACE_RENDER_ALL) {
-                        editor_set_style(&editor.current_theme.content_whitespace, 1, 0);
-                        printf("-");
-                    } else {
-                        printf(" ");
-                    }
+                if (editor.config.whitespace.tab == WHITESPACE_RENDER_ALL) {
+                    editor_set_style(&editor.current_theme.content_whitespace, 1, 0);
+                    printf("%s", editor.config.whitespace.tab_char);
                     chars_to_print--;
+                    for (int i = 0; i < width - 1 && chars_to_print > 0; i++) {
+                        printf(" ");
+                        chars_to_print--;
+                    }
+                } else {
+                    for (int i = 0; i < width && chars_to_print > 0; i++) {
+                        printf(" ");
+                        chars_to_print--;
+                    }
                 }
                 continue;
             }
@@ -390,7 +395,7 @@ void draw_buffer(Diagnostic *diagnostics, int diagnostics_count, int update_diag
                 }
                 if (editor.config.whitespace.space == WHITESPACE_RENDER_ALL || (editor.config.whitespace.space == WHITESPACE_RENDER_TRAILING && is_trailing)) {
                     editor_set_style(&editor.current_theme.content_whitespace, 1, 0);
-                    printf("·");
+                    printf("%s", editor.config.whitespace.space_char);
                 } else {
                     editor_set_style(&char_style, 1, 1);
                     printf("%s", ch.value);

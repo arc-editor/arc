@@ -258,6 +258,8 @@ void config_load(Config *config) {
     config->theme = strdup("default");
     config->whitespace.space = WHITESPACE_RENDER_NONE;
     config->whitespace.tab = WHITESPACE_RENDER_NONE;
+    config->whitespace.space_char = strdup("·");
+    config->whitespace.tab_char = strdup("→");
 
     char *path = get_path("/config.toml");
     if (!path) {
@@ -282,12 +284,26 @@ void config_load(Config *config) {
     toml_datum_t tab_data = toml_seek(result.toptab, "editor.whitespace.render.tab");
     config->whitespace.tab = parse_whitespace_render(tab_data);
 
+    toml_datum_t space_char_data = toml_seek(result.toptab, "editor.whitespace.characters.space");
+    if (space_char_data.type == TOML_STRING) {
+        free(config->whitespace.space_char);
+        config->whitespace.space_char = strdup(space_char_data.u.s);
+    }
+
+    toml_datum_t tab_char_data = toml_seek(result.toptab, "editor.whitespace.characters.tab");
+    if (tab_char_data.type == TOML_STRING) {
+        free(config->whitespace.tab_char);
+        config->whitespace.tab_char = strdup(tab_char_data.u.s);
+    }
+
     free(path);
     toml_free(result);
 }
 
 void config_destroy(Config *config) {
-    free(config->theme);    
+    free(config->theme);
+    free(config->whitespace.space_char);
+    free(config->whitespace.tab_char);
 }
 
 void config_load_theme(char *name, Theme *theme) {
