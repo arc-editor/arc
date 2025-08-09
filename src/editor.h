@@ -25,6 +25,8 @@ typedef struct {
     char search_term[SEARCH_TERM_MAX_LEN];
     int search_term_len;
     int search_direction; // 1 for forward, -1 for backward
+    int search_start_y;
+    int search_start_x;
     char last_search_term[SEARCH_TERM_MAX_LEN];
     int last_search_direction;
 } Editor;
