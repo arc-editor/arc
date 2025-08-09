@@ -98,6 +98,13 @@ int normal_handle_input(const char *ch_str) {
         picker_buffer_show();
         break;
       case 'c':
+        if (editor_get_active_buffer()->dirty) {
+          editor_set_status_message("Buffer has unsaved changes. Use C to force close.");
+        } else {
+          editor_close_buffer(editor_get_active_buffer_idx());
+        }
+        break;
+      case 'C':
         editor_close_buffer(editor_get_active_buffer_idx());
         break;
       case 'q':
