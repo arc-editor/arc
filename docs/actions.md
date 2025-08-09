@@ -30,9 +30,20 @@ The "change" action deletes the target text and then enters insert mode, allowin
 
 ---
 
-## Targets (Motions)
+## Text Object Specifiers
 
-Targets, or motions, are the nouns of the command system. They define the region of text that an action will operate on.
+Some targets can be combined with a specifier to change what is selected. The specifier comes after the action and before the target (e.g. `d` `i` `w`).
+
+| Key | Description                               |
+| --- | ----------------------------------------- |
+| `i` | "inner" - selects the text object itself. |
+| `a` | "around" - selects the text object and surrounding whitespace. |
+
+---
+
+## Targets (Motions and Text Objects)
+
+Targets are the nouns of the command system. They define the region of text that an action will operate on. They can be either motions or text objects.
 
 ### Word Motions
 
@@ -46,6 +57,19 @@ Targets, or motions, are the nouns of the command system. They define the region
 | `E` | Moves to the end of the current WORD.     |
 
 A "word" is a sequence of letters, numbers, and underscores. A "WORD" is a sequence of non-whitespace characters.
+
+**Note:** When used with an action like `d` or `c`, the `w` and `W` motions behave like `e` and `E`. For example, `dw` will delete from the cursor to the end of the current word, just like `de`.
+
+### Word Text Objects
+
+These are used with actions like `d` and `c`, and must be combined with a specifier (`i` or `a`).
+
+| Key | Description                               |
+| --- | ----------------------------------------- |
+| `iw` | Inner word.                             |
+| `aw` | Around a word (includes whitespace).    |
+| `iW` | Inner WORD.                             |
+| `aW` | Around a WORD.                          |
 
 ### Character Find Motions
 
@@ -62,7 +86,6 @@ These motions work on the current line.
 
 | Key | Description                                                               |
 | --- | ------------------------------------------------------------------------- |
-| `dp`| Deletes the current paragraph. A paragraph is a block of text separated by empty lines. |
 | `np`| Moves the cursor to the beginning of the next paragraph.                  |
 | `pp`| Moves the cursor to the beginning of the previous paragraph.              |
 
