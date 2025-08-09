@@ -480,6 +480,7 @@ void draw_diagnostics(const Diagnostic *diagnostics, int diagnostics_count) {
         if (d.col_start == d.col_end || (d.col_start <= buffer->position_x && d.col_end > buffer->position_x)) {
             int y = buffer->position_y - buffer->offset_y + 1;
             ui_draw_popup(&editor.current_theme, d.severity, d.message, y, editor.screen_cols, editor.screen_rows);
+            return;
         }
     }
 }
@@ -504,12 +505,12 @@ void editor_draw() {
     editor_clear_screen();
     draw_buffer(diagnostics, diagnostic_count, update_diagnostics);
     draw_statusline();
+    if (editor_handle_input == normal_handle_input) {
+        draw_diagnostics(diagnostics, diagnostic_count);
+    }
     draw_cursor();
     if (picker_is_open()) {
         picker_draw(editor.screen_cols, editor.screen_rows, &editor.current_theme);
-    }
-    if (editor_handle_input == normal_handle_input) {
-        draw_diagnostics(diagnostics, diagnostic_count);
     }
     if (diagnostics) {
         for (int i = 0; i < diagnostic_count; i++) {
