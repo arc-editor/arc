@@ -152,10 +152,10 @@ static const char* onedark_theme_toml =
     "item-text-highlight = { fg = \"#61afef\", bold = true }\n"
     "\n"
     "[popup.border]\n"
-    "fg = \"#3e4452\"\n"
+    "fg = \"#61afef\"\n"
     "\n"
     "[picker.border]\n"
-    "fg = \"#3e4452\"\n"
+    "fg = \"#61afef\"\n"
 ;
 
 static const char* catppuccin_latte_toml =
@@ -223,10 +223,10 @@ static const char* catppuccin_latte_toml =
     "item-text-highlight = { fg = \"#1e66f5\", bold = true }\n"
     "\n"
     "[popup.border]\n"
-    "fg = \"#dce0e8\"\n"
+    "fg = \"#7287fd\"\n"
     "\n"
     "[picker.border]\n"
-    "fg = \"#dce0e8\"\n"
+    "fg = \"#7287fd\"\n"
 ;
 
 static const char* catppuccin_frappe_toml =
@@ -294,10 +294,10 @@ static const char* catppuccin_frappe_toml =
     "item-text-highlight = { fg = \"#8caaee\", bold = true }\n"
     "\n"
     "[popup.border]\n"
-    "fg = \"#232634\"\n"
+    "fg = \"#babbf1\"\n"
     "\n"
     "[picker.border]\n"
-    "fg = \"#232634\"\n"
+    "fg = \"#babbf1\"\n"
 ;
 
 static const char* catppuccin_macchiato_toml =
@@ -365,10 +365,10 @@ static const char* catppuccin_macchiato_toml =
     "item-text-highlight = { fg = \"#8aadf4\", bold = true }\n"
     "\n"
     "[popup.border]\n"
-    "fg = \"#181926\"\n"
+    "fg = \"#b7bdf8\"\n"
     "\n"
     "[picker.border]\n"
-    "fg = \"#181926\"\n"
+    "fg = \"#b7bdf8\"\n"
 ;
 
 static const char* catppuccin_mocha_toml =
@@ -436,10 +436,10 @@ static const char* catppuccin_mocha_toml =
     "item-text-highlight = { fg = \"#89b4fa\", bold = true }\n"
     "\n"
     "[popup.border]\n"
-    "fg = \"#11111b\"\n"
+    "fg = \"#b4befe\"\n"
     "\n"
     "[picker.border]\n"
-    "fg = \"#11111b\"\n"
+    "fg = \"#b4befe\"\n"
 ;
 
 // Create directories recursively (like mkdir -p)
