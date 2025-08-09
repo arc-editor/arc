@@ -352,6 +352,16 @@ void draw_buffer(Diagnostic *diagnostics, int diagnostics_count, int update_diag
         // Iterate over characters in the line
         for (int ch_idx = 0; ch_idx < line->char_count && chars_to_print > 0; ch_idx++) {
             Char ch = line->chars[ch_idx];
+            Style* style = line_style;
+            int in_selection = is_visual_mode && is_in_selection(row, ch_idx);
+            int in_search = is_in_search_match(row, ch_idx);
+
+            if (in_search) {
+                style = &editor.current_theme.search_match;
+            } else if (in_selection) {
+                style = &editor.current_theme.content_selection;
+            }
+
             if (strcmp(ch.value, "\t") == 0) {
                 if (cols_to_skip >= buffer->tab_width) {
                     cols_to_skip -= buffer->tab_width;
@@ -368,14 +378,21 @@ void draw_buffer(Diagnostic *diagnostics, int diagnostics_count, int update_diag
                 }
 
                 if (editor.config.whitespace.tab == WHITESPACE_RENDER_ALL || (editor.config.whitespace.tab == WHITESPACE_RENDER_TRAILING && is_trailing)) {
-                    editor_set_style(&editor.current_theme.content_whitespace, 1, 0);
+                    Style whitespace_style = editor.current_theme.content_whitespace;
+                    whitespace_style.bg_r = style->bg_r;
+                    whitespace_style.bg_g = style->bg_g;
+                    whitespace_style.bg_b = style->bg_b;
+                    editor_set_style(&whitespace_style, 1, 1);
                     printf("%s", editor.config.whitespace.tab_char);
                     chars_to_print--;
+
+                    editor_set_style(style, 0, 1);
                     for (int i = 0; i < width - 1 && chars_to_print > 0; i++) {
                         printf(" ");
                         chars_to_print--;
                     }
                 } else {
+                    editor_set_style(style, 0, 1);
                     for (int i = 0; i < width && chars_to_print > 0; i++) {
                         printf(" ");
                         chars_to_print--;
@@ -386,16 +403,6 @@ void draw_buffer(Diagnostic *diagnostics, int diagnostics_count, int update_diag
             if (cols_to_skip) {
                 cols_to_skip--;
                 continue;
-            }
-            
-            Style* style = line_style;
-            int in_selection = is_visual_mode && is_in_selection(row, ch_idx);
-            int in_search = is_in_search_match(row, ch_idx);
-
-            if (in_search) {
-                style = &editor.current_theme.search_match;
-            } else if (in_selection) {
-                style = &editor.current_theme.content_selection;
             }
 
             Style char_style;
@@ -416,7 +423,11 @@ void draw_buffer(Diagnostic *diagnostics, int diagnostics_count, int update_diag
                     }
                 }
                 if (editor.config.whitespace.space == WHITESPACE_RENDER_ALL || (editor.config.whitespace.space == WHITESPACE_RENDER_TRAILING && is_trailing)) {
-                    editor_set_style(&editor.current_theme.content_whitespace, 1, 0);
+                    Style whitespace_style = editor.current_theme.content_whitespace;
+                    whitespace_style.bg_r = style->bg_r;
+                    whitespace_style.bg_g = style->bg_g;
+                    whitespace_style.bg_b = style->bg_b;
+                    editor_set_style(&whitespace_style, 1, 1);
                     printf("%s", editor.config.whitespace.space_char);
                 } else {
                     editor_set_style(&char_style, 1, 1);
