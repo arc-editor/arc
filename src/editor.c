@@ -570,6 +570,36 @@ void *render_loop(void * arg __attribute__((unused))) {
     return NULL;
 }
 
+static void calculate_end_point(const char *text, int start_y, int start_x, int *end_y, int *end_x);
+
+static void editor_add_insertion_to_history(const char* text) {
+    if (is_undo_redo_active) return;
+
+    History *h = buffer->history;
+    if (h->is_coalescing) {
+        Change *last_change = h->undo_stack.head;
+        if (last_change && last_change->type == CHANGE_TYPE_INSERT) {
+            int end_y, end_x;
+            calculate_end_point(last_change->text, last_change->y, last_change->x, &end_y, &end_x);
+            if (end_y == buffer->position_y && end_x == buffer->position_x) {
+                // Coalesce
+                size_t old_len = strlen(last_change->text);
+                size_t new_text_len = strlen(text);
+                char *new_full_text = realloc(last_change->text, old_len + new_text_len + 1);
+                if (new_full_text) {
+                    memcpy(new_full_text + old_len, text, new_text_len);
+                    new_full_text[old_len + new_text_len] = '\0';
+                    last_change->text = new_full_text;
+                    history_clear_redo(h);
+                    return; // Done
+                }
+            }
+        }
+    }
+    // If not coalesced, add a new change.
+    history_add_change(h, CHANGE_TYPE_INSERT, buffer->position_y, buffer->position_x, text);
+}
+
 void editor_insert_new_line() {
     pthread_mutex_lock(&editor_mutex);
     BufferLine *current_line = buffer->lines[buffer->position_y];
@@ -623,9 +653,7 @@ void editor_insert_new_line() {
             .new_end_point = { (uint32_t)(buffer->position_y + 1), 0 }
         });
     }
-    if (!is_undo_redo_active) {
-        history_add_change(buffer->history, CHANGE_TYPE_INSERT, buffer->position_y, buffer->position_x, "\n");
-    }
+    editor_add_insertion_to_history("\n");
     buffer->position_y++;
     buffer_reset_offset_y(buffer, editor.screen_rows);
     buffer->position_x = 0;
@@ -898,9 +926,7 @@ void editor_insert_char(const char *ch) {
 
     line->chars[buffer->position_x] = new;
     line->char_count++;
-    if (!is_undo_redo_active) {
-        history_add_change(buffer->history, CHANGE_TYPE_INSERT, buffer->position_y, buffer->position_x, ch);
-    }
+    editor_add_insertion_to_history(ch);
     buffer->position_x++;
     buffer_reset_offset_x(buffer, editor.screen_cols);
     editor_did_change_buffer();
@@ -2138,6 +2164,7 @@ void editor_redo(void) {
 
     Change *change = history_pop_redo(buffer->history);
     if (change) {
+        fprintf(stderr, "JULES: Redoing change type %d, text: '%s'\n", change->type, change->text);
         if (change->type == CHANGE_TYPE_INSERT) {
             pthread_mutex_unlock(&editor_mutex);
             editor_insert_string_at(change->text, change->y, change->x);

@@ -3,9 +3,11 @@
 #include <string.h>
 #include "editor.h"
 #include "normal.h"
+#include "history.h"
 
 int insert_handle_input(const char *ch_str) {
     if (ch_str[0] == 27 && ch_str[1] == '\0') { // ESC
+        history_end_coalescing(editor_get_active_buffer()->history);
         editor_handle_input = normal_handle_input;
         editor_needs_draw();
         return 1;

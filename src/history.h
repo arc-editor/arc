@@ -26,6 +26,7 @@ typedef struct {
 typedef struct {
     ChangeStack undo_stack;
     ChangeStack redo_stack;
+    int is_coalescing;
 } History;
 
 History* history_create(void);
@@ -40,5 +41,8 @@ Change* history_pop_redo(History *h);
 void history_push_redo(History *h, Change *change);
 
 void history_clear_redo(History *h);
+
+void history_start_coalescing(History *h);
+void history_end_coalescing(History *h);
 
 #endif // HISTORY_H
