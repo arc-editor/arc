@@ -99,7 +99,6 @@ int normal_handle_input(const char *ch_str) {
         break;
       case 'c':
         if (editor_get_active_buffer()->dirty) {
-          editor_set_status_message("Buffer has unsaved changes. Use C to force close.");
         } else {
           editor_close_buffer(editor_get_active_buffer_idx());
         }
@@ -109,7 +108,6 @@ int normal_handle_input(const char *ch_str) {
         break;
       case 'q':
         if (editor_is_any_buffer_dirty()) {
-          editor_set_status_message("One or more buffers have unsaved changes. Use Q to force quit.");
         } else {
           return 0;
         }

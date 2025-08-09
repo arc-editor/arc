@@ -157,12 +157,6 @@ void editor_set_cursor_shape(int shape_code) {
 void draw_statusline() {
     printf("\x1b[%d;1H", editor.screen_rows);
 
-    if (editor.status_message[0] != '\0' && time(NULL) - editor.status_message_time < 5) {
-        editor_set_style(&editor.current_theme.statusline_text, 1, 1);
-        printf("%s", editor.status_message);
-        return;
-    }
-
     const char *mode;
     if (editor_handle_input == insert_handle_input) {
         editor_set_style(&editor.current_theme.statusline_mode_insert, 1, 1);
@@ -710,16 +704,7 @@ void setup_terminal() {
 void setup_terminal() {}
 #endif
 
-void editor_set_status_message(const char *fmt, ...) {
-    va_list args;
-    va_start(args, fmt);
-    vsnprintf(editor.status_message, sizeof(editor.status_message), fmt, args);
-    va_end(args);
-    editor.status_message_time = time(NULL);
-}
-
 void editor_init(char *file_name) {
-    editor.status_message[0] = '\0';
     init_terminal_size();
     setup_terminal();
     editor.buffer_capacity = 1;
@@ -1033,7 +1018,6 @@ void editor_write_force() {
     }
     FILE *fp = fopen(buffer->file_name, "w");
     if (fp == NULL) {
-        editor_set_status_message("Error writing to file: %s", buffer->file_name);
         pthread_mutex_unlock(&editor_mutex);
         return;
     }
@@ -1060,13 +1044,11 @@ void editor_write_force() {
 
 void editor_write() {
     if (buffer->file_name == NULL) {
-        editor_set_status_message("No file name to write to.");
         return;
     }
     struct stat st;
     if (stat(buffer->file_name, &st) == 0) {
         if (st.st_mtime > buffer->mtime) {
-            editor_set_status_message("File has been modified since opening. Use W to force write.");
             return;
         }
     }
