@@ -79,6 +79,7 @@ typedef struct {
 void theme_init();
 void theme_destroy();
 void theme_load(const char* filename, Theme *theme);
+void theme_load_from_string(const char* content, Theme *theme);
 Style *theme_get_capture_style(const char* capture_name, Theme *theme);
 const CaptureInfo* theme_get_capture_info(const char* capture_name);
 
