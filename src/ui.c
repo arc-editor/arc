@@ -124,7 +124,7 @@ void ui_draw_popup(const Theme* theme, DiagnosticSeverity severity, const char *
     }
 
     // Draw box
-    printf("\x1b[38;2;%d;%d;%dm", style->fg_r, style->fg_g, style->fg_b);
+    printf("\x1b[38;2;%d;%d;%dm\x1b[48;2;%d;%d;%dm", style->fg_r, style->fg_g, style->fg_b, theme->content_background.bg_r, theme->content_background.bg_g, theme->content_background.bg_b);
     for (int row = 0; row < height; row++) {
         printf("\x1b[%d;%dH", y + row, x);
         if (row == 0) {
@@ -141,7 +141,14 @@ void ui_draw_popup(const Theme* theme, DiagnosticSeverity severity, const char *
             printf("│");
         }
     }
-    printf("\x1b[0m");
+
+    // Draw content background
+    for (int i = 0; i < num_lines; i++) {
+      printf("\x1b[%d;%dH", y + 1 + i, x + 2);
+      for (int j = 0; j < width - 4; j++) {
+        printf(" ");
+      }
+    }
 
     printf("\x1b[38;2;%d;%d;%dm", style->fg_r, style->fg_g, style->fg_b);
     for (int i = 0; i < num_lines; i++) {
@@ -149,8 +156,8 @@ void ui_draw_popup(const Theme* theme, DiagnosticSeverity severity, const char *
         if (lines[i].length > 0) {
             printf("%.*s", lines[i].length, lines[i].text);
             // Add hyphen if we're at the end of a broken word
-            if (i < num_lines - 1 && 
-                lines[i].text[lines[i].length-1] != ' ' && 
+            if (i < num_lines - 1 &&
+                lines[i].text[lines[i].length-1] != ' ' &&
                 lines[i+1].text[0] != ' ' &&
                 lines[i].text + lines[i].length == lines[i+1].text) {
                 printf("-");
@@ -174,7 +181,7 @@ int ui_draw_picker_box(const Theme* theme, int screen_cols, int screen_rows, int
   *w = width - 2;
   *h = height;
 
-  printf("\x1b[38;2;%d;%d;%dm", theme->picker_border.fg_r, theme->picker_border.fg_g, theme->picker_border.fg_b);
+  printf("\x1b[38;2;%d;%d;%dm\x1b[48;2;%d;%d;%dm", theme->picker_border.fg_r, theme->picker_border.fg_g, theme->picker_border.fg_b, theme->content_background.bg_r, theme->content_background.bg_g, theme->content_background.bg_b);
   for (int row = 0; row < height; row++) {
     printf("\x1b[%d;%dH", margin_y + 1 + row, margin_x + 1);
 
