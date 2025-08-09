@@ -754,8 +754,8 @@ static WhitespaceRender parse_whitespace_render(toml_datum_t datum) {
 
 void config_load(Config *config) {
     config->theme = strdup("default");
-    config->whitespace.space = WHITESPACE_RENDER_NONE;
-    config->whitespace.tab = WHITESPACE_RENDER_NONE;
+    config->whitespace.space = WHITESPACE_RENDER_TRAILING;
+    config->whitespace.tab = WHITESPACE_RENDER_TRAILING;
     config->whitespace.space_char = strdup("·");
     config->whitespace.tab_char = strdup("→");
 
