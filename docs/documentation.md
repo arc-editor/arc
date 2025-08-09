@@ -29,3 +29,7 @@ sudo make install
 ## Configuration
 
 Arc is configured using a simple TOML file. The goal is to provide a powerful configuration system that remains easy to understand and manage. (More documentation to come as the configuration system is finalized).
+
+## Commands
+
+For a detailed guide on text editing commands, see the [Actions and Motions](actions.html) documentation.
