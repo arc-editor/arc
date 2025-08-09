@@ -63,6 +63,7 @@ typedef struct {
     Style content_line_number_active;
     Style content_line_number_sticky;
     Style content_selection;
+    Style content_whitespace;
     Style search_match;
 
     Style statusline_mode_insert;

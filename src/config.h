@@ -4,8 +4,22 @@
 #include "tree_sitter/api.h"
 #include "theme.h"
 
+typedef enum {
+    WHITESPACE_RENDER_NONE,
+    WHITESPACE_RENDER_ALL,
+    WHITESPACE_RENDER_TRAILING,
+} WhitespaceRender;
+
 typedef struct {
-  char *theme;  
+    WhitespaceRender space;
+    WhitespaceRender tab;
+    char *space_char;
+    char *tab_char;
+} WhitespaceConfig;
+
+typedef struct {
+  char *theme;
+  WhitespaceConfig whitespace;
 } Config;
 
 typedef TSLanguage *(*TSLanguageFn)(void);
