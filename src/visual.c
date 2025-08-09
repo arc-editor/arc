@@ -53,6 +53,17 @@ int visual_handle_input(const char *ch_str) {
         case 'l':
             editor_move_cursor_right();
             break;
+        case ';': {
+            Buffer *b = editor_get_active_buffer();
+            int temp_y = b->selection_start_y;
+            int temp_x = b->selection_start_x;
+            b->selection_start_y = b->position_y;
+            b->selection_start_x = b->position_x;
+            b->position_y = temp_y;
+            b->position_x = temp_x;
+            editor_request_redraw();
+            break;
+        }
         case 'w':
         case 'e':
         case 'b':
