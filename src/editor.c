@@ -31,6 +31,7 @@
 #include "ui.h"
 #include "utf8.h"
 #include "search.h"
+#include "utf8.h"
 
 static pthread_mutex_t editor_mutex = PTHREAD_MUTEX_INITIALIZER;
 Editor editor;
@@ -44,7 +45,7 @@ static int is_in_search_match(int y, int x) {
     if (buf->search_state.count == 0) {
         return 0;
     }
-    size_t term_len = strlen(buf->search_state.term);
+    size_t term_len = utf8_strlen(buf->search_state.term);
     for (int i = 0; i < buf->search_state.count; i++) {
         if (buf->search_state.matches[i].y == y) {
             if (x >= buf->search_state.matches[i].x && x < buf->search_state.matches[i].x + (int)term_len) {

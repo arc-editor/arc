@@ -125,3 +125,18 @@ int utf8_char_width(const char *s) {
 
     return width;
 }
+
+size_t utf8_strlen(const char *s) {
+    init_utf8();
+    size_t i = 0;
+    const char *p = s;
+    while (*p) {
+        int len = mblen(p, MB_CUR_MAX);
+        if (len < 1) {
+            len = 1;
+        }
+        p += len;
+        i++;
+    }
+    return i;
+}
