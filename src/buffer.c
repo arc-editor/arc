@@ -4,6 +4,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
+#include <sys/stat.h>
 #include <math.h>
 #include "buffer.h"
 #include "log.h"
@@ -527,8 +528,14 @@ void buffer_init(Buffer *b, char *file_name) {
     b->cursor = NULL;
     b->parser = NULL;
     b->tree = NULL;
+    b->mtime = 0;
     if (file_name == NULL) {
         return;
+    }
+
+    struct stat st;
+    if (stat(file_name, &st) == 0) {
+        b->mtime = st.st_mtime;
     }
 
     char *lang_name = get_file_extension(file_name);

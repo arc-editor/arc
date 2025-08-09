@@ -1,6 +1,7 @@
 #ifndef BUFFER_H
 #define BUFFER_H
 
+#include <time.h>
 #include "tree_sitter/api.h"
 #include "theme.h"
 
@@ -39,6 +40,7 @@ typedef struct {
     char *read_buffer;
     size_t read_buffer_capacity;
     char *file_name;
+    time_t mtime;
     int tab_width;
     int line_num_width;
     int version;
