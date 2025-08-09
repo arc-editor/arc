@@ -2164,7 +2164,6 @@ void editor_redo(void) {
 
     Change *change = history_pop_redo(buffer->history);
     if (change) {
-        fprintf(stderr, "JULES: Redoing change type %d, text: '%s'\n", change->type, change->text);
         if (change->type == CHANGE_TYPE_INSERT) {
             pthread_mutex_unlock(&editor_mutex);
             editor_insert_string_at(change->text, change->y, change->x);
