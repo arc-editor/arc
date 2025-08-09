@@ -15,6 +15,78 @@
 #include "log.h"
 #include "theme.h"
 
+static const char* default_theme_toml =
+    "[content]\n"
+    "line-number = { fg = \"#646482\", bg = \"#26283C\" }\n"
+    "line-number-active = { fg = \"#8C96B4\", bg = \"#32374B\" }\n"
+    "line-number-sticky = { fg = \"#646482\", bg = \"#1B2130\" }\n"
+    "cursor-line = { bg = \"#32374B\" }\n"
+    "selection = { bg = \"#474A63\" }\n"
+    "background = { bg = \"#26283C\" }\n"
+    "whitespace = { fg = \"#474A63\" }\n"
+    "\n"
+    "[search]\n"
+    "match = { bg = \"#474A63\" }\n"
+    "\n"
+    "[statusline]\n"
+    "mode-insert = { fg = \"#141428\", bg = \"#D2F0BE\", bold = true }\n"
+    "mode-normal = { fg = \"#141428\", bg = \"#C8C8FF\", bold = true }\n"
+    "mode-visual = { fg = \"#141428\", bg = \"#f5e0dc\", bold = true }\n"
+    "mode-command = { fg = \"#141428\", bg = \"#8aadf4\", bold = true }\n"
+    "text = { fg = \"#D7DCFA\", bg = \"#1F2130\" }\n"
+    "\n"
+    "\n"
+    "[syntax]\n"
+    "keyword = { fg = \"#c6a0f6\" }\n"
+    "keyword-storage-type = { fg = \"#c6a0f6\" }\n"
+    "keyword-storage-modifier = { fg = \"#c6a0f6\" }\n"
+    "keyword-control = { fg = \"#c6a0f6\" }\n"
+    "keyword-control-repeat = { fg = \"#c6a0f6\" }\n"
+    "keyword-control-return = { fg = \"#c6a0f6\" }\n"
+    "keyword-control-conditional = { fg = \"#c6a0f6\" }\n"
+    "keyword-directive = { fg = \"#c6a0f6\" }\n"
+    "function-special = { fg = \"#c6a0f6\" }\n"
+    "string = { fg = \"#a6da95\" }\n"
+    "constant-character = { fg = \"#8bd5ca\" }\n"
+    "type-enum-variant = { fg = \"#8bd5ca\" }\n"
+    "constant-character-escape = { fg = \"#f5bde6\" }\n"
+    "constant-numeric = { fg = \"#f5a97f\" }\n"
+    "constant-builtin-boolean = { fg = \"#f5a97f\" }\n"
+    "constant = { fg = \"#f5a97f\" }\n"
+    "variable = { fg = \"#cad3f5\" }\n"
+    "variable-parameter = { fg = \"#ee99a0\", italic = true }\n"
+    "variable-other-member = { fg = \"#8aadf4\" }\n"
+    "function = { fg = \"#8aadf4\" }\n"
+    "type = { fg = \"#eed49f\" }\n"
+    "type-builtin = { fg = \"#eed49f\" }\n"
+    "attribute = { fg = \"#eed49f\" }\n"
+    "punctuation = { fg = \"#939ab7\" }\n"
+    "punctuation-delimiter = { fg = \"#939ab7\" }\n"
+    "punctuation-bracket = { fg = \"#939ab7\" }\n"
+    "comment = { fg = \"#939ab7\", italic = true }\n"
+    "operator = { fg = \"#91d7e3\" }\n"
+    "label = { fg = \"#7dc4e4\" }\n"
+    "info = { fg = \"#8aadf4\" }\n"
+    "warning = { fg = \"#eed49f\" }\n"
+    "error = { fg = \"#ee99a0\" }\n"
+    "\n"
+    "[diagnostics]\n"
+    "hint = { fg = \"#8aadf4\" }\n"
+    "info = { fg = \"#8aadf4\" }\n"
+    "warning = { fg = \"#eed49f\" }\n"
+    "error = { fg = \"#ee99a0\" }\n"
+    "\n"
+    "[picker]\n"
+    "item-text = { fg = \"#cad3f5\" }\n"
+    "item-text-highlight = { fg = \"#8aadf4\", bold = true }\n"
+    "\n"
+    "[popup.border]\n"
+    "fg = \"#8aadf4\"\n"
+    "\n"
+    "[picker.border]\n"
+    "fg = \"#8aadf4\"\n"
+;
+
 // Create directories recursively (like mkdir -p)
 int mkdir_recursive(const char *path, __mode_t mode) {
     char *path_copy = strdup(path);
@@ -313,6 +385,20 @@ void config_load_theme(char *name, Theme *theme) {
         log_error("config.config_load_theme: make_config_path failed");
         return;
     }
+
+    if (access(path, F_OK) == -1) {
+        if (strcmp(name, "default") == 0) {
+            FILE* file = fopen(path, "w");
+            if (file) {
+                fputs(default_theme_toml, file);
+                fclose(file);
+                log_info("config.config_load_theme: created default theme at %s", path);
+            } else {
+                log_warning("config.config_load_theme: failed to create default theme at %s", path);
+            }
+        }
+    }
+
     log_info("config.config_load_theme: loading theme from %s", path);
     theme_load(path, theme);
     free(path);
