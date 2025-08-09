@@ -2,6 +2,7 @@
 #define EDITOR_H
 
 #define EDITOR_VERSION "debug"
+#include <time.h>
 #include "theme.h"
 #include "buffer.h"
 #include "config.h"
@@ -29,6 +30,10 @@ typedef struct {
     int search_start_x;
     char last_search_term[SEARCH_TERM_MAX_LEN];
     int last_search_direction;
+
+    // Status message
+    char status_message[128];
+    time_t status_message_time;
 } Editor;
 
 typedef struct {
@@ -59,6 +64,7 @@ Buffer **editor_get_buffers(int *count);
 void editor_set_active_buffer(int index);
 int editor_get_active_buffer_idx(void);
 void editor_close_buffer(int buffer_index);
+int editor_is_any_buffer_dirty(void);
 void editor_needs_draw();
 void editor_clear_screen();
 void editor_move_cursor_right();
@@ -68,11 +74,13 @@ void editor_move_cursor_up();
 void editor_insert_char(const char *ch);
 void editor_insert_new_line();
 void editor_write();
+void editor_write_force();
 void editor_delete();
 void editor_backspace();
 void editor_move_n_lines_down(int n);
 void editor_move_n_lines_up(int n);
 void editor_search_next(int direction);
+void editor_set_status_message(const char *fmt, ...);
 void editor_set_style(Style *style, int fg, int bg);
 void editor_set_cursor_shape(int shape_code);
 void editor_request_redraw(void);
