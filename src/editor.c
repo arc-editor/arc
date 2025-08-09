@@ -2081,7 +2081,9 @@ void editor_undo(void) {
             buffer->position_y = change->y;
             buffer->position_x = change->x;
         } else { // CHANGE_TYPE_DELETE
+            pthread_mutex_unlock(&editor_mutex);
             editor_insert_string_at(change->text, change->y, change->x);
+            pthread_mutex_lock(&editor_mutex);
             buffer->position_y = change->y;
             buffer->position_x = change->x;
         }
@@ -2102,7 +2104,9 @@ void editor_redo(void) {
     if (change) {
         log_info("Redoing change: type=%d, y=%d, x=%d, text='%s'", change->type, change->y, change->x, change->text);
         if (change->type == CHANGE_TYPE_INSERT) {
+            pthread_mutex_unlock(&editor_mutex);
             editor_insert_string_at(change->text, change->y, change->x);
+            pthread_mutex_lock(&editor_mutex);
             buffer->position_y = change->y;
             buffer->position_x = change->x;
         } else { // CHANGE_TYPE_DELETE
