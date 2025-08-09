@@ -89,8 +89,9 @@ static const char* default_theme_toml =
 
 static const char* onedark_theme_toml =
     "[content]\n"
-    "line-number = { fg = \"#495162\" }\n"
-    "line-number-active = { fg = \"#abb2bf\" }\n"
+    "line-number = { fg = \"#495162\", bg = \"#282c34\" }\n"
+    "line-number-active = { fg = \"#abb2bf\", bg = \"#2c313c\" }\n"
+    "line-number-sticky = { fg = \"#495162\", bg = \"#21252b\" }\n"
     "cursor-line = { bg = \"#2c313c\" }\n"
     "selection = { bg = \"#3e4452\" }\n"
     "background = { bg = \"#282c34\" }\n"
@@ -159,8 +160,9 @@ static const char* onedark_theme_toml =
 
 static const char* catppuccin_latte_toml =
     "[content]\n"
-    "line-number = { fg = \"#bcc0cc\" }\n"
-    "line-number-active = { fg = \"#7287fd\" }\n"
+    "line-number = { fg = \"#bcc0cc\", bg = \"#eff1f5\" }\n"
+    "line-number-active = { fg = \"#7287fd\", bg = \"#e6e9ef\" }\n"
+    "line-number-sticky = { fg = \"#bcc0cc\", bg = \"#dce0e8\" }\n"
     "cursor-line = { bg = \"#e6e9ef\" }\n"
     "selection = { bg = \"#acb0be\" }\n"
     "background = { bg = \"#eff1f5\" }\n"
@@ -229,8 +231,9 @@ static const char* catppuccin_latte_toml =
 
 static const char* catppuccin_frappe_toml =
     "[content]\n"
-    "line-number = { fg = \"#626880\" }\n"
-    "line-number-active = { fg = \"#babbf1\" }\n"
+    "line-number = { fg = \"#626880\", bg = \"#303446\" }\n"
+    "line-number-active = { fg = \"#babbf1\", bg = \"#3b3f52\" }\n"
+    "line-number-sticky = { fg = \"#626880\", bg = \"#232634\" }\n"
     "cursor-line = { bg = \"#3b3f52\" }\n"
     "selection = { bg = \"#51576d\" }\n"
     "background = { bg = \"#303446\" }\n"
@@ -299,8 +302,9 @@ static const char* catppuccin_frappe_toml =
 
 static const char* catppuccin_macchiato_toml =
     "[content]\n"
-    "line-number = { fg = \"#5b6078\" }\n"
-    "line-number-active = { fg = \"#b7bdf8\" }\n"
+    "line-number = { fg = \"#5b6078\", bg = \"#24273a\" }\n"
+    "line-number-active = { fg = \"#b7bdf8\", bg = \"#303347\" }\n"
+    "line-number-sticky = { fg = \"#5b6078\", bg = \"#181926\" }\n"
     "cursor-line = { bg = \"#303347\" }\n"
     "selection = { bg = \"#494d64\" }\n"
     "background = { bg = \"#24273a\" }\n"
@@ -369,8 +373,9 @@ static const char* catppuccin_macchiato_toml =
 
 static const char* catppuccin_mocha_toml =
     "[content]\n"
-    "line-number = { fg = \"#585b70\" }\n"
-    "line-number-active = { fg = \"#b4befe\" }\n"
+    "line-number = { fg = \"#585b70\", bg = \"#1e1e2e\" }\n"
+    "line-number-active = { fg = \"#b4befe\", bg = \"#2a2b3c\" }\n"
+    "line-number-sticky = { fg = \"#585b70\", bg = \"#11111b\" }\n"
     "cursor-line = { bg = \"#2a2b3c\" }\n"
     "selection = { bg = \"#45475a\" }\n"
     "background = { bg = \"#1e1e2e\" }\n"
