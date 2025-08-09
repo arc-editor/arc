@@ -52,4 +52,6 @@ void run_normal_tests(void) {
     test_helper("test_daW_at_start", "hello-world goodbye", 0, 0, "daW", "goodbye");
     test_helper("test_daW_in_middle", "hello-world goodbye", 0, 2, "daW", "goodbye");
     test_helper("test_daW_at_end", "hello-world goodbye", 0, 10, "daW", "goodbye");
+
+    test_visual_motion_helper("test_visual_swap_selection", "hello world", 0, 2, "ll;", 0, 4, 0, 2);
 }

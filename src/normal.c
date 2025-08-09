@@ -101,11 +101,21 @@ int normal_handle_input(const char *ch_str) {
       case 'c':
         editor_close_buffer(editor_get_active_buffer_idx());
         break;
-    case 'q':
-      return 0;
-    case 'w':
-      editor_write();
-      break;
+      case 'q':
+        if (editor_is_any_buffer_dirty()) {
+          editor_set_status_message("One or more buffers have unsaved changes. Use Q to force quit.");
+        } else {
+          return 0;
+        }
+        break;
+      case 'Q':
+        return 0;
+      case 'w':
+        editor_write();
+        break;
+      case 'W':
+        editor_write_force();
+        break;
     }
     is_space_mode = 0;
     return 1;

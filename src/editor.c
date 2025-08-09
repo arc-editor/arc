@@ -14,6 +14,8 @@
 #include <pthread.h>
 #include <dlfcn.h>
 #include <limits.h>
+#include <stdarg.h>
+#include <sys/stat.h>
 #include "log.h"
 #include "picker.h"
 #include "picker_file.h"
@@ -154,6 +156,12 @@ void editor_set_cursor_shape(int shape_code) {
 
 void draw_statusline() {
     printf("\x1b[%d;1H", editor.screen_rows);
+
+    if (editor.status_message[0] != '\0' && time(NULL) - editor.status_message_time < 5) {
+        editor_set_style(&editor.current_theme.statusline_text, 1, 1);
+        printf("%s", editor.status_message);
+        return;
+    }
 
     const char *mode;
     if (editor_handle_input == insert_handle_input) {
@@ -605,7 +613,7 @@ void editor_insert_new_line() {
     }
 
     buffer->line_count++;
-    if (buffer->parser) {
+    if (buffer->parser && buffer->tree) {
         ts_tree_edit(buffer->tree, &(TSInputEdit){
             .start_byte = start_byte,
             .old_end_byte = start_byte,
@@ -675,7 +683,16 @@ void setup_terminal() {
 void setup_terminal() {}
 #endif
 
+void editor_set_status_message(const char *fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+    vsnprintf(editor.status_message, sizeof(editor.status_message), fmt, args);
+    va_end(args);
+    editor.status_message_time = time(NULL);
+}
+
 void editor_init(char *file_name) {
+    editor.status_message[0] = '\0';
     init_terminal_size();
     setup_terminal();
     editor.buffer_capacity = 1;
@@ -780,6 +797,15 @@ void editor_set_active_buffer(int index) {
     buffer->needs_draw = 1;
 }
 
+int editor_is_any_buffer_dirty(void) {
+    for (int i = 0; i < editor.buffer_count; i++) {
+        if (editor.buffers[i]->dirty) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
 void editor_close_buffer(int buffer_index) {
     pthread_mutex_lock(&editor_mutex);
     if (buffer_index < 0 || buffer_index >= editor.buffer_count) {
@@ -882,7 +908,7 @@ void editor_insert_char(const char *ch) {
     buffer_reset_offset_x(buffer, editor.screen_cols);
     editor_did_change_buffer();
 
-    if (buffer->parser) {
+    if (buffer->parser && buffer->tree) {
         uint32_t start_byte = 0;
         for (int i = 0; i < buffer->position_y; i++) {
             for (int j = 0; j < buffer->lines[i]->char_count; j++) {
@@ -981,7 +1007,7 @@ void editor_move_cursor_up() {
     pthread_mutex_unlock(&editor_mutex);
 }
 
-void editor_write() {
+void editor_write_force() {
     pthread_mutex_lock(&editor_mutex);
     if (buffer->file_name == NULL) {
         pthread_mutex_unlock(&editor_mutex);
@@ -989,7 +1015,7 @@ void editor_write() {
     }
     FILE *fp = fopen(buffer->file_name, "w");
     if (fp == NULL) {
-        log_error("editor.editor_write: failed to open file for writing");
+        editor_set_status_message("Error writing to file: %s", buffer->file_name);
         pthread_mutex_unlock(&editor_mutex);
         return;
     }
@@ -1004,8 +1030,29 @@ void editor_write() {
     }
     fclose(fp);
     buffer->dirty = 0;
+
+    struct stat st;
+    if (stat(buffer->file_name, &st) == 0) {
+        buffer->mtime = st.st_mtime;
+    }
+
     buffer->needs_draw = 1;
     pthread_mutex_unlock(&editor_mutex);
+}
+
+void editor_write() {
+    if (buffer->file_name == NULL) {
+        editor_set_status_message("No file name to write to.");
+        return;
+    }
+    struct stat st;
+    if (stat(buffer->file_name, &st) == 0) {
+        if (st.st_mtime > buffer->mtime) {
+            editor_set_status_message("File has been modified since opening. Use W to force write.");
+            return;
+        }
+    }
+    editor_write_force();
 }
 
 void editor_delete() {
@@ -1046,7 +1093,7 @@ void editor_delete() {
         }
         buffer->line_count--;
         buffer_set_line_num_width(buffer);
-        if (buffer->parser) {
+        if (buffer->parser && buffer->tree) {
             ts_tree_edit(buffer->tree, &(TSInputEdit){
                 .start_byte = start_byte,
                 .old_end_byte = start_byte + 1,
@@ -1065,7 +1112,7 @@ void editor_delete() {
                 &line->chars[buffer->position_x + 1],
                 (line->char_count - buffer->position_x - 1) * sizeof(Char));
         line->char_count--;
-        if (buffer->parser) {
+        if (buffer->parser && buffer->tree) {
             line->needs_highlight = 1;
             ts_tree_edit(buffer->tree, &(TSInputEdit){
                 .start_byte = start_byte,
@@ -1118,7 +1165,7 @@ void editor_backspace() {
         }
         buffer->line_count--;
         buffer_set_line_num_width(buffer);
-        if (buffer->parser) {
+        if (buffer->parser && buffer->tree) {
             int prev_line_byte_len = 0;
             for (int i = 0; i < prev_line->char_count; i++) {
                 prev_line_byte_len += strlen(prev_line->chars[i].value);
@@ -1147,7 +1194,7 @@ void editor_backspace() {
                 (line->char_count - buffer->position_x) * sizeof(Char));
         line->char_count--;
         buffer->position_x--;
-        if (buffer->parser) {
+        if (buffer->parser && buffer->tree) {
             line->needs_highlight = 1;
             ts_tree_edit(buffer->tree, &(TSInputEdit){
                 .start_byte = start_byte - strlen(deleted_char.value),
@@ -1806,7 +1853,7 @@ void range_delete(Buffer *b, Range *range, EditorCommand *cmd) {
         }
     }
 
-    if (b->parser) {
+    if (b->parser && b->tree) {
         uint32_t start_byte = 0;
         for (int i = 0; i < top; i++) {
             for (int j = 0; j < b->lines[i]->char_count; j++) {
