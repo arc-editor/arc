@@ -173,72 +173,79 @@ static void parse_style(toml_datum_t root, const char* key, Style* style) {
     }
 }
 
+static void parse_theme_from_toml(toml_datum_t toptab, Theme *theme) {
+    parse_style(toptab, "syntax.keyword", &theme->syntax_keyword);
+    parse_style(toptab, "syntax.keyword-storage-type", &theme->syntax_keyword_storage_type);
+    parse_style(toptab, "syntax.keyword-storage-modifier", &theme->syntax_keyword_storage_modifier);
+    parse_style(toptab, "syntax.keyword-control", &theme->syntax_keyword_control);
+    parse_style(toptab, "syntax.keyword-control-repeat", &theme->syntax_keyword_control_repeat);
+    parse_style(toptab, "syntax.keyword-control-return", &theme->syntax_keyword_control_return);
+    parse_style(toptab, "syntax.keyword-control-conditional", &theme->syntax_keyword_control_conditional);
+    parse_style(toptab, "syntax.keyword-directive", &theme->syntax_keyword_directive);
+    parse_style(toptab, "syntax.function-special", &theme->syntax_function_special);
+    parse_style(toptab, "syntax.function-builtin", &theme->syntax_function_builtin);
+    parse_style(toptab, "syntax.string", &theme->syntax_string);
+    parse_style(toptab, "syntax.constant-character", &theme->syntax_constant_character);
+    parse_style(toptab, "syntax.type-enum-variant", &theme->syntax_type_enum_variant);
+    parse_style(toptab, "syntax.constant-character-escape", &theme->syntax_constant_character_escape);
+    parse_style(toptab, "syntax.constant-numeric", &theme->syntax_constant_numeric);
+    parse_style(toptab, "syntax.constant-builtin-boolean", &theme->syntax_constant_builtin_boolean);
+    parse_style(toptab, "syntax.constant", &theme->syntax_constant);
+    parse_style(toptab, "syntax.variable", &theme->syntax_variable);
+    parse_style(toptab, "syntax.variable-parameter", &theme->syntax_variable_parameter);
+    parse_style(toptab, "syntax.variable-other-member", &theme->syntax_variable_other_member);
+    parse_style(toptab, "syntax.function", &theme->syntax_function);
+    parse_style(toptab, "syntax.type", &theme->syntax_type);
+    parse_style(toptab, "syntax.type-builtin", &theme->syntax_type_builtin);
+    parse_style(toptab, "syntax.attribute", &theme->syntax_attribute);
+    parse_style(toptab, "syntax.punctuation", &theme->syntax_punctuation);
+    parse_style(toptab, "syntax.punctuation-delimiter", &theme->syntax_punctuation_delimiter);
+    parse_style(toptab, "syntax.punctuation-bracket", &theme->syntax_punctuation_bracket);
+    parse_style(toptab, "syntax.comment", &theme->syntax_comment);
+    parse_style(toptab, "syntax.operator", &theme->syntax_operator);
+    parse_style(toptab, "syntax.label", &theme->syntax_label);
+    parse_style(toptab, "syntax.info", &theme->syntax_info);
+    parse_style(toptab, "syntax.warning", &theme->syntax_warning);
+    parse_style(toptab, "syntax.error", &theme->syntax_error);
+    parse_style(toptab, "diagnostics.info", &theme->diagnostics_info);
+    parse_style(toptab, "diagnostics.warning", &theme->diagnostics_warning);
+    parse_style(toptab, "diagnostics.error", &theme->diagnostics_error);
+    parse_style(toptab, "diagnostics.hint", &theme->diagnostics_hint);
+    parse_style(toptab, "picker.item-text", &theme->picker_item_text);
+    parse_style(toptab, "picker.item-text-highlight", &theme->picker_item_text_highlight);
+    parse_style(toptab, "content.background", &theme->content_background);
+    parse_style(toptab, "content.cursor-line", &theme->content_cursor_line);
+    parse_style(toptab, "content.line-number", &theme->content_line_number);
+    parse_style(toptab, "content.line-number-active", &theme->content_line_number_active);
+    parse_style(toptab, "content.line-number-sticky", &theme->content_line_number_sticky);
+    parse_style(toptab, "content.whitespace", &theme->content_whitespace);
+    parse_style(toptab, "content.selection", &theme->content_selection);
+    parse_style(toptab, "search.match", &theme->search_match);
+    parse_style(toptab, "statusline.mode-insert", &theme->statusline_mode_insert);
+    parse_style(toptab, "statusline.mode-normal", &theme->statusline_mode_normal);
+    parse_style(toptab, "statusline.mode-command", &theme->statusline_mode_command);
+    parse_style(toptab, "statusline.mode-visual", &theme->statusline_mode_visual);
+    parse_style(toptab, "statusline.text", &theme->statusline_text);
+    parse_style(toptab, "popup.border", &theme->popup_border);
+    parse_style(toptab, "picker.border", &theme->picker_border);
+}
+
 void theme_load(const char* filename, Theme *theme) {
     toml_result_t result = toml_parse_file_ex(filename);
     if (!result.ok) {
         log_warning("theme.theme_load: cannot parse %s - %s", filename, result.errmsg);
         return;
     }
+    parse_theme_from_toml(result.toptab, theme);
+    toml_free(result);
+}
 
-    parse_style(result.toptab, "syntax.keyword", &theme->syntax_keyword);
-    parse_style(result.toptab, "syntax.keyword-storage-type", &theme->syntax_keyword_storage_type);
-    parse_style(result.toptab, "syntax.keyword-storage-modifier", &theme->syntax_keyword_storage_modifier);
-    parse_style(result.toptab, "syntax.keyword-control", &theme->syntax_keyword_control);
-    parse_style(result.toptab, "syntax.keyword-control-repeat", &theme->syntax_keyword_control_repeat);
-    parse_style(result.toptab, "syntax.keyword-control-return", &theme->syntax_keyword_control_return);
-    parse_style(result.toptab, "syntax.keyword-control-conditional", &theme->syntax_keyword_control_conditional);
-    parse_style(result.toptab, "syntax.keyword-directive", &theme->syntax_keyword_directive);
-    parse_style(result.toptab, "syntax.function-special", &theme->syntax_function_special);
-    parse_style(result.toptab, "syntax.function-builtin", &theme->syntax_function_builtin);
-    parse_style(result.toptab, "syntax.string", &theme->syntax_string);
-    parse_style(result.toptab, "syntax.constant-character", &theme->syntax_constant_character);
-    parse_style(result.toptab, "syntax.type-enum-variant", &theme->syntax_type_enum_variant);
-    parse_style(result.toptab, "syntax.constant-character-escape", &theme->syntax_constant_character_escape);
-    parse_style(result.toptab, "syntax.constant-numeric", &theme->syntax_constant_numeric);
-    parse_style(result.toptab, "syntax.constant-builtin-boolean", &theme->syntax_constant_builtin_boolean);
-    parse_style(result.toptab, "syntax.constant", &theme->syntax_constant);
-    parse_style(result.toptab, "syntax.variable", &theme->syntax_variable);
-    parse_style(result.toptab, "syntax.variable-parameter", &theme->syntax_variable_parameter);
-    parse_style(result.toptab, "syntax.variable-other-member", &theme->syntax_variable_other_member);
-    parse_style(result.toptab, "syntax.function", &theme->syntax_function);
-    parse_style(result.toptab, "syntax.type", &theme->syntax_type);
-    parse_style(result.toptab, "syntax.type-builtin", &theme->syntax_type_builtin);
-    parse_style(result.toptab, "syntax.attribute", &theme->syntax_attribute);
-    parse_style(result.toptab, "syntax.punctuation", &theme->syntax_punctuation);
-    parse_style(result.toptab, "syntax.punctuation-delimiter", &theme->syntax_punctuation_delimiter);
-    parse_style(result.toptab, "syntax.punctuation-bracket", &theme->syntax_punctuation_bracket);
-    parse_style(result.toptab, "syntax.comment", &theme->syntax_comment);
-    parse_style(result.toptab, "syntax.operator", &theme->syntax_operator);
-    parse_style(result.toptab, "syntax.label", &theme->syntax_label);
-    parse_style(result.toptab, "syntax.info", &theme->syntax_info);
-    parse_style(result.toptab, "syntax.warning", &theme->syntax_warning);
-    parse_style(result.toptab, "syntax.error", &theme->syntax_error);
-    parse_style(result.toptab, "diagnostics.info", &theme->diagnostics_info);
-    parse_style(result.toptab, "diagnostics.warning", &theme->diagnostics_warning);
-    parse_style(result.toptab, "diagnostics.error", &theme->diagnostics_error);
-    parse_style(result.toptab, "diagnostics.hint", &theme->diagnostics_hint);
-
-    parse_style(result.toptab, "picker.item-text", &theme->picker_item_text);
-    parse_style(result.toptab, "picker.item-text-highlight", &theme->picker_item_text_highlight);
-
-    parse_style(result.toptab, "content.background", &theme->content_background);
-    parse_style(result.toptab, "content.cursor-line", &theme->content_cursor_line);
-    parse_style(result.toptab, "content.line-number", &theme->content_line_number);
-    parse_style(result.toptab, "content.line-number-active", &theme->content_line_number_active);
-    parse_style(result.toptab, "content.line-number-sticky", &theme->content_line_number_sticky);
-    parse_style(result.toptab, "content.whitespace", &theme->content_whitespace);
-
-    parse_style(result.toptab, "content.selection", &theme->content_selection);
-    parse_style(result.toptab, "search.match", &theme->search_match);
-
-    parse_style(result.toptab, "statusline.mode-insert", &theme->statusline_mode_insert);
-    parse_style(result.toptab, "statusline.mode-normal", &theme->statusline_mode_normal);
-    parse_style(result.toptab, "statusline.mode-command", &theme->statusline_mode_command);
-    parse_style(result.toptab, "statusline.mode-visual", &theme->statusline_mode_visual);
-    parse_style(result.toptab, "statusline.text", &theme->statusline_text);
-
-    parse_style(result.toptab, "popup.border", &theme->popup_border);
-    parse_style(result.toptab, "picker.border", &theme->picker_border);
-
+void theme_load_from_string(const char* content, Theme *theme) {
+    toml_result_t result = toml_parse(content, strlen(content));
+    if (!result.ok) {
+        log_warning("theme.theme_load_from_string: cannot parse content - %s", result.errmsg);
+        return;
+    }
+    parse_theme_from_toml(result.toptab, theme);
     toml_free(result);
 }

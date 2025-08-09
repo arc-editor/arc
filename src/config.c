@@ -805,44 +805,45 @@ void config_destroy(Config *config) {
 }
 
 void config_load_theme(char *name, Theme *theme) {
-    if (name == NULL) return;
+    if (name == NULL) {
+        log_warning("config.config_load_theme: theme name is NULL, loading default");
+        name = "default";
+    }
+
     char *path = get_path("/themes/%s.toml", name);
     if (!path) {
         log_error("config.config_load_theme: make_config_path failed");
         return;
     }
-
-    if (access(path, F_OK) == -1) {
-        const char* toml_content = NULL;
-        if (strcmp(name, "default") == 0) {
-            toml_content = default_theme_toml;
-        } else if (strcmp(name, "onedark") == 0) {
-            toml_content = onedark_theme_toml;
-        } else if (strcmp(name, "onedarker") == 0) {
-            toml_content = onedarker_theme_toml;
-        } else if (strcmp(name, "catppuccin_latte") == 0) {
-            toml_content = catppuccin_latte_toml;
-        } else if (strcmp(name, "catppuccin_frappe") == 0) {
-            toml_content = catppuccin_frappe_toml;
-        } else if (strcmp(name, "catppuccin_macchiato") == 0) {
-            toml_content = catppuccin_macchiato_toml;
-        } else if (strcmp(name, "catppuccin_mocha") == 0) {
-            toml_content = catppuccin_mocha_toml;
-        }
-
-        if (toml_content) {
-            FILE* file = fopen(path, "w");
-            if (file) {
-                fputs(toml_content, file);
-                fclose(file);
-                log_info("config.config_load_theme: created %s theme at %s", name, path);
-            } else {
-                log_warning("config.config_load_theme: failed to create %s theme at %s", name, path);
-            }
-        }
+    if (access(path, F_OK) != -1) {
+        log_info("config.config_load_theme: loading user theme from %s", path);
+        theme_load(path, theme);
+        free(path);
+        return;
     }
 
-    log_info("config.config_load_theme: loading theme from %s", path);
-    theme_load(path, theme);
-    free(path);
+    free(path); // Free path since we won't use it further for embedded themes
+
+    const char* toml_content = NULL;
+    if (strcmp(name, "default") == 0) {
+        toml_content = default_theme_toml;
+    } else if (strcmp(name, "onedark") == 0) {
+        toml_content = onedark_theme_toml;
+    } else if (strcmp(name, "catppuccin_latte") == 0) {
+        toml_content = catppuccin_latte_toml;
+    } else if (strcmp(name, "catppuccin_frappe") == 0) {
+        toml_content = catppuccin_frappe_toml;
+    } else if (strcmp(name, "catppuccin_macchiato") == 0) {
+        toml_content = catppuccin_macchiato_toml;
+    } else if (strcmp(name, "catppuccin_mocha") == 0) {
+        toml_content = catppuccin_mocha_toml;
+    }
+
+    if (toml_content) {
+        log_info("config.config_load_theme: loading embedded theme '%s'", name);
+        theme_load_from_string(toml_content, theme);
+    } else {
+        log_warning("config.config_load_theme: theme '%s' not found, loading default embedded theme", name);
+        theme_load_from_string(default_theme_toml, theme);
+    }
 }
