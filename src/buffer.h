@@ -86,5 +86,7 @@ int buffer_find_backward(Buffer *b, const char *term, int *y, int *x);
 void buffer_update_search_matches(Buffer *b, const char *term);
 void buffer_clear_search_state(Buffer *b);
 void buffer_update_current_search_match(Buffer *b);
+int buffer_find_first_match(Buffer *b, const char *term, int start_y, int start_x, int *match_y, int *match_x);
+int buffer_find_last_match_before(Buffer *b, const char *term, int start_y, int start_x, int *match_y, int *match_x);
 
 #endif

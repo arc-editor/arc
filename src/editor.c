@@ -196,9 +196,22 @@ void draw_statusline() {
     if (editor_handle_input == search_handle_input) {
         const char *search_term = search_get_term();
         char prompt_char = search_get_prompt_char();
-        int search_len = printf(" %c%s", prompt_char, search_term);
-        for (int i = 0; i < editor.screen_cols - mode_len - search_len; i++) {
+        int search_len = snprintf(NULL, 0, " %c%s", prompt_char, search_term);
+        printf(" %c%s", prompt_char, search_term);
+
+        char search_stats[32] = {0};
+        int search_stats_len = 0;
+        if (buffer->search_state.count > 0) {
+            search_stats_len = snprintf(search_stats, sizeof(search_stats), "[%d/%d]", buffer->search_state.current + 1, buffer->search_state.count);
+        } else if (search_term[0] != '\0') {
+            search_stats_len = snprintf(search_stats, sizeof(search_stats), "[0/0]");
+        }
+
+        for (int i = 0; i < editor.screen_cols - mode_len - search_len - search_stats_len; i++) {
             putchar(' ');
+        }
+        if (search_stats_len > 0) {
+            printf("%s", search_stats);
         }
     } else {
         int left_len = mode_len + branch_name_len;
