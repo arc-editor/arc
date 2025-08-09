@@ -37,7 +37,7 @@ void ui_draw_popup(const Theme* theme, DiagnosticSeverity severity, const char *
 
     if (width < 5) width = 5;
     if (width > screen_cols) width = screen_cols;
-    
+
     int content_width = width - 4;
 
     const char* line_start = popup_text;
