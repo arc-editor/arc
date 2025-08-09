@@ -512,10 +512,10 @@ void editor_draw() {
         draw_diagnostics(diagnostics, diagnostic_count);
     }
     if (diagnostics) {
-        free(diagnostics);
         for (int i = 0; i < diagnostic_count; i++) {
             free(diagnostics[i].message);
         }
+        free(diagnostics);
     }
     draw_cursor();
     fflush(stdout);
