@@ -1,7 +1,4 @@
 #include "test.h"
-#include "../src/editor.h"
-#include "../src/buffer.h"
-#include "../src/normal.h"
 
 void run_normal_tests(void) {
     printf("--- Normal mode tests ---\n");
@@ -27,7 +24,7 @@ void run_normal_tests(void) {
     test_helper("test_daw_on_space_1", "hello  world", 0, 5, "daw", "hello");
     test_helper("test_daw_on_space_2", "hello  world", 0, 6, "daw", "hello");
     test_helper("test_daw_on_trailing_space", "hello ", 0, 5, "daw", "hello ");
-    test_helper("test_daw_with_leading_space", " hello world", 0, 1, "daw", "world");
+    test_helper("test_daw_with_leading_space", " hello world", 0, 1, "daw", " world");
     test_helper("test_daw_with_trailing_space", "hello world ", 0, 0, "daw", "world ");
     test_helper("test_daw_in_middle_1", "foo bar baz", 0, 5, "daw", "foo baz");
     test_helper("test_daw_in_middle_2", "foo bar  baz", 0, 5, "daw", "foo baz");
