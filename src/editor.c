@@ -1470,9 +1470,12 @@ static void get_target_range(EditorCommand *cmd, Range *range) {
                         while (range->x_start > 0 && !is_whitespace(line->chars[range->x_start - 1].value[0])) range->x_start--;
                         while (range->x_end < line->char_count - 1 && !is_whitespace(line->chars[range->x_end + 1].value[0])) range->x_end++;
 
+                        int x_end = range->x_end;
                         while (range->x_end < line->char_count - 1 && is_whitespace(line->chars[range->x_end + 1].value[0])) range->x_end++;
-                        while (range->x_start > 0 && is_whitespace(line->chars[range->x_start - 1].value[0])) range->x_start--;
                         range->x_end++;
+                        if (x_end + 1 == range->x_end) {
+                            while (range->x_start > 0 && is_whitespace(line->chars[range->x_start - 1].value[0])) range->x_start--;
+                        }
                     } else {
                         int end_of_space = buffer->position_x;
                         while(end_of_space < line->char_count && is_whitespace(line->chars[end_of_space].value[0])) end_of_space++;
