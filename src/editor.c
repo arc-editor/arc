@@ -491,7 +491,6 @@ void editor_draw() {
     if (buffer->needs_parse) {
         buffer_parse(buffer);
     }
-    // TODO: free once malloc was used
     Diagnostic *diagnostics = NULL;
     int diagnostic_count = 0;
     int prev_diag_version = buffer->diagnostics_version;
@@ -505,6 +504,7 @@ void editor_draw() {
     editor_clear_screen();
     draw_buffer(diagnostics, diagnostic_count, update_diagnostics);
     draw_statusline();
+    draw_cursor();
     if (picker_is_open()) {
         picker_draw(editor.screen_cols, editor.screen_rows, &editor.current_theme);
     }
@@ -517,7 +517,6 @@ void editor_draw() {
         }
         free(diagnostics);
     }
-    draw_cursor();
     fflush(stdout);
     buffer->needs_draw = 0;
 }
