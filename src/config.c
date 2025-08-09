@@ -829,6 +829,8 @@ void config_load_theme(char *name, Theme *theme) {
         toml_content = default_theme_toml;
     } else if (strcmp(name, "onedark") == 0) {
         toml_content = onedark_theme_toml;
+    } else if (strcmp(name, "onedarker") == 0) {
+        toml_content = onedarker_theme_toml;
     } else if (strcmp(name, "catppuccin_latte") == 0) {
         toml_content = catppuccin_latte_toml;
     } else if (strcmp(name, "catppuccin_frappe") == 0) {
