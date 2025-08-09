@@ -44,7 +44,14 @@ static void search_update_and_jump() {
     buffer_update_search_matches(buffer, editor.search_term);
 
     int match_y, match_x;
-    if (buffer_find_first_match(buffer, editor.search_term, editor.search_start_y, editor.search_start_x, &match_y, &match_x)) {
+    int found = 0;
+    if (editor.search_direction == 1) {
+        found = buffer_find_first_match(buffer, editor.search_term, editor.search_start_y, editor.search_start_x, &match_y, &match_x);
+    } else {
+        found = buffer_find_last_match_before(buffer, editor.search_term, editor.search_start_y, editor.search_start_x, &match_y, &match_x);
+    }
+
+    if (found) {
         buffer->position_y = match_y;
         buffer->position_x = match_x;
         editor_center_view();

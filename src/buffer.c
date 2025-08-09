@@ -98,6 +98,30 @@ int get_capture_priority(const char* capture_name) {
     return 0;
 }
 
+int buffer_find_last_match_before(Buffer *b, const char *term, int start_y, int start_x, int *match_y, int *match_x) {
+    if (!term || term[0] == '\0') {
+        return 0;
+    }
+
+    for (int i = b->search_state.count - 1; i >= 0; i--) {
+        int y = b->search_state.matches[i].y;
+        int x = b->search_state.matches[i].x;
+        if (y < start_y || (y == start_y && x < start_x)) {
+            *match_y = y;
+            *match_x = x;
+            return 1;
+        }
+    }
+
+    if (b->search_state.count > 0) {
+        *match_y = b->search_state.matches[b->search_state.count - 1].y;
+        *match_x = b->search_state.matches[b->search_state.count - 1].x;
+        return 1;
+    }
+
+    return 0;
+}
+
 int buffer_find_first_match(Buffer *b, const char *term, int start_y, int start_x, int *match_y, int *match_x) {
     if (!term || term[0] == '\0') {
         return 0;
