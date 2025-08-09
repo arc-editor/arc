@@ -6,6 +6,7 @@
 #include "search.h"
 #include "picker_file.h"
 #include "picker_buffer.h"
+#include "picker_search.h"
 #include "visual.h"
 
 EditorCommand cmd;
@@ -74,6 +75,9 @@ int normal_handle_input(const char *ch_str) {
     switch (ch) {
       case 'f':
         picker_file_show();
+        break;
+      case '/':
+        picker_search_show();
         break;
       case 'b':
         picker_buffer_show();
