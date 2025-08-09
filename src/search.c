@@ -101,6 +101,9 @@ int search_handle_input(const char *ch_str) {
         if (editor.search_term_len > 0) {
             editor.search_term_len--;
             editor.search_term[editor.search_term_len] = '\0';
+            if (editor.search_term_len == 0) {
+                buffer_clear_search_state(editor_get_active_buffer());
+            }
             editor_needs_draw();
         }
         return 1;

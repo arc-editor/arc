@@ -39,6 +39,22 @@ int (*editor_handle_input)(const char *);
 
 #define buffer (editor.buffers[editor.active_buffer_idx])
 
+static int is_in_search_match(int y, int x) {
+    Buffer *buf = buffer;
+    if (buf->search_state.count == 0) {
+        return 0;
+    }
+    size_t term_len = strlen(buf->search_state.term);
+    for (int i = 0; i < buf->search_state.count; i++) {
+        if (buf->search_state.matches[i].y == y) {
+            if (x >= buf->search_state.matches[i].x && x < buf->search_state.matches[i].x + (int)term_len) {
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+
 void editor_command_reset(EditorCommand *cmd) {
     memset(cmd, 0, sizeof(EditorCommand));
 }
@@ -342,8 +358,11 @@ void draw_buffer(Diagnostic *diagnostics, int diagnostics_count, int update_diag
             
             Style* style = line_style;
             int in_selection = is_visual_mode && is_in_selection(row, ch_idx);
+            int in_search = is_in_search_match(row, ch_idx);
 
-            if (in_selection) {
+            if (in_search) {
+                style = &editor.current_theme.search_match;
+            } else if (in_selection) {
                 style = &editor.current_theme.content_selection;
             }
 
