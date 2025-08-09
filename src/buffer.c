@@ -10,7 +10,6 @@
 #include "config.h"
 #include "theme.h"
 #include "utf8.h"
-#include "search.h"
 
 static char* line_to_string(BufferLine *line);
 
