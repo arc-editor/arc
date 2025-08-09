@@ -9,7 +9,7 @@ title: Arc Editor - Actions and Motions
 
 Arc's normal mode operates on an "action and motion" system, inspired by Vim. Commands follow a `[count][action][target]` structure, allowing for efficient and composable text editing.
 
--   **`[count]`**: An optional number to repeat the command. For example, `2dw` deletes two words.
+-   **`[count]`**: An optional number to repeat the command. For example, `2e` moves the cursor to the end of the second word from the cursor.
 -   **`[action]`**: The operation to perform, like `d` for delete.
 -   **`[target]`**: The text object to act upon, like `w` for word or `p` for paragraph.
 
@@ -39,8 +39,8 @@ Targets, or motions, are the nouns of the command system. They define the region
 | Key | Description                               |
 | --- | ----------------------------------------- |
 | `w` | Moves to the beginning of the next word.  |
-| `b` | Moves to the beginning of the previous word. |
-| `e` | Moves to the end of the current word.     |
+| `b` | Moves to the beginning of the current word. If already at the beginning of a word, moves to the beginning of the previous word. |
+| `e` | Moves to the end of the current word. If already at the end of a word, moves to the end of the next word. |
 | `W` | Moves to the beginning of the next WORD (whitespace-separated). |
 | `B` | Moves to the beginning of the previous WORD. |
 | `E` | Moves to the end of the current WORD.     |
