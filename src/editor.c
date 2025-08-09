@@ -710,11 +710,7 @@ void editor_init(char *file_name) {
     }
     theme_init();
     buffer_init(buffer, file_name);
-    if (file_name) {
-        editor_handle_input = normal_handle_input;
-    } else {
-        picker_file_show();
-    }
+    editor_handle_input = normal_handle_input;
     editor_set_cursor_shape(2);
     buffer_set_line_num_width(buffer);
     config_load(&editor.config);
