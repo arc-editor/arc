@@ -3,6 +3,7 @@
 
 #include "tree_sitter/api.h"
 #include "theme.h"
+#include "history.h"
 
 typedef struct __attribute__((packed)) {
     char value[5];
@@ -49,6 +50,7 @@ typedef struct {
     TSQuery *query;
     TSQueryCursor *cursor;
     int diagnostics_version;
+    History *history;
 
     struct {
         char *term;

@@ -5,6 +5,7 @@
 #include "../src/visual.h"
 #include "test_search.h"
 #include "test_normal.h"
+#include "test_undo.h"
 #include <stdio.h>
 #include <unistd.h>
 
@@ -157,6 +158,7 @@ int main(void) {
     test_helper("test_mid_file_multi_line_from_bottom_dap", "foo\n\nbar\nbaz\n\nbat", 3, 0, "dap", "foo\n\nbat");
 
     run_normal_tests();
+    run_undo_tests();
 
     // ================ target only commands ================
     test_motion_helper("test_w_motion", "hello world", 0, 0, "w", 0, 6);

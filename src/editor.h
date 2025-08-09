@@ -76,6 +76,8 @@ void editor_search_next(int direction);
 void editor_set_style(Style *style, int fg, int bg);
 void editor_set_cursor_shape(int shape_code);
 void editor_request_redraw(void);
+void editor_undo(void);
+void editor_redo(void);
 Buffer *editor_get_active_buffer(void);
 void range_delete(Buffer *b, Range *range, EditorCommand *cmd);
 int range_get_left_boundary(Range *range);

@@ -9,7 +9,7 @@
 #include "log.h"
 #include "config.h"
 #include "theme.h"
-#include "utf8.h"
+#include "history.h"
 #include "utf8.h"
 
 static char* line_to_string(BufferLine *line);
@@ -489,6 +489,7 @@ char *get_file_extension(const char *file_name) {
 
 void buffer_init(Buffer *b, char *file_name) {
     b->diagnostics_version = 0;
+    b->history = history_create();
     b->tab_width = 4;
     b->line_num_width = 3;
     if (file_name) {
@@ -603,6 +604,9 @@ void buffer_destroy(Buffer *b) {
     }
     if (b->tree) {
         ts_tree_delete(b->tree);
+    }
+    if (b->history) {
+        history_destroy(b->history);
     }
     free(b->read_buffer);
 }

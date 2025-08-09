@@ -35,6 +35,7 @@
 
 static pthread_mutex_t editor_mutex = PTHREAD_MUTEX_INITIALIZER;
 Editor editor;
+static int is_undo_redo_active = 0;
 
 int (*editor_handle_input)(const char *);
 
@@ -614,6 +615,9 @@ void editor_insert_new_line() {
             .new_end_point = { (uint32_t)(buffer->position_y + 1), 0 }
         });
     }
+    if (!is_undo_redo_active) {
+        history_add_change(buffer->history, CHANGE_TYPE_INSERT, buffer->position_y, buffer->position_x, "\n");
+    }
     buffer->position_y++;
     buffer_reset_offset_y(buffer, editor.screen_rows);
     buffer->position_x = 0;
@@ -871,6 +875,9 @@ void editor_insert_char(const char *ch) {
 
     line->chars[buffer->position_x] = new;
     line->char_count++;
+    if (!is_undo_redo_active) {
+        history_add_change(buffer->history, CHANGE_TYPE_INSERT, buffer->position_y, buffer->position_x, ch);
+    }
     buffer->position_x++;
     buffer_reset_offset_x(buffer, editor.screen_cols);
     editor_did_change_buffer();
@@ -1020,6 +1027,9 @@ void editor_delete() {
             pthread_mutex_unlock(&editor_mutex);
             return;
         }
+        if (!is_undo_redo_active) {
+            history_add_change(buffer->history, CHANGE_TYPE_DELETE, buffer->position_y, buffer->position_x, "\n");
+        }
         if (buffer->parser) {
             BufferLine *next_line = buffer->lines[buffer->position_y + 1];
             next_line->needs_highlight = 1;
@@ -1048,6 +1058,9 @@ void editor_delete() {
         }
     } else {
         Char deleted_char = line->chars[buffer->position_x];
+        if (!is_undo_redo_active) {
+            history_add_change(buffer->history, CHANGE_TYPE_DELETE, buffer->position_y, buffer->position_x, deleted_char.value);
+        }
         memmove(&line->chars[buffer->position_x],
                 &line->chars[buffer->position_x + 1],
                 (line->char_count - buffer->position_x - 1) * sizeof(Char));
@@ -1089,6 +1102,9 @@ void editor_backspace() {
             return;
         }
         BufferLine *prev_line = buffer->lines[buffer->position_y - 1];
+        if (!is_undo_redo_active) {
+            history_add_change(buffer->history, CHANGE_TYPE_DELETE, buffer->position_y - 1, prev_line->char_count, "\n");
+        }
         int new_char_count = prev_line->char_count + line->char_count;
         buffer_line_realloc_for_capacity(prev_line, new_char_count);
         memcpy(&prev_line->chars[prev_line->char_count], line->chars, line->char_count * sizeof(Char));
@@ -1123,6 +1139,9 @@ void editor_backspace() {
 
     } else {
         Char deleted_char = line->chars[buffer->position_x - 1];
+        if (!is_undo_redo_active) {
+            history_add_change(buffer->history, CHANGE_TYPE_DELETE, buffer->position_y, buffer->position_x - 1, deleted_char.value);
+        }
         memmove(&line->chars[buffer->position_x - 1],
                 &line->chars[buffer->position_x],
                 (line->char_count - buffer->position_x) * sizeof(Char));
@@ -1712,6 +1731,43 @@ int range_get_bottom_boundary(Range *range) {
     return range->y_start;
 }
 
+static char* buffer_get_text_in_range(Buffer *b, int top, int left, int bottom, int right) {
+    size_t len = 0;
+    for (int y = top; y <= bottom; y++) {
+        BufferLine *line = b->lines[y];
+        int start_x = (y == top) ? left : 0;
+        int end_x = (y == bottom) ? right : line->char_count;
+        for (int x = start_x; x < end_x; x++) {
+            len += strlen(line->chars[x].value);
+        }
+        if (y < bottom) {
+            len++; // for '\n'
+        }
+    }
+
+    if (len == 0) return NULL;
+
+    char *text = malloc(len + 1);
+    if (!text) return NULL;
+
+    char *p = text;
+    for (int y = top; y <= bottom; y++) {
+        BufferLine *line = b->lines[y];
+        int start_x = (y == top) ? left : 0;
+        int end_x = (y == bottom) ? right : line->char_count;
+        for (int x = start_x; x < end_x; x++) {
+            size_t char_len = strlen(line->chars[x].value);
+            memcpy(p, line->chars[x].value, char_len);
+            p += char_len;
+        }
+        if (y < bottom) {
+            *p++ = '\n';
+        }
+    }
+    *p = '\0';
+    return text;
+}
+
 void range_delete(Buffer *b, Range *range, EditorCommand *cmd) {
     int left = range_get_left_boundary(range);
     int right = range_get_right_boundary(range);
@@ -1720,10 +1776,34 @@ void range_delete(Buffer *b, Range *range, EditorCommand *cmd) {
     if (left == right && top == bottom) return;
 
     if (cmd->target == 'p' && top == bottom) {
+        if (!is_undo_redo_active) {
+            char *line_text = buffer_get_text_in_range(b, top, 0, top, b->lines[top]->char_count);
+            if (line_text) {
+                size_t len = strlen(line_text);
+                char *deleted_text = malloc(len + 2);
+                if (deleted_text) {
+                    sprintf(deleted_text, "%s\n", line_text);
+                    history_add_change(b->history, CHANGE_TYPE_DELETE, top, 0, deleted_text);
+                    free(deleted_text);
+                }
+                free(line_text);
+            } else { // empty line
+                history_add_change(b->history, CHANGE_TYPE_DELETE, top, 0, "\n");
+            }
+        }
+
         buffer_line_destroy(b->lines[top]);
         memmove(&b->lines[top], &b->lines[top + 1], (b->line_count - top - 1) * sizeof(BufferLine *));
         b->line_count--;
         return;
+    }
+
+    if (!is_undo_redo_active) {
+        char *deleted_text = buffer_get_text_in_range(b, top, left, bottom, right);
+        if (deleted_text) {
+            history_add_change(b->history, CHANGE_TYPE_DELETE, top, left, deleted_text);
+            free(deleted_text);
+        }
     }
 
     if (b->parser) {
@@ -1937,6 +2017,110 @@ void editor_center_view(void) {
 void editor_set_screen_size(int rows, int cols) {
     editor.screen_rows = rows;
     editor.screen_cols = cols;
+}
+
+static int utf8_char_len_from_string(const char *s) {
+    unsigned char c = *s;
+    if (c < 0x80) return 1;
+    if ((c & 0xE0) == 0xC0) return 2;
+    if ((c & 0xF0) == 0xE0) return 3;
+    if ((c & 0xF8) == 0xF0) return 4;
+    return 1; // fallback
+}
+
+static void editor_insert_string_at(const char *text, int y, int x) {
+    buffer->position_y = y;
+    buffer->position_x = x;
+    const char *p = text;
+    while (*p) {
+        if (*p == '\n') {
+            editor_insert_new_line();
+            p++;
+        } else {
+            char utf8_buf[8];
+            size_t len = utf8_char_len_from_string(p);
+            strncpy(utf8_buf, p, len);
+            utf8_buf[len] = '\0';
+            editor_insert_char(utf8_buf);
+            p += len;
+        }
+    }
+}
+
+static void calculate_end_point(const char *text, int start_y, int start_x, int *end_y, int *end_x) {
+    *end_y = start_y;
+    *end_x = start_x;
+    const char *p = text;
+    while (*p) {
+        if (*p == '\n') {
+            (*end_y)++;
+            *end_x = 0;
+            p++;
+        } else {
+            (*end_x)++;
+            p += utf8_char_len_from_string(p);
+        }
+    }
+}
+
+void editor_undo(void) {
+    log_info("UNDO CALLED");
+    pthread_mutex_lock(&editor_mutex);
+    is_undo_redo_active = 1;
+
+    Change *change = history_pop_undo(buffer->history);
+    if (change) {
+        log_info("Undoing change: type=%d, y=%d, x=%d, text='%s'", change->type, change->y, change->x, change->text);
+        if (change->type == CHANGE_TYPE_INSERT) {
+            int end_y, end_x;
+            calculate_end_point(change->text, change->y, change->x, &end_y, &end_x);
+
+            Range range = { .y_start = change->y, .x_start = change->x, .y_end = end_y, .x_end = end_x };
+            EditorCommand cmd = {0}; // dummy cmd
+            range_delete(buffer, &range, &cmd);
+            buffer->position_y = change->y;
+            buffer->position_x = change->x;
+        } else { // CHANGE_TYPE_DELETE
+            editor_insert_string_at(change->text, change->y, change->x);
+            buffer->position_y = change->y;
+            buffer->position_x = change->x;
+        }
+        history_push_redo(buffer->history, change);
+        editor_did_change_buffer();
+    }
+
+    is_undo_redo_active = 0;
+    pthread_mutex_unlock(&editor_mutex);
+}
+
+void editor_redo(void) {
+    log_info("REDO CALLED");
+    pthread_mutex_lock(&editor_mutex);
+    is_undo_redo_active = 1;
+
+    Change *change = history_pop_redo(buffer->history);
+    if (change) {
+        log_info("Redoing change: type=%d, y=%d, x=%d, text='%s'", change->type, change->y, change->x, change->text);
+        if (change->type == CHANGE_TYPE_INSERT) {
+            editor_insert_string_at(change->text, change->y, change->x);
+            buffer->position_y = change->y;
+            buffer->position_x = change->x;
+        } else { // CHANGE_TYPE_DELETE
+            int end_y, end_x;
+            calculate_end_point(change->text, change->y, change->x, &end_y, &end_x);
+
+            Range range = { .y_start = change->y, .x_start = change->x, .y_end = end_y, .x_end = end_x };
+            EditorCommand cmd = {0}; // dummy cmd
+            range_delete(buffer, &range, &cmd);
+            buffer->position_y = change->y;
+            buffer->position_x = change->x;
+        }
+        history_push_undo(buffer->history, change);
+        editor_did_change_buffer();
+    }
+
+    is_undo_redo_active = 0;
+    pthread_mutex_unlock(&editor_mutex);
 }
 
 Buffer *editor_get_active_buffer(void) {
