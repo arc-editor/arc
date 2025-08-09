@@ -7,7 +7,10 @@
 #include "theme.h"
 #include "fuzzy.h"
 
+extern Editor editor;
+
 static int selection = 0;
+static int scroll_offset = 0;
 static char search[256];
 static unsigned char search_len = 0;
 static int is_open = 0;
@@ -22,6 +25,7 @@ void picker_open() {
     if (!delegate) return;
     is_open = 1;
     selection = 0;
+    scroll_offset = 0;
     search_len = 0;
     search[0] = '\0';
     if (delegate->on_open) {
@@ -64,21 +68,33 @@ int picker_handle_input(const char *ch_str) {
         return 1;
     }
 
+    int picker_h = editor.screen_rows / 2;
+    if (picker_h < 5) picker_h = 5;
+    if (picker_h > 20) picker_h = 20;
+    int list_h = picker_h - 4;
+
     if (ch_str[0] == 14 && ch_str[1] == '\0') { // Down arrow
         if (selection < delegate->get_results_count() - 1) {
             selection++;
+            if (selection >= scroll_offset + list_h) {
+                scroll_offset = selection - list_h + 1;
+            }
             editor_request_redraw();
         }
         return 1;
     } else if (ch_str[0] == 16 && ch_str[1] == '\0') { // Up arrow
         if (selection > 0) {
             selection--;
+            if (selection < scroll_offset) {
+                scroll_offset = selection;
+            }
             editor_request_redraw();
         }
         return 1;
     }
     
     selection = 0;
+    scroll_offset = 0;
     if ((ch_str[0] == 8 || ch_str[0] == 127) && ch_str[1] == '\0') { // Backspace
         if (search_len > 0) {
             // This is not UTF-8 aware, but it's a start
@@ -133,9 +149,9 @@ void picker_draw(int screen_cols, int screen_rows, Theme *theme) {
     // Draw results
     int results_count = delegate->get_results_count();
 
-    for (int i = 0; i < results_count && i < h; i++) {
+    for (int i = scroll_offset; i < results_count && (i - scroll_offset) < h; i++) {
         int item_index = delegate->get_result_index(i);
-        printf("\x1b[%d;%dH", y + i, x);
+        printf("\x1b[%d;%dH", y + (i - scroll_offset), x);
         const char *item_text = delegate->get_item_text(item_index);
         
         Style style = theme->picker_item_text;
