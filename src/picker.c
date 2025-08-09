@@ -68,9 +68,8 @@ int picker_handle_input(const char *ch_str) {
         return 1;
     }
 
-    int picker_h = editor.screen_rows / 2;
-    if (picker_h < 5) picker_h = 5;
-    if (picker_h > 20) picker_h = 20;
+    int margin_y = 2;
+    int picker_h = editor.screen_rows - margin_y * 2 - 1;
     int list_h = picker_h - 4;
 
     if (ch_str[0] == 14 && ch_str[1] == '\0') { // Down arrow
