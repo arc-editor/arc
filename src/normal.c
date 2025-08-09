@@ -16,6 +16,7 @@ int insertion_buffer_count = 0;
 int is_insertion_bufferable = 1;
 int is_space_mode = 0;
 int is_waiting_for_specifier = 0;
+int is_waiting_for_text_object_specifier = 0;
 
 void normal_register_insertion(char ch) {
     if (is_insertion_bufferable) {
@@ -37,11 +38,13 @@ void normal_insertion_registration_init() {
 void dispatch_command() {
     prev_cmd = cmd;
     editor_command_exec(&cmd);
+    is_waiting_for_text_object_specifier = 0;
 }
 
 int normal_handle_input(const char *ch_str) {
   if (ch_str[0] == 27 && ch_str[1] == '\0') {
       editor_command_reset(&cmd);
+      is_waiting_for_text_object_specifier = 0;
       return 1;
   }
 
@@ -58,6 +61,16 @@ int normal_handle_input(const char *ch_str) {
       return 1;
   }
   char ch = ch_str[0];
+
+  if (is_waiting_for_text_object_specifier) {
+    if (ch == 'i' || ch == 'a') {
+      strncpy(cmd.specifier, &ch, 1);
+      cmd.specifier[1] = '\0';
+      is_waiting_for_text_object_specifier = 0;
+      return 1;
+    }
+    is_waiting_for_text_object_specifier = 0;
+  }
 
   if (!command_inited) {
     editor_command_reset(&cmd);
@@ -111,6 +124,10 @@ int normal_handle_input(const char *ch_str) {
         break;
       case 'W':
       case 'w':
+        if (cmd.specifier[0] == '\0') {
+          ch = (ch == 'w') ? 'e' : 'E';
+        }
+        // fallthrough
       case 'e':
       case 'E':
       case 'b':
@@ -214,10 +231,13 @@ int normal_handle_input(const char *ch_str) {
       }
       break;
     }
-    case 'c':
-    case 'd':
     case 'g':
       cmd.action = ch;
+      break;
+    case 'c':
+    case 'd':
+      cmd.action = ch;
+      is_waiting_for_text_object_specifier = 1;
       break;
     case 0x04: // ctrl d
       editor_move_n_lines_down(cmd.count);

@@ -1399,17 +1399,31 @@ static void get_target_range(EditorCommand *cmd, Range *range) {
             break;
         case 'w':
             if (cmd->action) {
-                if (!line->char_count || is_whitespace(line->chars[range->x_end].value[0])) {
-                    return;
+                if (cmd->specifier[0] == 'i') {
+                    if (is_word_char(line->chars[buffer->position_x].value[0])) {
+                        while (range->x_start > 0 && is_word_char(line->chars[range->x_start - 1].value[0])) range->x_start--;
+                        while (range->x_end < line->char_count - 1 && is_word_char(line->chars[range->x_end + 1].value[0])) range->x_end++;
+                        range->x_end++;
+                    }
+                } else if (cmd->specifier[0] == 'a') {
+                    if (is_word_char(line->chars[buffer->position_x].value[0])) {
+                        while (range->x_start > 0 && is_word_char(line->chars[range->x_start - 1].value[0])) range->x_start--;
+                        while (range->x_end < line->char_count - 1 && is_word_char(line->chars[range->x_end + 1].value[0])) range->x_end++;
+                        while (range->x_end < line->char_count - 1 && is_whitespace(line->chars[range->x_end + 1].value[0])) range->x_end++;
+                        while (range->x_start > 0 && is_whitespace(line->chars[range->x_start - 1].value[0])) range->x_start--;
+                        range->x_end++;
+                    } else {
+                        int end_of_space = buffer->position_x;
+                        while(end_of_space < line->char_count && is_whitespace(line->chars[end_of_space].value[0])) end_of_space++;
+                        if (end_of_space < line->char_count) {
+                            range->x_start = buffer->position_x;
+                            while(range->x_start > 0 && is_whitespace(line->chars[range->x_start - 1].value[0])) range->x_start--;
+                            range->x_end = end_of_space;
+                            while(range->x_end < line->char_count - 1 && is_word_char(line->chars[range->x_end + 1].value[0])) range->x_end++;
+                            range->x_end++;
+                        }
+                    }
                 }
-                if (range->x_start && is_word_char(line->chars[range->x_start - 1].value[0])) {
-                    range_expand_b(line, count, range);
-                    int tmp = range->x_end;
-                    range->x_end = range->x_start;
-                    range->x_start = tmp;
-                }
-                range_expand_e(line, count, range);
-                range->x_end++;
                 break;
             }
             while (count) {
@@ -1441,15 +1455,31 @@ static void get_target_range(EditorCommand *cmd, Range *range) {
             break;
         case 'W':
             if (cmd->action) {
-                if (!line->char_count || is_whitespace(line->chars[range->x_end].value[0])) {
-                    return;
+                if (cmd->specifier[0] == 'i') {
+                    if (!is_whitespace(line->chars[buffer->position_x].value[0])) {
+                        while (range->x_start > 0 && !is_whitespace(line->chars[range->x_start - 1].value[0])) range->x_start--;
+                        while (range->x_end < line->char_count - 1 && !is_whitespace(line->chars[range->x_end + 1].value[0])) range->x_end++;
+                        range->x_end++;
+                    }
+                } else if (cmd->specifier[0] == 'a') {
+                    if (!is_whitespace(line->chars[buffer->position_x].value[0])) {
+                        while (range->x_start > 0 && !is_whitespace(line->chars[range->x_start - 1].value[0])) range->x_start--;
+                        while (range->x_end < line->char_count - 1 && !is_whitespace(line->chars[range->x_end + 1].value[0])) range->x_end++;
+                        while (range->x_end < line->char_count - 1 && is_whitespace(line->chars[range->x_end + 1].value[0])) range->x_end++;
+                        while (range->x_start > 0 && is_whitespace(line->chars[range->x_start - 1].value[0])) range->x_start--;
+                        range->x_end++;
+                    } else {
+                        int end_of_space = buffer->position_x;
+                        while(end_of_space < line->char_count && is_whitespace(line->chars[end_of_space].value[0])) end_of_space++;
+                        if (end_of_space < line->char_count) {
+                            range->x_start = buffer->position_x;
+                            while(range->x_start > 0 && is_whitespace(line->chars[range->x_start - 1].value[0])) range->x_start--;
+                            range->x_end = end_of_space;
+                            while(range->x_end < line->char_count - 1 && !is_whitespace(line->chars[range->x_end + 1].value[0])) range->x_end++;
+                            range->x_end++;
+                        }
+                    }
                 }
-                range_expand_B(line, count, range);
-                int tmp = range->x_end;
-                range->x_end = range->x_start;
-                range->x_start = tmp;
-                range_expand_E(line, count, range);
-                range->x_end++;
                 break;
             }
             while (count) {
