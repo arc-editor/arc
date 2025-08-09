@@ -1025,6 +1025,23 @@ void editor_move_cursor_up() {
     pthread_mutex_unlock(&editor_mutex);
 }
 
+void editor_move_to_start_of_line(void) {
+    pthread_mutex_lock(&editor_mutex);
+    buffer->position_x = 0;
+    buffer_update_current_search_match(buffer);
+    buffer->needs_draw = 1;
+    pthread_mutex_unlock(&editor_mutex);
+}
+
+void editor_move_to_end_of_line(void) {
+    pthread_mutex_lock(&editor_mutex);
+    BufferLine *line = buffer->lines[buffer->position_y];
+    buffer->position_x = line->char_count;
+    buffer_update_current_search_match(buffer);
+    buffer->needs_draw = 1;
+    pthread_mutex_unlock(&editor_mutex);
+}
+
 void editor_write_force() {
     pthread_mutex_lock(&editor_mutex);
     if (buffer->file_name == NULL) {
