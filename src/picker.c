@@ -75,19 +75,25 @@ int picker_handle_input(const char *ch_str) {
 
     if (ch_str[0] == 14 && ch_str[1] == '\0') { // Down arrow
         if (selection < delegate->get_results_count() - 1) {
-            selection++;
-            if (selection >= scroll_offset + list_h) {
-                scroll_offset = selection - list_h + 1;
+            if (selection == scroll_offset + list_h - 1) {
+                scroll_offset += list_h;
+                if (scroll_offset >= delegate->get_results_count()) {
+                    scroll_offset = delegate->get_results_count() - 1;
+                }
             }
+            selection++;
             editor_request_redraw();
         }
         return 1;
     } else if (ch_str[0] == 16 && ch_str[1] == '\0') { // Up arrow
         if (selection > 0) {
-            selection--;
-            if (selection < scroll_offset) {
-                scroll_offset = selection;
+            if (selection == scroll_offset) {
+                scroll_offset -= list_h;
+                if (scroll_offset < 0) {
+                    scroll_offset = 0;
+                }
             }
+            selection--;
             editor_request_redraw();
         }
         return 1;
