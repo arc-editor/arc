@@ -189,7 +189,7 @@ void draw_statusline() {
         int right_len = position_len + line_count_len;
         char search_stats[32] = {0};
         int search_stats_len = 0;
-        if (buffer->search_state.count > 0) {
+        if (buffer->search_state.term && buffer->search_state.term[0] != '\0') {
             if (buffer->search_state.current != -1) {
                 search_stats_len = snprintf(search_stats, sizeof(search_stats), "[%d/%d]", buffer->search_state.current + 1, buffer->search_state.count);
             } else {
@@ -858,6 +858,7 @@ void editor_move_cursor_left() {
         buffer_reset_offset_x(buffer, editor.screen_cols);
     }
     buffer_move_position_left(buffer);
+    buffer_update_current_search_match(buffer);
     buffer->needs_draw = 1;
     pthread_mutex_unlock(&editor_mutex);
 }

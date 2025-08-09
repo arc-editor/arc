@@ -154,14 +154,7 @@ void buffer_update_search_matches(Buffer *b, const char *term) {
         free(line_str);
     }
 
-    b->search_state.current = -1;
-    for (int i = 0; i < b->search_state.count; i++) {
-        if (b->search_state.matches[i].y > b->position_y ||
-            (b->search_state.matches[i].y == b->position_y && b->search_state.matches[i].x >= b->position_x)) {
-            b->search_state.current = i;
-            break;
-        }
-    }
+    buffer_update_current_search_match(b);
 }
 
 void buffer_update_current_search_match(Buffer *b) {
