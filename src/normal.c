@@ -42,10 +42,7 @@ void dispatch_command() {
     is_waiting_for_text_object_specifier = 0;
 }
 
-#include "log.h"
-
 int normal_handle_input(const char *ch_str) {
-  log_info("normal_handle_input: %s", ch_str);
   if (ch_str[0] == 27 && ch_str[1] == '\0') {
       editor_command_reset(&cmd);
       is_waiting_for_text_object_specifier = 0;

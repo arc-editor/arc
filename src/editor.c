@@ -733,7 +733,7 @@ void editor_open(char *file_name) {
         buffer_set_line_num_width(buffer);
         editor_handle_input = normal_handle_input;
         buffer_update_search_matches(buffer, editor.last_search_term);
-        
+
         char absolute_path[PATH_MAX];
         if (realpath(file_name, absolute_path) != NULL) {
             char *content = buffer_get_content(buffer);
@@ -837,7 +837,6 @@ void editor_close_buffer(int buffer_index) {
             editor.active_buffer_idx--;
         }
     }
-    
     buffer->needs_draw = 1;
     pthread_mutex_unlock(&editor_mutex);
 }
@@ -877,10 +876,8 @@ void editor_insert_char(const char *ch) {
             TSNode root_node = ts_tree_root_node(buffer->tree);
             TSPoint prev_point = {(uint32_t)buffer->position_y, (uint32_t)buffer->position_x - 1};
             TSPoint next_point = {(uint32_t)buffer->position_y, (uint32_t)buffer->position_x};
-            
             TSNode prev_leaf = ts_node_named_descendant_for_point_range(root_node, prev_point, prev_point);
             TSNode next_leaf = ts_node_named_descendant_for_point_range(root_node, next_point, next_point);
-
             if (!ts_node_is_null(prev_leaf) && ts_node_eq(prev_leaf, next_leaf)) {
                 new_style |= STYLE_UNDERLINE;
             }
@@ -1450,10 +1447,6 @@ static void get_target_range(EditorCommand *cmd, Range *range) {
     range->y_start = buffer->position_y;
     range->x_end = buffer->position_x;
     range->y_end = buffer->position_y;
-    if (cmd->target && line->char_count && buffer->position_x == line->char_count) {
-        // range->x_start--;
-        // range->x_end--;
-    }
     switch (cmd->target) {
         case 'n':
             if (strcmp(cmd->specifier, "p") == 0) {
@@ -1653,7 +1646,7 @@ static void get_target_range(EditorCommand *cmd, Range *range) {
             if (cmd->action == 'g') {
                 line = buffer->lines[buffer->line_count - 1];
                 range->x_end = line->char_count;
-                range->y_end = buffer->line_count - 1;                
+                range->y_end = buffer->line_count - 1;
             } else {
                 range_expand_e(line, count, range);
                 if (cmd->action) {
@@ -1669,7 +1662,7 @@ static void get_target_range(EditorCommand *cmd, Range *range) {
             if (cmd->action == 'g') {
                 line = buffer->lines[0];
                 range->x_end = 0;
-                range->y_end = 0;                
+                range->y_end = 0;
             } else {
                 range_expand_b(line, count, range);
             }
@@ -1963,7 +1956,6 @@ void editor_command_exec(EditorCommand *cmd) {
         return;
     }
 
-    log_info("get targ range: (%d, %d), (%d, %d)", range.y_start, range.x_start, range.y_end, range.x_end);
     if (cmd->action) {
         switch (cmd->target) {
             case 'f':
@@ -2111,13 +2103,11 @@ static void calculate_end_point(const char *text, int start_y, int start_x, int 
 }
 
 void editor_undo(void) {
-    log_info("UNDO CALLED");
     pthread_mutex_lock(&editor_mutex);
     is_undo_redo_active = 1;
 
     Change *change = history_pop_undo(buffer->history);
     if (change) {
-        log_info("Undoing change: type=%d, y=%d, x=%d, text='%s'", change->type, change->y, change->x, change->text);
         if (change->type == CHANGE_TYPE_INSERT) {
             int end_y, end_x;
             calculate_end_point(change->text, change->y, change->x, &end_y, &end_x);
@@ -2143,13 +2133,11 @@ void editor_undo(void) {
 }
 
 void editor_redo(void) {
-    log_info("REDO CALLED");
     pthread_mutex_lock(&editor_mutex);
     is_undo_redo_active = 1;
 
     Change *change = history_pop_redo(buffer->history);
     if (change) {
-        log_info("Redoing change: type=%d, y=%d, x=%d, text='%s'", change->type, change->y, change->x, change->text);
         if (change->type == CHANGE_TYPE_INSERT) {
             pthread_mutex_unlock(&editor_mutex);
             editor_insert_string_at(change->text, change->y, change->x);

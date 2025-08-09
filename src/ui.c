@@ -55,7 +55,7 @@ void ui_draw_popup(const Theme* theme, DiagnosticSeverity severity, const char *
             while(segment_ptr < segment_end) {
                 int remaining_in_segment = segment_end - segment_ptr;
                 int chunk_len = (remaining_in_segment > content_width) ? content_width : remaining_in_segment;
-                
+
                 // If we're breaking a word in the middle (not at a space), add a hyphen
                 if (chunk_len < remaining_in_segment && 
                     segment_ptr[chunk_len-1] != ' ' && 
@@ -82,7 +82,7 @@ void ui_draw_popup(const Theme* theme, DiagnosticSeverity severity, const char *
                 }
             }
         }
-        
+
         if (line_end) {
             line_start = line_end + 1; // Move to the start of the next line
         } else {
