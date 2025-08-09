@@ -604,7 +604,7 @@ void editor_insert_new_line() {
     }
 
     buffer->line_count++;
-    if (buffer->parser) {
+    if (buffer->parser && buffer->tree) {
         ts_tree_edit(buffer->tree, &(TSInputEdit){
             .start_byte = start_byte,
             .old_end_byte = start_byte,
@@ -875,7 +875,7 @@ void editor_insert_char(const char *ch) {
     buffer_reset_offset_x(buffer, editor.screen_cols);
     editor_did_change_buffer();
 
-    if (buffer->parser) {
+    if (buffer->parser && buffer->tree) {
         uint32_t start_byte = 0;
         for (int i = 0; i < buffer->position_y; i++) {
             for (int j = 0; j < buffer->lines[i]->char_count; j++) {
@@ -1036,7 +1036,7 @@ void editor_delete() {
         }
         buffer->line_count--;
         buffer_set_line_num_width(buffer);
-        if (buffer->parser) {
+        if (buffer->parser && buffer->tree) {
             ts_tree_edit(buffer->tree, &(TSInputEdit){
                 .start_byte = start_byte,
                 .old_end_byte = start_byte + 1,
@@ -1052,7 +1052,7 @@ void editor_delete() {
                 &line->chars[buffer->position_x + 1],
                 (line->char_count - buffer->position_x - 1) * sizeof(Char));
         line->char_count--;
-        if (buffer->parser) {
+        if (buffer->parser && buffer->tree) {
             line->needs_highlight = 1;
             ts_tree_edit(buffer->tree, &(TSInputEdit){
                 .start_byte = start_byte,
@@ -1102,7 +1102,7 @@ void editor_backspace() {
         }
         buffer->line_count--;
         buffer_set_line_num_width(buffer);
-        if (buffer->parser) {
+        if (buffer->parser && buffer->tree) {
             int prev_line_byte_len = 0;
             for (int i = 0; i < prev_line->char_count; i++) {
                 prev_line_byte_len += strlen(prev_line->chars[i].value);
@@ -1128,7 +1128,7 @@ void editor_backspace() {
                 (line->char_count - buffer->position_x) * sizeof(Char));
         line->char_count--;
         buffer->position_x--;
-        if (buffer->parser) {
+        if (buffer->parser && buffer->tree) {
             line->needs_highlight = 1;
             ts_tree_edit(buffer->tree, &(TSInputEdit){
                 .start_byte = start_byte - strlen(deleted_char.value),
@@ -1726,7 +1726,7 @@ void range_delete(Buffer *b, Range *range, EditorCommand *cmd) {
         return;
     }
 
-    if (b->parser) {
+    if (b->parser && b->tree) {
         uint32_t start_byte = 0;
         for (int i = 0; i < top; i++) {
             for (int j = 0; j < b->lines[i]->char_count; j++) {
