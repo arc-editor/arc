@@ -1,0 +1,68 @@
+[content]
+line-number = { fg = "#495162", bg = "#21252b" }
+line-number-active = { fg = "#abb2bf", bg = "#282c34" }
+line-number-sticky = { fg = "#495162", bg = "#1c1f24" }
+cursor-line = { bg = "#282c34" }
+selection = { bg = "#3e4452" }
+background = { bg = "#21252b" }
+whitespace = { fg = "#4b5263" }
+
+[search]
+match = { bg = "#314365" }
+
+[statusline]
+mode-insert = { fg = "#21252b", bg = "#98c379", bold = true }
+mode-normal = { fg = "#21252b", bg = "#61afef", bold = true }
+mode-visual = { fg = "#21252b", bg = "#c678dd", bold = true }
+mode-command = { fg = "#21252b", bg = "#e5c07b", bold = true }
+text = { fg = "#abb2bf", bg = "#1c1f24" }
+
+[syntax]
+keyword = { fg = "#c678dd" }
+keyword-storage-type = { fg = "#c678dd" }
+keyword-storage-modifier = { fg = "#c678dd" }
+keyword-control = { fg = "#c678dd" }
+keyword-control-repeat = { fg = "#c678dd" }
+keyword-control-return = { fg = "#c678dd" }
+keyword-control-conditional = { fg = "#c678dd" }
+keyword-directive = { fg = "#c678dd" }
+function-special = { fg = "#61afef" }
+string = { fg = "#98c379" }
+constant-character = { fg = "#56b6c2" }
+type-enum-variant = { fg = "#56b6c2" }
+constant-character-escape = { fg = "#56b6c2" }
+constant-numeric = { fg = "#d19a66" }
+constant-builtin-boolean = { fg = "#d19a66" }
+constant = { fg = "#d19a66" }
+variable = { fg = "#e06c75" }
+variable-parameter = { fg = "#abb2bf", italic = true }
+variable-other-member = { fg = "#e06c75" }
+function = { fg = "#61afef" }
+type = { fg = "#e5c07b" }
+type-builtin = { fg = "#e5c07b" }
+attribute = { fg = "#d19a66" }
+punctuation = { fg = "#abb2bf" }
+punctuation-delimiter = { fg = "#abb2bf" }
+punctuation-bracket = { fg = "#abb2bf" }
+comment = { fg = "#7f848e", italic = true }
+operator = { fg = "#56b6c2" }
+label = { fg = "#e06c75" }
+info = { fg = "#61afef" }
+warning = { fg = "#e5c07b" }
+error = { fg = "e06c75" }
+
+[diagnostics]
+hint = { fg = "#61afef" }
+info = { fg = "#61afef" }
+warning = { fg = "#e5c07b" }
+error = { fg = "#e06c75" }
+
+[picker]
+item-text = { fg = "#abb2bf" }
+item-text-highlight = { fg = "#61afef", bold = true }
+
+[popup.border]
+fg = "#61afef"
+
+[picker.border]
+fg = "#61afef"

@@ -1,0 +1,126 @@
+clang -O0 -g -Wall -Wextra -std=c23 -Iexternal/tree-sitter/lib/include -Iexternal/tomlc17/src -Iexternal/cjson -Isrc -DTEST_BUILD -c src/buffer.c -o build/test/buffer.o
+clang -O0 -g -Wall -Wextra -std=c23 -Iexternal/tree-sitter/lib/include -Iexternal/tomlc17/src -Iexternal/cjson -Isrc -DTEST_BUILD -c src/config.c -o build/test/config.o
+git submodule init
+git submodule update --recursive
+cd external/tree-sitter && make CC=clang
+make[1]: Entering directory '/app/external/tree-sitter'
+make[1]: Nothing to be done for 'all'.
+make[1]: Leaving directory '/app/external/tree-sitter'
+clang build/test/runner.o build/test/test_normal.o build/test/test_search.o build/test/buffer.o build/test/config.o build/test/editor.o build/test/fuzzy.o build/test/git.o build/test/insert.o build/test/log.o build/test/lsp.o build/test/normal.o build/test/perf.o build/test/perfect_hashmap.o build/test/picker.o build/test/picker_buffer.o build/test/picker_file.o build/test/picker_search.o build/test/search.o build/test/theme.o build/test/ui.o build/test/utf8.o build/test/visual.o build/test/tomlc17.o build/test/cJSON.o external/tree-sitter/libtree-sitter.a -lm -o build/test/test_runner
+./build/test/test_runner
+[test_forward_search_from_middle] Assertion failed: values are not equal.
+  Expected: 1
+  Actual:   0
+Running tests...
+[2 q  - test_dw
+  - test_de
+  - test_mid_word_db
+  - test_start_of_line_to_mid_line_db
+  - test_start_of_line_to_start_of_line_db
+  - test_start_of_line_to_start_of_line_db
+  - test_dW
+  - test_dE
+  - test_mid_word_dB
+  - test_start_of_line_to_mid_line_dB
+  - test_start_of_line_to_start_of_line_dB
+  - test_start_of_line_to_start_of_line_dB
+  - test_partial_line_dl
+  - test_whole_line_dl
+  - test_partial_line_dh
+  - test_whole_line_dh
+  - test_whole_line_far_right_dh
+  - test_mid_file_single_line_dp_noop
+  - test_mid_file_single_line_dip
+  - test_mid_file_multi_line_from_toip_dp
+  - test_mid_file_multi_line_from_middle_dip
+  - test_mid_file_multi_line_from_bottom_dip
+  - test_mid_file_single_line_dap
+  - test_mid_file_multi_line_from_toip_dp
+  - test_mid_file_multi_line_from_middle_dap
+  - test_mid_file_multi_line_from_bottom_dap
+--- Normal mode tests ---
+  - test_dw_at_start_of_word
+  - test_dw_in_middle_of_word
+  - test_dW_at_start_of_WORD
+  - test_dW_in_middle_of_WORD
+  - test_diw_at_start
+  - test_diw_in_middle
+  - test_diw_at_end
+  - test_diw_on_space
+  - test_daw_at_start
+  - test_daw_in_middle
+  - test_daw_at_end
+  - test_daw_on_space_1
+  - test_daw_on_space_2
+  - test_daw_on_trailing_space
+  - test_daw_with_leading_space
+  - test_daw_with_trailing_space
+  - test_daw_in_middle_1
+  - test_daw_in_middle_2
+  - test_daw_in_middle_3
+  - test_daW_at_start
+  - test_daW_in_middle
+  - test_daW_at_end
+  - test_daW_on_space_1
+  - test_daW_on_space_2
+  - test_daW_on_trailing_space
+  - test_daW_with_leading_space
+  - test_daW_with_trailing_space
+  - test_daW_in_middle_1
+  - test_daW_in_middle_2
+  - test_daW_in_middle_3
+  - test_diW_at_start
+  - test_diW_in_middle
+  - test_diW_at_end
+  - test_daW_at_start
+  - test_daW_in_middle
+  - test_daW_at_end
+  - test_w_motion
+  - test_e_motion
+  - test_b_motion
+  - test_b_motion
+  - test_f_motion
+  - test_f_motion_no_match
+  - test_2f_motion
+  - test_F_motion
+  - test_t_motion
+  - test_2t_motion
+  - test_2t_motion
+  - test_T_motion
+  - test_np_motion
+  - test_np_motion_mid_para
+  - test_np_motion_end_of_file
+  - test_2np_motion
+  - test_pp_motion
+  - test_pp_motion_mid_para
+  - test_pp_motion_start_of_para
+  - test_pp_motion_start_of_file
+  - test_2pp_motion
+  - test_df_motion
+  - test_dF_motion
+  - test_dt_motion
+  - test_dT_motion
+  - test_visual_enter_and_move_right
+  - test_visual_enter_and_move_left
+  - test_visual_enter_and_move_down
+  - test_visual_enter_and_move_up
+  - test_visual_w
+  - test_visual_b
+  - test_visual_e
+  - test_visual_f
+  - test_visual_delete
+  - test_visual_delete_backward
+  - test_visual_delete_backward_across_line
+  - test_visual_delete_forward_across_line
+  - test_forward_search
+  - test_forward_search_from_middle
+  - test_backward_search
+  - test_backward_search_from_middle
+  - test_no_match_forward
+  - test_no_match_backward
+  - test_repeat_search
+  - test_forward_search_wrap
+  - test_backward_search_wrap
+  - test_search_with_offset
+1 test(s) failed.
+make: *** [Makefile:66: test] Error 1

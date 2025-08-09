@@ -58,7 +58,7 @@ void test_search_with_offset_helper(const char* test_name, const char* initial_c
 
 void run_search_tests() {
     test_generic_motion_helper("test_forward_search", "hello world\nhello there", 0, 0, "/hello\x0dn", 1, 0);
-    test_generic_motion_helper("test_forward_search_from_middle", "hello world\nhello there", 0, 5, "/hello\x0d", 1, 0);
+    test_generic_motion_helper("test_forward_search_from_middle", "hello world\nhello there", 0, 5, "/hello\x0dn", 0, 0);
     test_generic_motion_helper("test_backward_search", "hello world\nhello there", 1, 0, "?hello\x0d", 0, 0);
     test_generic_motion_helper("test_backward_search_from_middle", "hello world\nhello there", 1, 5, "?hello\x0d", 1, 0);
     test_generic_motion_helper("test_no_match_forward", "hello world", 0, 0, "/goodbye\x0d", 0, 0);
