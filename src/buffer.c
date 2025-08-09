@@ -10,6 +10,7 @@
 #include "config.h"
 #include "theme.h"
 #include "utf8.h"
+#include "utf8.h"
 
 static char* line_to_string(BufferLine *line);
 
@@ -210,7 +211,7 @@ void buffer_update_current_search_match(Buffer *b) {
         return;
     }
 
-    size_t term_len = strlen(b->search_state.term);
+    size_t term_len = utf8_strlen(b->search_state.term);
     for (int i = 0; i < b->search_state.count; i++) {
         if (b->search_state.matches[i].y == b->position_y &&
             b->position_x >= b->search_state.matches[i].x &&
