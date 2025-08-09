@@ -1,5 +1,4 @@
 #include "test.h"
-#include "../src/editor.h"
 
 void run_undo_tests(void) {
     printf("--- Undo/Redo tests ---\n");
