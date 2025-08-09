@@ -207,6 +207,19 @@ int normal_handle_input(const char *ch_str) {
       cmd.action = 'c';
       dispatch_command();
       break;
+    case 'o':
+      editor_move_to_end_of_line();
+      editor_insert_new_line();
+      normal_insertion_registration_init();
+      editor_handle_input = insert_handle_input;
+      break;
+    case 'O':
+      editor_move_to_start_of_line();
+      editor_insert_new_line();
+      editor_move_cursor_up();
+      normal_insertion_registration_init();
+      editor_handle_input = insert_handle_input;
+      break;
     case 'k':
       editor_move_cursor_up();
       break;

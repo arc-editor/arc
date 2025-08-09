@@ -71,6 +71,8 @@ void editor_move_cursor_right();
 void editor_move_cursor_left();
 void editor_move_cursor_down();
 void editor_move_cursor_up();
+void editor_move_to_start_of_line(void);
+void editor_move_to_end_of_line(void);
 void editor_insert_char(const char *ch);
 void editor_insert_new_line();
 void editor_write();

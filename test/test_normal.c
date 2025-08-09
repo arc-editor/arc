@@ -54,4 +54,10 @@ void run_normal_tests(void) {
     test_helper("test_daW_at_end", "hello-world goodbye", 0, 10, "daW", "goodbye");
 
     test_visual_motion_helper("test_visual_swap_selection", "hello world", 0, 2, "ll;", 0, 4, 0, 2);
+
+    // o and O
+    test_helper("test_o_in_middle_of_line", "hello\nworld", 0, 2, "o", "hello\n\nworld");
+    test_helper("test_O_in_middle_of_line", "hello\nworld", 1, 2, "O", "hello\n\nworld");
+    test_helper("test_o_at_end_of_file", "hello", 0, 5, "o", "hello\n");
+    test_helper("test_O_at_start_of_file", "hello", 0, 0, "O", "\nhello");
 }
