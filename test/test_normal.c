@@ -29,6 +29,9 @@ void run_normal_tests(void) {
     test_helper("test_daw_on_trailing_space", "hello ", 0, 5, "daw", "hello ");
     test_helper("test_daw_with_leading_space", " hello world", 0, 1, "daw", "world");
     test_helper("test_daw_with_trailing_space", "hello world ", 0, 0, "daw", "world ");
+    test_helper("test_daw_in_middle_1", "foo bar baz", 0, 5, "daw", "foo baz");
+    test_helper("test_daw_in_middle_2", "foo bar  baz", 0, 5, "daw", "foo baz");
+    test_helper("test_daw_in_middle_3", "foo  bar baz", 0, 6, "daw", "foo  baz");
 
     // diW
     test_helper("test_diW_at_start", "hello-world goodbye", 0, 0, "diW", " goodbye");

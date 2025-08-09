@@ -1409,6 +1409,7 @@ static void get_target_range(EditorCommand *cmd, Range *range) {
                     if (is_word_char(line->chars[buffer->position_x].value[0])) {
                         while (range->x_start > 0 && is_word_char(line->chars[range->x_start - 1].value[0])) range->x_start--;
                         while (range->x_end < line->char_count - 1 && is_word_char(line->chars[range->x_end + 1].value[0])) range->x_end++;
+
                         while (range->x_end < line->char_count - 1 && is_whitespace(line->chars[range->x_end + 1].value[0])) range->x_end++;
                         while (range->x_start > 0 && is_whitespace(line->chars[range->x_start - 1].value[0])) range->x_start--;
                         range->x_end++;
@@ -1465,6 +1466,7 @@ static void get_target_range(EditorCommand *cmd, Range *range) {
                     if (!is_whitespace(line->chars[buffer->position_x].value[0])) {
                         while (range->x_start > 0 && !is_whitespace(line->chars[range->x_start - 1].value[0])) range->x_start--;
                         while (range->x_end < line->char_count - 1 && !is_whitespace(line->chars[range->x_end + 1].value[0])) range->x_end++;
+
                         while (range->x_end < line->char_count - 1 && is_whitespace(line->chars[range->x_end + 1].value[0])) range->x_end++;
                         while (range->x_start > 0 && is_whitespace(line->chars[range->x_start - 1].value[0])) range->x_start--;
                         range->x_end++;
