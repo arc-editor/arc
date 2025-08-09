@@ -345,7 +345,15 @@ void draw_buffer(Diagnostic *diagnostics, int diagnostics_count, int update_diag
                 }
                 int width = buffer->tab_width - (cols_to_skip % buffer->tab_width);
                 cols_to_skip = 0;
-                if (editor.config.whitespace.tab == WHITESPACE_RENDER_ALL) {
+                int is_trailing = 1;
+                for (int i = ch_idx + 1; i < line->char_count; i++) {
+                    if (strcmp(line->chars[i].value, " ") != 0 && strcmp(line->chars[i].value, "\t") != 0) {
+                        is_trailing = 0;
+                        break;
+                    }
+                }
+
+                if (editor.config.whitespace.tab == WHITESPACE_RENDER_ALL || (editor.config.whitespace.tab == WHITESPACE_RENDER_TRAILING && is_trailing)) {
                     editor_set_style(&editor.current_theme.content_whitespace, 1, 0);
                     printf("%s", editor.config.whitespace.tab_char);
                     chars_to_print--;
@@ -388,7 +396,7 @@ void draw_buffer(Diagnostic *diagnostics, int diagnostics_count, int update_diag
             if (strcmp(ch.value, " ") == 0) {
                 int is_trailing = 1;
                 for (int i = ch_idx + 1; i < line->char_count; i++) {
-                    if (strcmp(line->chars[i].value, " ") != 0) {
+                    if (strcmp(line->chars[i].value, " ") != 0 && strcmp(line->chars[i].value, "\t") != 0) {
                         is_trailing = 0;
                         break;
                     }
