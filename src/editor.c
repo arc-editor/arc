@@ -750,6 +750,14 @@ void editor_init(char *file_name) {
 void editor_open(char *file_name) {
     pthread_mutex_lock(&editor_mutex);
 
+    for (int i = 0; i < editor.buffer_count; i++) {
+        if (editor.buffers[i]->file_name && strcmp(editor.buffers[i]->file_name, file_name) == 0) {
+            editor.active_buffer_idx = i;
+            pthread_mutex_unlock(&editor_mutex);
+            return;
+        }
+    }
+
     if (editor.buffer_count == 1 && editor.buffers[0]->file_name == NULL) {
         buffer_destroy(editor.buffers[0]);
         buffer_init(editor.buffers[0], file_name);
