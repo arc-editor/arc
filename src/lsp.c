@@ -52,7 +52,7 @@ void *lsp_reader_thread_func(void *arg __attribute__((unused))) {
 
       pthread_mutex_lock(&diagnostics_mutex);
       diagnostics_version++;
-      
+
       // Clear old diagnostics
       for (int i = 0; i < diagnostic_count; i++) {
         free(diagnostics[i].message);
@@ -90,7 +90,7 @@ void *lsp_reader_thread_func(void *arg __attribute__((unused))) {
           cJSON *line_obj = cJSON_GetObjectItem(start, "line");
           cJSON *char_start_obj = cJSON_GetObjectItem(start, "character");
           cJSON *char_end_obj = cJSON_GetObjectItem(end, "character");
-          
+
           if (!line_obj || !char_start_obj || !char_end_obj) continue;
 
           diagnostics[i].line = line_obj->valueint;
@@ -132,7 +132,7 @@ void lsp_send_message(cJSON *json_rpc) {
   // Write header and message atomically if possible
   ssize_t header_written = write(to_server_pipe[1], header, strlen(header));
   ssize_t message_written = write(to_server_pipe[1], message, len);
-  
+
   if (header_written < 0 || message_written < 0) {
     log_error("lsp_send_message: write failed");
   }
@@ -181,7 +181,7 @@ cJSON *lsp_read_message() {
                 log_error("lsp_read_message: malloc failed");
                 return NULL;
             }
-            
+
             memcpy(json_copy, json_start, content_length);
             json_copy[content_length] = '\0';
 
