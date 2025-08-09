@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include "insert.h"
 #include "editor.h"
+#include "history.h"
 #include "search.h"
 #include "picker_file.h"
 #include "picker_buffer.h"
@@ -34,6 +35,7 @@ void normal_register_insertion(char ch) {
 void normal_insertion_registration_init() {
     insertion_buffer_count = 0;
     is_insertion_bufferable = 1;
+    history_start_coalescing(editor_get_active_buffer()->history);
 }
 
 void dispatch_command() {
@@ -195,10 +197,12 @@ int normal_handle_input(const char *ch_str) {
       editor_delete();
       break;
     case 'a':
+      normal_insertion_registration_init();
       editor_handle_input = insert_handle_input;
       editor_move_cursor_right();
       break;
     case 'i':
+      normal_insertion_registration_init();
       editor_handle_input = insert_handle_input;
       cmd.action = 'c';
       dispatch_command();

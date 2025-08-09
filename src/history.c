@@ -85,6 +85,7 @@ History* history_create(void) {
     }
     changestack_init(&h->undo_stack);
     changestack_init(&h->redo_stack);
+    h->is_coalescing = 0;
     return h;
 }
 
@@ -124,4 +125,16 @@ void history_push_redo(History *h, Change *change) {
 
 void history_clear_redo(History *h) {
     changestack_clear(&h->redo_stack);
+}
+
+void history_start_coalescing(History *h) {
+    if (h) {
+        h->is_coalescing = 1;
+    }
+}
+
+void history_end_coalescing(History *h) {
+    if (h) {
+        h->is_coalescing = 0;
+    }
 }
