@@ -1409,23 +1409,36 @@ static void get_target_range(EditorCommand *cmd, Range *range) {
                     range->x_end = 0;
                 }
             } else {
-                int original_y = range->y_start;
+                if (cmd->specifier[0] == '\0') {
+                    range->x_end = range->x_start;
+                    range->y_end = range->y_start;
+                    break;
+                }
 
+                int original_y = range->y_start;
                 if (is_line_empty(buffer->lines[original_y])) {
-                    range->y_start = original_y;
-                    range->y_end = original_y;
+                    if (cmd->specifier[0] == 'a') {
+                        // dap on an empty line should delete that line.
+                    } else {
+                        // dip on an empty line is a no-op
+                        range->x_end = range->x_start;
+                        range->y_end = range->y_start;
+                    }
                 } else {
                     while (range->y_start > 0 && !is_line_empty(buffer->lines[range->y_start - 1])) {
                         range->y_start--;
                     }
-
                     while (range->y_end < buffer->line_count - 1 && !is_line_empty(buffer->lines[range->y_end + 1])) {
                         range->y_end++;
                     }
                 }
 
-                if (range->y_end < buffer->line_count - 1 && is_line_empty(buffer->lines[range->y_end + 1])) {
-                    range->y_end++;
+                if (cmd->specifier[0] == 'a') {
+                    if (range->y_end < buffer->line_count - 1 && is_line_empty(buffer->lines[range->y_end + 1])) {
+                        range->y_end++;
+                    } else if (range->y_start > 0 && is_line_empty(buffer->lines[range->y_start - 1])) {
+                        range->y_start--;
+                    }
                 }
 
                 range->x_start = 0;
@@ -1843,8 +1856,32 @@ void editor_command_exec(EditorCommand *cmd) {
                 int top = range_get_top_boundary(&range);
                 int bottom = range_get_bottom_boundary(&range);
                 buffer->position_x = left;
-                buffer->position_y = range_get_top_boundary(&range);
-                range_delete(buffer, &range, cmd);
+                buffer->position_y = top;
+                if (cmd->target == 'p') {
+                    int lines_to_remove = bottom - top + 1;
+                    if (lines_to_remove <= 0 || (top == bottom && left == right)) break;
+
+                    for (int i = top; i <= bottom; i++) {
+                        buffer_line_destroy(buffer->lines[i]);
+                        free(buffer->lines[i]);
+                    }
+                    if (buffer->line_count > bottom + 1) {
+                        memmove(&buffer->lines[top], &buffer->lines[bottom + 1], (buffer->line_count - bottom - 1) * sizeof(BufferLine *));
+                    }
+                    buffer->line_count -= lines_to_remove;
+                    if (buffer->line_count == 0) {
+                        buffer->lines[0] = (BufferLine *)malloc(sizeof(BufferLine));
+                        buffer_line_init(buffer->lines[0]);
+                        buffer->line_count = 1;
+                    }
+                    if (top < buffer->line_count) {
+                        buffer->position_y = top;
+                    } else {
+                        buffer->position_y = buffer->line_count - 1;
+                    }
+                } else {
+                    range_delete(buffer, &range, cmd);
+                }
                 buffer_reset_offset_x(buffer, editor.screen_cols);
                 buffer_reset_offset_y(buffer, editor.screen_rows);
                 buffer_update_current_search_match(buffer);
