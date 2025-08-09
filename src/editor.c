@@ -2077,9 +2077,33 @@ void editor_command_exec(EditorCommand *cmd) {
 }
 
 void editor_center_view(void) {
-    buffer_reset_offset_y(buffer, editor.screen_rows);
-    buffer_reset_offset_x(buffer, editor.screen_cols);
-    buffer_update_current_search_match(buffer);
+    pthread_mutex_lock(&editor_mutex);
+    buffer->offset_y = buffer->position_y - editor.screen_rows / 2;
+    if (buffer->offset_y < 0) {
+        buffer->offset_y = 0;
+    }
+    buffer->needs_draw = 1;
+    pthread_mutex_unlock(&editor_mutex);
+}
+
+void editor_scroll_to_top(void) {
+    pthread_mutex_lock(&editor_mutex);
+    buffer->offset_y = buffer->position_y;
+    if (buffer->offset_y < 0) {
+        buffer->offset_y = 0;
+    }
+    buffer->needs_draw = 1;
+    pthread_mutex_unlock(&editor_mutex);
+}
+
+void editor_scroll_to_bottom(void) {
+    pthread_mutex_lock(&editor_mutex);
+    buffer->offset_y = buffer->position_y - editor.screen_rows + 2;
+    if (buffer->offset_y < 0) {
+        buffer->offset_y = 0;
+    }
+    buffer->needs_draw = 1;
+    pthread_mutex_unlock(&editor_mutex);
 }
 
 void editor_set_screen_size(int rows, int cols) {

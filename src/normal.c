@@ -1,6 +1,7 @@
 #include <string.h>
 #include <termios.h>
 #include <unistd.h>
+#include "log.h"
 #include "insert.h"
 #include "editor.h"
 #include "history.h"
@@ -45,6 +46,10 @@ void dispatch_command() {
 }
 
 int normal_handle_input(const char *ch_str) {
+  log_info("normal_handle_input: %s", ch_str);
+  if (cmd.action) {
+    log_info("  cmd.action = %c", cmd.action);
+  }
   if (ch_str[0] == 27 && ch_str[1] == '\0') {
       editor_command_reset(&cmd);
       is_waiting_for_text_object_specifier = 0;
@@ -135,6 +140,22 @@ int normal_handle_input(const char *ch_str) {
   }
 
   if (cmd.action) {
+    if (cmd.action == 'z') {
+        switch(ch) {
+            case 'z':
+                editor_center_view();
+                break;
+            case 't':
+                editor_scroll_to_top();
+                break;
+            case 'b':
+                editor_scroll_to_bottom();
+                break;
+        }
+        editor_command_reset(&cmd);
+        return 1;
+    }
+
     switch (ch) {
       case 'f':
       case 'F':
@@ -158,6 +179,9 @@ int normal_handle_input(const char *ch_str) {
       case 'p':
         cmd.target = ch;
         dispatch_command();
+        break;
+      default:
+        editor_command_reset(&cmd);
         break;
     }
     return 1;
@@ -274,6 +298,7 @@ int normal_handle_input(const char *ch_str) {
       break;
     }
     case 'g':
+    case 'z':
       cmd.action = ch;
       break;
     case 'c':
