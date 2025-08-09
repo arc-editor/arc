@@ -97,8 +97,9 @@ install: all
 	# cp default.toml $(DESTDIR)$(PREFIX)/share/arc/default.toml
 
 .PHONY: run
+run: ARGS = $(filter-out $@,$(MAKECMDGOALS))
 run: $(TARGET)
-	./$(TARGET)
+	./$(TARGET) $(ARGS)
 
 .PHONY: compile_commands
 compile_commands:
