@@ -661,6 +661,34 @@ void editor_insert_new_line() {
     buffer->position_y++;
     buffer_reset_offset_y(buffer, editor.screen_rows);
     buffer->position_x = 0;
+
+    pthread_mutex_unlock(&editor_mutex);
+    // Auto-indent
+    if (buffer->position_y > 0) {
+        BufferLine *prev_line = buffer->lines[buffer->position_y - 1];
+        int indent_len = 0;
+        while (indent_len < prev_line->char_count &&
+               (strcmp(prev_line->chars[indent_len].value, " ") == 0 ||
+                strcmp(prev_line->chars[indent_len].value, "\t") == 0)) {
+            indent_len++;
+        }
+
+        if (indent_len > 0) {
+            char *indent_str = malloc(indent_len * 8 + 1); // Max utf8 char size is 4, 8 is safe
+            if (indent_str) {
+                char *head = indent_str;
+                for (int i = 0; i < indent_len; i++) {
+                    strcpy(head, prev_line->chars[i].value);
+                    head += strlen(prev_line->chars[i].value);
+                }
+                *head = '\0';
+                editor_insert_string(indent_str);
+                free(indent_str);
+            }
+        }
+    }
+    pthread_mutex_lock(&editor_mutex);
+
     editor_did_change_buffer();
     buffer_set_line_num_width(buffer);
 
@@ -896,6 +924,19 @@ void editor_start(char *file_name, int benchmark_mode) {
         }
     }
     editor_clear_screen();
+}
+
+static int utf8_char_len_from_string(const char *s);
+void editor_insert_string(const char *str) {
+    const char *p = str;
+    while (*p) {
+        char utf8_buf[8];
+        size_t len = utf8_char_len_from_string(p);
+        strncpy(utf8_buf, p, len);
+        utf8_buf[len] = '\0';
+        editor_insert_char(utf8_buf);
+        p += len;
+    }
 }
 
 void editor_insert_char(const char *ch) {
