@@ -49,6 +49,8 @@ int visual_handle_input(const char *ch_str) {
             b->selection_start_x = b->position_x;
             b->position_y = temp_y;
             b->position_x = temp_x;
+            buffer_reset_offset_x(b, editor.screen_cols);
+            buffer_reset_offset_y(b, editor.screen_rows);
             editor_request_redraw();
             break;
         }
