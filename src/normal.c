@@ -63,6 +63,19 @@ void normal_exec_motion(char ch) {
             return;
         }
 
+        if (cmd.action == 'g') {
+            switch(ch) {
+                case 'h':
+                    editor_move_to_start_of_line();
+                    editor_command_reset(&cmd);
+                    return;
+                case 'l':
+                    editor_move_to_end_of_line();
+                    editor_command_reset(&cmd);
+                    return;
+            }
+        }
+
         switch (ch) {
             case 'f':
             case 'F':
