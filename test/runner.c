@@ -122,9 +122,11 @@ void test_visual_action_helper(const char* test_name, const char* initial_conten
     remove(filename);
 }
 
+#include <stdbool.h>
+
 int main(void) {
     printf("Running tests...\n");
-    editor_init(NULL);
+    editor_init(NULL, false);
     editor_set_screen_size(24, 80);
 
     // ================ deletions ================

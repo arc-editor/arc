@@ -8,7 +8,8 @@ static void test_open_file_duplicate_buffer() {
     const char *test_name = "test_open_file_duplicate_buffer";
     printf("  - %s\n", test_name);
 
-    editor_init(NULL);
+#include <stdbool.h>
+    editor_init(NULL, false);
     editor_set_screen_size(20, 80);
     editor_handle_input = normal_handle_input;
 
