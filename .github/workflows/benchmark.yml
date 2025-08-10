@@ -13,41 +13,56 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y clang neovim bc
       - name: Build
         run: make
+
+      # 10MB Benchmark
       - name: Create 10MB random file
-        run: dd if=/dev/urandom of=random.txt bs=1M count=10
-      - name: Run arc benchmark
-        run: /usr/bin/time -v ./build/arc --benchmark random.txt 2> arc_time.log
-      - name: Run neovim benchmark
-        run: /usr/bin/time -v nvim --headless -c 'q!' random.txt 2> nvim_time.log
+        run: dd if=/dev/urandom of=random_10mb.txt bs=1M count=10
+      - name: Run arc benchmark (10MB)
+        run: /usr/bin/time -v ./build/arc --benchmark random_10mb.txt 2> arc_10mb_time.log
+      - name: Run neovim benchmark (10MB)
+        run: /usr/bin/time -v nvim --headless -c 'q!' random_10mb.txt 2> nvim_10mb_time.log
+
+      # 1KB Benchmark
+      - name: Create 1KB random file
+        run: dd if=/dev/urandom of=random_1kb.txt bs=1K count=1
+      - name: Run arc benchmark (1KB)
+        run: /usr/bin/time -v ./build/arc --benchmark random_1kb.txt 2> arc_1kb_time.log
+      - name: Run neovim benchmark (1KB)
+        run: /usr/bin/time -v nvim --headless -c 'q!' random_1kb.txt 2> nvim_1kb_time.log
+
       - name: Generate report
         run: |
-          # For arc
-          ARC_WALL_TIME_STR=$(grep 'Elapsed (wall clock) time' arc_time.log | awk '{print $NF}')
-          ARC_MINUTES=$(echo $ARC_WALL_TIME_STR | cut -d: -f1)
-          ARC_SECONDS=$(echo $ARC_WALL_TIME_STR | cut -d: -f2)
-          ARC_TOTAL_SECONDS=$(echo "$ARC_MINUTES*60 + $ARC_SECONDS" | bc)
-          ARC_MS=$(echo "$ARC_TOTAL_SECONDS * 1000" | bc)
-          ARC_MEM_KB=$(grep 'Maximum resident set size' arc_time.log | awk '{print $NF}')
-          ARC_MEM_MB=$(echo "scale=2; $ARC_MEM_KB / 1024" | bc)
-          # For nvim
-          NVIM_WALL_TIME_STR=$(grep 'Elapsed (wall clock) time' nvim_time.log | awk '{print $NF}')
-          # Handle h:mm:ss format
-          if echo "$NVIM_WALL_TIME_STR" | grep -q '.*:.*:.*'; then
-            NVIM_HOURS=$(echo $NVIM_WALL_TIME_STR | cut -d: -f1)
-            NVIM_MINUTES=$(echo $NVIM_WALL_TIME_STR | cut -d: -f2)
-            NVIM_SECONDS=$(echo $NVIM_WALL_TIME_STR | cut -d: -f3)
-            NVIM_TOTAL_SECONDS=$(echo "$NVIM_HOURS*3600 + $NVIM_MINUTES*60 + $NVIM_SECONDS" | bc)
-          else
-            NVIM_MINUTES=$(echo $NVIM_WALL_TIME_STR | cut -d: -f1)
-            NVIM_SECONDS=$(echo $NVIM_WALL_TIME_STR | cut -d: -f2)
-            NVIM_TOTAL_SECONDS=$(echo "$NVIM_MINUTES*60 + $NVIM_SECONDS" | bc)
-          fi
-          NVIM_MS=$(echo "$NVIM_TOTAL_SECONDS * 1000" | bc)
-          NVIM_MEM_KB=$(grep 'Maximum resident set size' nvim_time.log | awk '{print $NF}')
-          NVIM_MEM_MB=$(echo "scale=2; $NVIM_MEM_KB / 1024" | bc)
+          # Function to parse time and memory
+          parse_results() {
+            local log_file=$1
+            local wall_time_str=$(grep 'Elapsed (wall clock) time' $log_file | awk '{print $NF}')
+            local total_seconds
+            if echo "$wall_time_str" | grep -q '.*:.*:.*'; then
+              local hours=$(echo $wall_time_str | cut -d: -f1)
+              local minutes=$(echo $wall_time_str | cut -d: -f2)
+              local seconds=$(echo $wall_time_str | cut -d: -f3)
+              total_seconds=$(echo "$hours*3600 + $minutes*60 + $seconds" | bc)
+            else
+              local minutes=$(echo $wall_time_str | cut -d: -f1)
+              local seconds=$(echo $wall_time_str | cut -d: -f2)
+              total_seconds=$(echo "$minutes*60 + $seconds" | bc)
+            fi
+            local ms=$(echo "$total_seconds * 1000" | bc)
+            local mem_kb=$(grep 'Maximum resident set size' $log_file | awk '{print $NF}')
+            local mem_mb=$(echo "scale=2; $mem_kb / 1024" | bc)
+            echo "$ms $mem_mb"
+          }
+
+          ARC_10MB_RESULTS=($(parse_results arc_10mb_time.log))
+          NVIM_10MB_RESULTS=($(parse_results nvim_10mb_time.log))
+          ARC_1KB_RESULTS=($(parse_results arc_1kb_time.log))
+          NVIM_1KB_RESULTS=($(parse_results nvim_1kb_time.log))
+
           # Create the markdown table and append to the job summary
           echo "### Benchmark Results" >> $GITHUB_STEP_SUMMARY
-          echo "| Application | Startup Time (ms) | Memory Used (MB) |" >> $GITHUB_STEP_SUMMARY
-          echo "|-------------|-------------------|------------------|" >> $GITHUB_STEP_SUMMARY
-          echo "| arc         | \`$ARC_MS\`           | \`$ARC_MEM_MB\`      |" >> $GITHUB_STEP_SUMMARY
-          echo "| neovim      | \`$NVIM_MS\`          | \`$NVIM_MEM_MB\`     |" >> $GITHUB_STEP_SUMMARY
+          echo "| File Size | Application | Startup Time (ms) | Memory Used (MB) |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|-------------|-------------------|------------------|" >> $GITHUB_STEP_SUMMARY
+          echo "| 10 MB     | arc         | \`${ARC_10MB_RESULTS[0]}\`           | \`${ARC_10MB_RESULTS[1]}\`      |" >> $GITHUB_STEP_SUMMARY
+          echo "| 10 MB     | neovim      | \`${NVIM_10MB_RESULTS[0]}\`          | \`${NVIM_10MB_RESULTS[1]}\`     |" >> $GITHUB_STEP_SUMMARY
+          echo "| 1 KB      | arc         | \`${ARC_1KB_RESULTS[0]}\`           | \`${ARC_1KB_RESULTS[1]}\`      |" >> $GITHUB_STEP_SUMMARY
+          echo "| 1 KB      | neovim      | \`${NVIM_1KB_RESULTS[0]}\`          | \`${NVIM_1KB_RESULTS[1]}\`     |" >> $GITHUB_STEP_SUMMARY
