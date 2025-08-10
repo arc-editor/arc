@@ -55,7 +55,7 @@ void editor_scroll_to_bottom(void);
 void editor_set_screen_size(int rows, int cols);
 void editor_draw();
 void editor_init(char *file_name);
-void editor_start(char *file_name);
+void editor_start(char *file_name, int benchmark_mode);
 void editor_open(char *file_name);
 Buffer **editor_get_buffers(int *count);
 void editor_set_active_buffer(int index);
