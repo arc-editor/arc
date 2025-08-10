@@ -1980,6 +1980,8 @@ void editor_command_exec(EditorCommand *cmd) {
     if (editor_handle_input == visual_handle_input && (!cmd->action || cmd->action == 'g')) {
         buffer->position_x = range.x_end;
         buffer->position_y = range.y_end;
+        buffer_reset_offset_x(buffer, editor.screen_cols);
+        buffer_reset_offset_y(buffer, editor.screen_rows);
         editor_command_reset(cmd);
         editor_request_redraw();
         pthread_mutex_unlock(&editor_mutex);
