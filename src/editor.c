@@ -705,9 +705,13 @@ void setup_terminal() {
 void setup_terminal() {}
 #endif
 
-void editor_init(char *file_name) {
-    init_terminal_size();
-    setup_terminal();
+#include <stdbool.h>
+
+void editor_init(char *file_name, bool benchmark_mode) {
+    if (!benchmark_mode) {
+        init_terminal_size();
+        setup_terminal();
+    }
     editor.buffer_capacity = 1;
     editor.buffers = malloc(sizeof(Buffer*) * editor.buffer_capacity);
     if (!editor.buffers) {
@@ -863,7 +867,7 @@ int editor_get_active_buffer_idx(void) {
 }
 
 void editor_start(char *file_name, int benchmark_mode) {
-    editor_init(file_name);
+    editor_init(file_name, benchmark_mode);
     if (benchmark_mode) {
         // In benchmark mode, we just initialize, load the file, and exit.
         // The performance metrics will be captured by the calling process.
