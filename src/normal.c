@@ -321,6 +321,27 @@ int normal_handle_input(const char *ch_str) {
     case 'x':
       editor_delete();
       break;
+    case 's':
+      editor_delete();
+      normal_insertion_registration_init();
+      editor_handle_input = insert_handle_input;
+      break;
+    case 'S':
+      {
+        Buffer *buffer = editor_get_active_buffer();
+        EditorCommand cmd = {0};
+        Range range = {
+            .y_start = buffer->position_y,
+            .y_end = buffer->position_y,
+            .x_start = 0,
+            .x_end = buffer->lines[buffer->position_y]->char_count,
+        };
+        range_delete(buffer, &range, &cmd);
+        editor_move_to_start_of_line();
+        normal_insertion_registration_init();
+        editor_handle_input = insert_handle_input;
+        break;
+      }
     case 'a':
       normal_insertion_registration_init();
       editor_handle_input = insert_handle_input;
