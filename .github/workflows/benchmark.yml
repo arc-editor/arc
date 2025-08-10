@@ -1,10 +1,15 @@
 name: Benchmark
 
-on: [push]
+on:
+  push:
+    branches:
+      - main
 
 jobs:
   benchmark:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v3
         with:
@@ -81,13 +86,30 @@ jobs:
           NVIM_10MB_RESULTS=($(parse_results nvim_10mb_time.log))
           HELIX_10MB_RESULTS=($(parse_results helix_10mb_time.log))
 
-          # Create the markdown table and append to the job summary
-          echo "### Benchmark Results" >> $GITHUB_STEP_SUMMARY
-          echo "| File Size | Application | Startup Time (ms) | Memory Used (MB) |" >> $GITHUB_STEP_SUMMARY
-          echo "|-----------|-------------|-------------------|------------------|" >> $GITHUB_STEP_SUMMARY
-          echo "| 10 KB     | arc         | \`${ARC_10KB_RESULTS[0]}\`          | \`${ARC_10KB_RESULTS[1]}\`     |" >> $GITHUB_STEP_SUMMARY
-          echo "| 10 KB     | neovim      | \`${NVIM_10KB_RESULTS[0]}\`         | \`${NVIM_10KB_RESULTS[1]}\`    |" >> $GITHUB_STEP_SUMMARY
-          echo "| 10 KB     | helix       | \`${HELIX_10KB_RESULTS[0]}\`        | \`${HELIX_10KB_RESULTS[1]}\`   |" >> $GITHUB_STEP_SUMMARY
-          echo "| 10 MB     | arc         | \`${ARC_10MB_RESULTS[0]}\`          | \`${ARC_10MB_RESULTS[1]}\`     |" >> $GITHUB_STEP_SUMMARY
-          echo "| 10 MB     | neovim      | \`${NVIM_10MB_RESULTS[0]}\`         | \`${NVIM_10MB_RESULTS[1]}\`    |" >> $GITHUB_STEP_SUMMARY
-          echo "| 10 MB     | helix       | \`${HELIX_10MB_RESULTS[0]}\`        | \`${HELIX_10MB_RESULTS[1]}\`   |" >> $GITHUB_STEP_SUMMARY
+          # Create the markdown table and write to a file
+          {
+            echo "| File Size | Application | Startup Time (ms) | Memory Used (MB) |"
+            echo "|-----------|-------------|-------------------|------------------|"
+            echo "| 10 KB     | arc         | \`${ARC_10KB_RESULTS[0]}\`          | \`${ARC_10KB_RESULTS[1]}\`     |"
+            echo "| 10 KB     | neovim      | \`${NVIM_10KB_RESULTS[0]}\`         | \`${NVIM_10KB_RESULTS[1]}\`    |"
+            echo "| 10 KB     | helix       | \`${HELIX_10KB_RESULTS[0]}\`        | \`${HELIX_10KB_RESULTS[1]}\`   |"
+            echo "| 10 MB     | arc         | \`${ARC_10MB_RESULTS[0]}\`          | \`${ARC_10MB_RESULTS[1]}\`     |"
+            echo "| 10 MB     | neovim      | \`${NVIM_10MB_RESULTS[0]}\`         | \`${NVIM_10MB_RESULTS[1]}\`    |"
+            echo "| 10 MB     | helix       | \`${HELIX_10MB_RESULTS[0]}\`        | \`${HELIX_10MB_RESULTS[1]}\`   |"
+          } > benchmark_results.md
+
+      - name: Update README.md
+        run: python3 scripts/update_readme.py README.md benchmark_results.md
+
+      - name: Commit and push if changed
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          git add README.md
+          # Commit only if there are changes
+          if ! git diff --staged --quiet; then
+            git commit -m "docs: Update benchmark results"
+            git push
+          else
+            echo "No changes to commit."
+          fi
