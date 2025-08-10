@@ -1447,7 +1447,7 @@ void range_expand_B(BufferLine *line, int count, Range *range) {
 }
 
 static void get_target_range(EditorCommand *cmd, Range *range) {
-    if (editor_handle_input == visual_handle_input && cmd->action) {
+    if (editor_handle_input == visual_handle_input && cmd->action && cmd->action != 'g') {
         range->x_start = buffer->selection_start_x;
         range->y_start = buffer->selection_start_y;
         range->x_end = buffer->position_x;
@@ -1977,9 +1977,12 @@ void editor_command_exec(EditorCommand *cmd) {
     Range range;
     get_target_range(cmd, &range);
 
-    if (editor_handle_input == visual_handle_input && !cmd->action) {
+    if (editor_handle_input == visual_handle_input && (!cmd->action || cmd->action == 'g')) {
         buffer->position_x = range.x_end;
         buffer->position_y = range.y_end;
+        buffer_reset_offset_x(buffer, editor.screen_cols);
+        buffer_reset_offset_y(buffer, editor.screen_rows);
+        editor_command_reset(cmd);
         editor_request_redraw();
         pthread_mutex_unlock(&editor_mutex);
         return;

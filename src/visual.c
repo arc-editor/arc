@@ -3,8 +3,8 @@
 #include "editor.h"
 #include "normal.h"
 
-static EditorCommand cmd;
-static int is_waiting_for_specifier = 0;
+extern EditorCommand cmd;
+extern int is_waiting_for_specifier;
 
 void visual_mode_enter() {
     editor_command_reset(&cmd);
@@ -14,7 +14,7 @@ int visual_handle_input(const char *ch_str) {
     if (is_waiting_for_specifier) {
         strncpy(cmd.specifier, ch_str, sizeof(cmd.specifier) - 1);
         cmd.specifier[sizeof(cmd.specifier) - 1] = '\0';
-        editor_command_exec(&cmd);
+        dispatch_command();
         is_waiting_for_specifier = 0;
         editor_command_reset(&cmd);
         return 1;
@@ -41,18 +41,6 @@ int visual_handle_input(const char *ch_str) {
             editor_request_redraw();
             editor_command_reset(&cmd);
             break;
-        case 'j':
-            editor_move_cursor_down();
-            break;
-        case 'k':
-            editor_move_cursor_up();
-            break;
-        case 'h':
-            editor_move_cursor_left();
-            break;
-        case 'l':
-            editor_move_cursor_right();
-            break;
         case ';': {
             Buffer *b = editor_get_active_buffer();
             int temp_y = b->selection_start_y;
@@ -61,31 +49,19 @@ int visual_handle_input(const char *ch_str) {
             b->selection_start_x = b->position_x;
             b->position_y = temp_y;
             b->position_x = temp_x;
+            buffer_reset_offset_x(b, editor.screen_cols);
+            buffer_reset_offset_y(b, editor.screen_rows);
             editor_request_redraw();
             break;
         }
-        case 'w':
-        case 'e':
-        case 'b':
-        case 'W':
-        case 'E':
-        case 'B':
-            cmd.target = ch;
-            editor_command_exec(&cmd);
-            editor_command_reset(&cmd);
-            break;
         case 'd':
         case 'c':
             cmd.action = ch;
             editor_command_exec(&cmd);
             editor_command_reset(&cmd);
             break;
-        case 'f':
-        case 'F':
-        case 't':
-        case 'T':
-            cmd.target = ch;
-            is_waiting_for_specifier = 1;
+        default:
+            normal_exec_motion(ch);
             break;
     }
     return 1;

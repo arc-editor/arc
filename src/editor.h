@@ -45,6 +45,7 @@ typedef struct {
   char specifier[8]; // '(', '}'
 } EditorCommand;
 
+extern Editor editor;
 extern int (*editor_handle_input)(const char *);
 
 void editor_command_reset(EditorCommand *cmd);

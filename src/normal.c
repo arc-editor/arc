@@ -45,6 +45,137 @@ void dispatch_command() {
     is_waiting_for_text_object_specifier = 0;
 }
 
+void normal_exec_motion(char ch) {
+    if (cmd.action) {
+        if (cmd.action == 'z') {
+            switch(ch) {
+                case 'z':
+                    editor_center_view();
+                    break;
+                case 't':
+                    editor_scroll_to_top();
+                    break;
+                case 'b':
+                    editor_scroll_to_bottom();
+                    break;
+            }
+            editor_command_reset(&cmd);
+            return;
+        }
+
+        if (cmd.action == 'g') {
+            switch(ch) {
+                case 'h':
+                    editor_move_to_start_of_line();
+                    editor_command_reset(&cmd);
+                    return;
+                case 'l':
+                    editor_move_to_end_of_line();
+                    editor_command_reset(&cmd);
+                    return;
+            }
+        }
+
+        switch (ch) {
+            case 'f':
+            case 'F':
+            case 't':
+            case 'T':
+                cmd.target = ch;
+                is_waiting_for_specifier = 1;
+                break;
+            case 'W':
+            case 'w':
+                if (cmd.specifier[0] == '\0') {
+                    ch = (ch == 'w') ? 'e' : 'E';
+                }
+                // fallthrough
+            case 'e':
+            case 'E':
+            case 'b':
+            case 'l':
+            case 'h':
+            case 'B':
+            case 'p':
+                cmd.target = ch;
+                dispatch_command();
+                break;
+            default:
+                editor_command_reset(&cmd);
+                break;
+        }
+        return;
+    }
+
+    switch (ch) {
+        case 'k':
+            editor_move_cursor_up();
+            break;
+        case 'j':
+            editor_move_cursor_down();
+            break;
+        case 'h':
+            editor_move_cursor_left();
+            break;
+        case 'l':
+            editor_move_cursor_right();
+            break;
+        case 'w':
+        case 'e':
+        case 'b':
+        case 'W':
+        case 'E':
+        case 'B':
+            cmd.target = ch;
+            dispatch_command();
+            break;
+        case 'f':
+        case 'F':
+        case 't':
+        case 'T':
+            cmd.target = ch;
+            is_waiting_for_specifier = 1;
+            break;
+        case 'n': {
+            const char *last_term = search_get_last_term();
+            if (last_term && last_term[0] != '\0') {
+                editor_search_next(search_get_last_direction());
+            } else {
+                cmd.target = ch;
+                is_waiting_for_specifier = 1;
+            }
+            break;
+        }
+        case 'p': {
+            const char *last_term = search_get_last_term();
+            if (last_term && last_term[0] != '\0') {
+                editor_search_next(-search_get_last_direction());
+            } else {
+                cmd.target = ch;
+                is_waiting_for_specifier = 1;
+            }
+            break;
+        }
+        case 'g':
+        case 'z':
+            cmd.action = ch;
+            break;
+        case 'c':
+        case 'd':
+            cmd.action = ch;
+            is_waiting_for_text_object_specifier = 1;
+            break;
+        case 0x04: // ctrl d
+            editor_move_n_lines_down(cmd.count);
+            editor_command_reset(&cmd);
+            break;
+        case 0x15: // ctrl u
+            editor_move_n_lines_up(cmd.count);
+            editor_command_reset(&cmd);
+            break;
+    }
+}
+
 int normal_handle_input(const char *ch_str) {
   if (ch_str[0] == 27 && ch_str[1] == '\0') {
       editor_command_reset(&cmd);
@@ -136,50 +267,7 @@ int normal_handle_input(const char *ch_str) {
   }
 
   if (cmd.action) {
-    if (cmd.action == 'z') {
-        switch(ch) {
-            case 'z':
-                editor_center_view();
-                break;
-            case 't':
-                editor_scroll_to_top();
-                break;
-            case 'b':
-                editor_scroll_to_bottom();
-                break;
-        }
-        editor_command_reset(&cmd);
-        return 1;
-    }
-
-    switch (ch) {
-      case 'f':
-      case 'F':
-      case 't':
-      case 'T':
-        cmd.target = ch;
-        is_waiting_for_specifier = 1;
-        break;
-      case 'W':
-      case 'w':
-        if (cmd.specifier[0] == '\0') {
-          ch = (ch == 'w') ? 'e' : 'E';
-        }
-        // fallthrough
-      case 'e':
-      case 'E':
-      case 'b':
-      case 'l':
-      case 'h':
-      case 'B':
-      case 'p':
-        cmd.target = ch;
-        dispatch_command();
-        break;
-      default:
-        editor_command_reset(&cmd);
-        break;
-    }
+    normal_exec_motion(ch);
     return 1;
   }
 
@@ -246,70 +334,29 @@ int normal_handle_input(const char *ch_str) {
       editor_handle_input = insert_handle_input;
       break;
     case 'k':
-      editor_move_cursor_up();
-      break;
     case 'j':
-      editor_move_cursor_down();
-      break;
     case 'h':
-      editor_move_cursor_left();
-      break;
     case 'l':
-      editor_move_cursor_right();
-      break;
     case 'w':
     case 'e':
     case 'b':
     case 'W':
     case 'E':
     case 'B':
-      cmd.target = ch;
-      dispatch_command();
-      break;
     case 'f':
     case 'F':
     case 't':
     case 'T':
-      cmd.target = ch;
-      is_waiting_for_specifier = 1;
-      break;
-    case 'n': {
-      const char *last_term = search_get_last_term();
-      if (last_term && last_term[0] != '\0') {
-        editor_search_next(search_get_last_direction());
-      } else {
-        cmd.target = ch;
-        is_waiting_for_specifier = 1;
-      }
-      break;
-    }
-    case 'p': {
-      const char *last_term = search_get_last_term();
-      if (last_term && last_term[0] != '\0') {
-        editor_search_next(-search_get_last_direction());
-      } else {
-        cmd.target = ch;
-        is_waiting_for_specifier = 1;
-      }
-      break;
-    }
+    case 'n':
+    case 'p':
     case 'g':
     case 'z':
-      cmd.action = ch;
-      break;
     case 'c':
     case 'd':
-      cmd.action = ch;
-      is_waiting_for_text_object_specifier = 1;
-      break;
     case 0x04: // ctrl d
-      editor_move_n_lines_down(cmd.count);
-      editor_command_reset(&cmd);
-      break;
     case 0x15: // ctrl u
-      editor_move_n_lines_up(cmd.count);
-      editor_command_reset(&cmd);
-      break;
+        normal_exec_motion(ch);
+        break;
     case '/':
       search_init(1);
       editor_needs_draw();
