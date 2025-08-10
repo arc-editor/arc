@@ -60,7 +60,14 @@ void run_normal_tests(void) {
     test_helper("test_O_in_middle_of_line", "hello\nworld", 1, 2, "O", "hello\n\nworld");
     test_helper("test_o_at_end_of_file", "hello", 0, 5, "o", "hello\n");
     test_helper("test_O_at_start_of_file", "hello", 0, 0, "O", "\nhello");
+    // s
+    test_helper("test_s_at_start_of_word", "hello world", 0, 0, "sH", "Hello world");
+    test_helper("test_s_in_middle_of_word", "hello world", 0, 2, "sL", "heLlo world");
+    test_helper("test_s_at_end_of_word", "hello world", 0, 4, "sO", "hellO world");
 
+    // S
+    test_helper("test_S_on_line_with_content", "hello world\ngoodbye", 0, 3, "SNew", "New\ngoodbye");
+    test_helper("test_S_on_empty_line", "hello\n\nworld", 1, 0, "SNew", "hello\nNew\nworld");
     // J
     test_helper("test_J_join_lines", "hello\nworld", 0, 2, "J", "hello world");
     test_helper("test_J_on_last_line", "hello", 0, 2, "J", "hello");

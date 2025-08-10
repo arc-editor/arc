@@ -337,6 +337,16 @@ int normal_handle_input(const char *ch_str) {
     case 'x':
       editor_delete();
       break;
+    case 's':
+      editor_delete();
+      normal_insertion_registration_init();
+      editor_handle_input = insert_handle_input;
+      break;
+    case 'S':
+      editor_clear_line();
+      normal_insertion_registration_init();
+      editor_handle_input = insert_handle_input;
+      break;
     case 'a':
       normal_insertion_registration_init();
       editor_handle_input = insert_handle_input;

@@ -1174,6 +1174,26 @@ void editor_delete() {
     pthread_mutex_unlock(&editor_mutex);
 }
 
+void editor_clear_line(void) {
+    pthread_mutex_lock(&editor_mutex);
+    Buffer *b = editor_get_active_buffer();
+    EditorCommand cmd = {0};
+    Range range = {
+        .y_start = b->position_y,
+        .y_end = b->position_y,
+        .x_start = 0,
+        .x_end = b->lines[b->position_y]->char_count,
+    };
+    if (range.x_start != range.x_end) {
+        range_delete(b, &range, &cmd);
+        editor_did_change_buffer();
+    }
+    b->position_x = 0;
+    buffer_update_current_search_match(b);
+    b->needs_draw = 1;
+    pthread_mutex_unlock(&editor_mutex);
+}
+
 void editor_backspace() {
     pthread_mutex_lock(&editor_mutex);
     BufferLine *line = buffer->lines[buffer->position_y];
