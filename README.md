@@ -26,12 +26,12 @@ Here is a comparison of startup time and memory usage for `arc` against other po
 <!-- BENCHMARK_TABLE_START -->
 | File Size | Application | Startup Time (ms) | Memory Used (MB) |
 |-----------|-------------|-------------------|------------------|
-| 10 KB     | arc         | `0`          | `3.12`     |
-| 10 KB     | neovim      | `10.00`         | `10.23`    |
-| 10 KB     | helix       | `10.00`        | `13.98`   |
-| 10 MB     | arc         | `640.00`          | `147.50`     |
-| 10 MB     | neovim      | `50.00`         | `24.72`    |
-| 10 MB     | helix       | `10.00`        | `14.16`   |
+| 10 KB     | arc         | `0`          | `3.08`     |
+| 10 KB     | neovim      | `10.00`         | `10.13`    |
+| 10 KB     | helix       | `10.00`        | `14.05`   |
+| 10 MB     | arc         | `660.00`          | `147.57`     |
+| 10 MB     | neovim      | `50.00`         | `24.92`    |
+| 10 MB     | helix       | `10.00`        | `13.64`   |
 
 <!-- BENCHMARK_TABLE_END -->
 
