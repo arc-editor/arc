@@ -1447,7 +1447,7 @@ void range_expand_B(BufferLine *line, int count, Range *range) {
 }
 
 static void get_target_range(EditorCommand *cmd, Range *range) {
-    if (editor_handle_input == visual_handle_input && cmd->action) {
+    if (editor_handle_input == visual_handle_input && cmd->action && cmd->action != 'g') {
         range->x_start = buffer->selection_start_x;
         range->y_start = buffer->selection_start_y;
         range->x_end = buffer->position_x;
