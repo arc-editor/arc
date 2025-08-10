@@ -18,21 +18,16 @@ jobs:
           echo "$(pwd)/helix-${HELIX_VERSION}-x86_64-linux" >> $GITHUB_PATH
       - name: Build arc
         run: make
+      - name: Run tests
+        run: make test
 
       # Create files
       - name: Create test files
         run: |
-          dd if=/dev/urandom of=random_1kb.txt bs=1K count=1
-          dd if=/dev/urandom of=random_10kb.txt bs=1K count=10
-          dd if=/dev/urandom of=random_10mb.txt bs=1M count=10
-
-      # 1KB Benchmarks
-      - name: Run arc benchmark (1KB)
-        run: /usr/bin/time -v ./build/arc --benchmark random_1kb.txt 2> arc_1kb_time.log
-      - name: Run neovim benchmark (1KB)
-        run: /usr/bin/time -v nvim --headless -c 'q!' random_1kb.txt 2> nvim_1kb_time.log
-      - name: Run helix benchmark (1KB)
-        run: timeout 2s /usr/bin/time -v hx random_1kb.txt 2> helix_1kb_time.log || true
+          # 10KB file with 25-char lines
+          cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 25 | head -n 394 > random_10kb.txt
+          # 10MB file with 25-char lines
+          cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 25 | head -n 403298 > random_10mb.txt
 
       # 10KB Benchmarks
       - name: Run arc benchmark (10KB)
@@ -79,9 +74,6 @@ jobs:
             echo "$ms $mem_mb"
           }
 
-          ARC_1KB_RESULTS=($(parse_results arc_1kb_time.log))
-          NVIM_1KB_RESULTS=($(parse_results nvim_1kb_time.log))
-          HELIX_1KB_RESULTS=($(parse_results helix_1kb_time.log))
           ARC_10KB_RESULTS=($(parse_results arc_10kb_time.log))
           NVIM_10KB_RESULTS=($(parse_results nvim_10kb_time.log))
           HELIX_10KB_RESULTS=($(parse_results helix_10kb_time.log))
@@ -93,9 +85,6 @@ jobs:
           echo "### Benchmark Results" >> $GITHUB_STEP_SUMMARY
           echo "| File Size | Application | Startup Time (ms) | Memory Used (MB) |" >> $GITHUB_STEP_SUMMARY
           echo "|-----------|-------------|-------------------|------------------|" >> $GITHUB_STEP_SUMMARY
-          echo "| 1 KB      | arc         | \`${ARC_1KB_RESULTS[0]}\`           | \`${ARC_1KB_RESULTS[1]}\`      |" >> $GITHUB_STEP_SUMMARY
-          echo "| 1 KB      | neovim      | \`${NVIM_1KB_RESULTS[0]}\`          | \`${NVIM_1KB_RESULTS[1]}\`     |" >> $GITHUB_STEP_SUMMARY
-          echo "| 1 KB      | helix       | \`${HELIX_1KB_RESULTS[0]}\`         | \`${HELIX_1KB_RESULTS[1]}\`    |" >> $GITHUB_STEP_SUMMARY
           echo "| 10 KB     | arc         | \`${ARC_10KB_RESULTS[0]}\`          | \`${ARC_10KB_RESULTS[1]}\`     |" >> $GITHUB_STEP_SUMMARY
           echo "| 10 KB     | neovim      | \`${NVIM_10KB_RESULTS[0]}\`         | \`${NVIM_10KB_RESULTS[1]}\`    |" >> $GITHUB_STEP_SUMMARY
           echo "| 10 KB     | helix       | \`${HELIX_10KB_RESULTS[0]}\`        | \`${HELIX_10KB_RESULTS[1]}\`   |" >> $GITHUB_STEP_SUMMARY
