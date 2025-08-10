@@ -2088,7 +2088,7 @@ void editor_center_view(void) {
 
 void editor_scroll_to_top(void) {
     pthread_mutex_lock(&editor_mutex);
-    buffer->offset_y = buffer->position_y;
+    buffer->offset_y = buffer->position_y - 5;
     if (buffer->offset_y < 0) {
         buffer->offset_y = 0;
     }
@@ -2098,7 +2098,7 @@ void editor_scroll_to_top(void) {
 
 void editor_scroll_to_bottom(void) {
     pthread_mutex_lock(&editor_mutex);
-    buffer->offset_y = buffer->position_y - editor.screen_rows + 2;
+    buffer->offset_y = buffer->position_y - editor.screen_rows + 2 + 5;
     if (buffer->offset_y < 0) {
         buffer->offset_y = 0;
     }
