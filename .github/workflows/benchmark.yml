@@ -24,10 +24,10 @@ jobs:
       # Create files
       - name: Create test files
         run: |
-          # 10KB file with 25-char lines
-          cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 25 | head -n 394 > random_10kb.txt
-          # 10MB file with 25-char lines
-          cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 25 | head -n 403298 > random_10mb.txt
+          # 10KB file with 25-char lines (approx 10.2KB)
+          head -c 41000 /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 25 | head -n 394 > random_10kb.txt
+          # 10MB file with 25-char lines (approx 10.5MB)
+          head -c 42000000 /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 25 | head -n 403298 > random_10mb.txt
 
       # 10KB Benchmarks
       - name: Run arc benchmark (10KB)
