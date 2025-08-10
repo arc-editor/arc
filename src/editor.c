@@ -1977,9 +1977,10 @@ void editor_command_exec(EditorCommand *cmd) {
     Range range;
     get_target_range(cmd, &range);
 
-    if (editor_handle_input == visual_handle_input && !cmd->action) {
+    if (editor_handle_input == visual_handle_input && (!cmd->action || cmd->action == 'g')) {
         buffer->position_x = range.x_end;
         buffer->position_y = range.y_end;
+        editor_command_reset(cmd);
         editor_request_redraw();
         pthread_mutex_unlock(&editor_mutex);
         return;
