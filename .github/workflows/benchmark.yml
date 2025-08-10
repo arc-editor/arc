@@ -10,31 +10,55 @@ jobs:
         with:
           submodules: true
       - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y clang neovim bc
-      - name: Build
+        run: sudo apt-get update && sudo apt-get install -y clang neovim bc curl
+      - name: Install Helix
+        run: |
+          HELIX_VERSION="23.10"
+          curl -L "https://github.com/helix-editor/helix/releases/download/${HELIX_VERSION}/helix-${HELIX_VERSION}-x86_64-linux.tar.xz" | tar -xJ
+          echo "$(pwd)/helix-${HELIX_VERSION}-x86_64-linux" >> $GITHUB_PATH
+      - name: Build arc
         run: make
 
-      # 10MB Benchmark
-      - name: Create 10MB random file
-        run: dd if=/dev/urandom of=random_10mb.txt bs=1M count=10
-      - name: Run arc benchmark (10MB)
-        run: /usr/bin/time -v ./build/arc --benchmark random_10mb.txt 2> arc_10mb_time.log
-      - name: Run neovim benchmark (10MB)
-        run: /usr/bin/time -v nvim --headless -c 'q!' random_10mb.txt 2> nvim_10mb_time.log
+      # Create files
+      - name: Create test files
+        run: |
+          dd if=/dev/urandom of=random_1kb.txt bs=1K count=1
+          dd if=/dev/urandom of=random_10kb.txt bs=1K count=10
+          dd if=/dev/urandom of=random_10mb.txt bs=1M count=10
 
-      # 1KB Benchmark
-      - name: Create 1KB random file
-        run: dd if=/dev/urandom of=random_1kb.txt bs=1K count=1
+      # 1KB Benchmarks
       - name: Run arc benchmark (1KB)
         run: /usr/bin/time -v ./build/arc --benchmark random_1kb.txt 2> arc_1kb_time.log
       - name: Run neovim benchmark (1KB)
         run: /usr/bin/time -v nvim --headless -c 'q!' random_1kb.txt 2> nvim_1kb_time.log
+      - name: Run helix benchmark (1KB)
+        run: timeout 2s /usr/bin/time -v hx random_1kb.txt 2> helix_1kb_time.log || true
+
+      # 10KB Benchmarks
+      - name: Run arc benchmark (10KB)
+        run: /usr/bin/time -v ./build/arc --benchmark random_10kb.txt 2> arc_10kb_time.log
+      - name: Run neovim benchmark (10KB)
+        run: /usr/bin/time -v nvim --headless -c 'q!' random_10kb.txt 2> nvim_10kb_time.log
+      - name: Run helix benchmark (10KB)
+        run: timeout 2s /usr/bin/time -v hx random_10kb.txt 2> helix_10kb_time.log || true
+
+      # 10MB Benchmarks
+      - name: Run arc benchmark (10MB)
+        run: /usr/bin/time -v ./build/arc --benchmark random_10mb.txt 2> arc_10mb_time.log
+      - name: Run neovim benchmark (10MB)
+        run: /usr/bin/time -v nvim --headless -c 'q!' random_10mb.txt 2> nvim_10mb_time.log
+      - name: Run helix benchmark (10MB)
+        run: timeout 2s /usr/bin/time -v hx random_10mb.txt 2> helix_10mb_time.log || true
 
       - name: Generate report
         run: |
           # Function to parse time and memory
           parse_results() {
             local log_file=$1
+            if [ ! -f "$log_file" ]; then
+              echo "N/A N/A"
+              return
+            fi
             local wall_time_str=$(grep 'Elapsed (wall clock) time' $log_file | awk '{print $NF}')
             local total_seconds
             if echo "$wall_time_str" | grep -q '.*:.*:.*'; then
@@ -42,10 +66,12 @@ jobs:
               local minutes=$(echo $wall_time_str | cut -d: -f2)
               local seconds=$(echo $wall_time_str | cut -d: -f3)
               total_seconds=$(echo "$hours*3600 + $minutes*60 + $seconds" | bc)
-            else
+            elif echo "$wall_time_str" | grep -q '.*:.*'; then
               local minutes=$(echo $wall_time_str | cut -d: -f1)
               local seconds=$(echo $wall_time_str | cut -d: -f2)
               total_seconds=$(echo "$minutes*60 + $seconds" | bc)
+            else
+              total_seconds=$wall_time_str
             fi
             local ms=$(echo "$total_seconds * 1000" | bc)
             local mem_kb=$(grep 'Maximum resident set size' $log_file | awk '{print $NF}')
@@ -53,16 +79,26 @@ jobs:
             echo "$ms $mem_mb"
           }
 
-          ARC_10MB_RESULTS=($(parse_results arc_10mb_time.log))
-          NVIM_10MB_RESULTS=($(parse_results nvim_10mb_time.log))
           ARC_1KB_RESULTS=($(parse_results arc_1kb_time.log))
           NVIM_1KB_RESULTS=($(parse_results nvim_1kb_time.log))
+          HELIX_1KB_RESULTS=($(parse_results helix_1kb_time.log))
+          ARC_10KB_RESULTS=($(parse_results arc_10kb_time.log))
+          NVIM_10KB_RESULTS=($(parse_results nvim_10kb_time.log))
+          HELIX_10KB_RESULTS=($(parse_results helix_10kb_time.log))
+          ARC_10MB_RESULTS=($(parse_results arc_10mb_time.log))
+          NVIM_10MB_RESULTS=($(parse_results nvim_10mb_time.log))
+          HELIX_10MB_RESULTS=($(parse_results helix_10mb_time.log))
 
           # Create the markdown table and append to the job summary
           echo "### Benchmark Results" >> $GITHUB_STEP_SUMMARY
           echo "| File Size | Application | Startup Time (ms) | Memory Used (MB) |" >> $GITHUB_STEP_SUMMARY
           echo "|-----------|-------------|-------------------|------------------|" >> $GITHUB_STEP_SUMMARY
-          echo "| 10 MB     | arc         | \`${ARC_10MB_RESULTS[0]}\`           | \`${ARC_10MB_RESULTS[1]}\`      |" >> $GITHUB_STEP_SUMMARY
-          echo "| 10 MB     | neovim      | \`${NVIM_10MB_RESULTS[0]}\`          | \`${NVIM_10MB_RESULTS[1]}\`     |" >> $GITHUB_STEP_SUMMARY
           echo "| 1 KB      | arc         | \`${ARC_1KB_RESULTS[0]}\`           | \`${ARC_1KB_RESULTS[1]}\`      |" >> $GITHUB_STEP_SUMMARY
           echo "| 1 KB      | neovim      | \`${NVIM_1KB_RESULTS[0]}\`          | \`${NVIM_1KB_RESULTS[1]}\`     |" >> $GITHUB_STEP_SUMMARY
+          echo "| 1 KB      | helix       | \`${HELIX_1KB_RESULTS[0]}\`         | \`${HELIX_1KB_RESULTS[1]}\`    |" >> $GITHUB_STEP_SUMMARY
+          echo "| 10 KB     | arc         | \`${ARC_10KB_RESULTS[0]}\`          | \`${ARC_10KB_RESULTS[1]}\`     |" >> $GITHUB_STEP_SUMMARY
+          echo "| 10 KB     | neovim      | \`${NVIM_10KB_RESULTS[0]}\`         | \`${NVIM_10KB_RESULTS[1]}\`    |" >> $GITHUB_STEP_SUMMARY
+          echo "| 10 KB     | helix       | \`${HELIX_10KB_RESULTS[0]}\`        | \`${HELIX_10KB_RESULTS[1]}\`   |" >> $GITHUB_STEP_SUMMARY
+          echo "| 10 MB     | arc         | \`${ARC_10MB_RESULTS[0]}\`          | \`${ARC_10MB_RESULTS[1]}\`     |" >> $GITHUB_STEP_SUMMARY
+          echo "| 10 MB     | neovim      | \`${NVIM_10MB_RESULTS[0]}\`         | \`${NVIM_10MB_RESULTS[1]}\`    |" >> $GITHUB_STEP_SUMMARY
+          echo "| 10 MB     | helix       | \`${HELIX_10MB_RESULTS[0]}\`        | \`${HELIX_10MB_RESULTS[1]}\`   |" >> $GITHUB_STEP_SUMMARY
