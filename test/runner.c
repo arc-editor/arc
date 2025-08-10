@@ -33,6 +33,7 @@ void test_helper(const char* test_name, const char* initial_content, int start_y
 
     char *result = buffer_get_content(buffer);
     ASSERT_STRING_EQUAL(test_name, result, expected_content);
+    editor_close_buffer(editor_get_active_buffer_idx());
 
     free(result);
     remove(filename);
@@ -63,6 +64,7 @@ void test_visual_motion_helper(const char* test_name, const char* initial_conten
     ASSERT_EQUAL(test_name, buffer->position_y, end_y);
     ASSERT_EQUAL(test_name, buffer->position_x, end_x);
 
+    editor_close_buffer(editor_get_active_buffer_idx());
     remove(filename);
 }
 
@@ -88,6 +90,7 @@ void test_motion_helper(const char* test_name, const char* initial_content, int 
     ASSERT_EQUAL(test_name, buffer->position_y, end_y);
     ASSERT_EQUAL(test_name, buffer->position_x, end_x);
 
+    editor_close_buffer(editor_get_active_buffer_idx());
     remove(filename);
 }
 
@@ -114,6 +117,7 @@ void test_visual_action_helper(const char* test_name, const char* initial_conten
     char *result = buffer_get_content(buffer);
     ASSERT_STRING_EQUAL(test_name, result, expected_content);
 
+    editor_close_buffer(editor_get_active_buffer_idx());
     free(result);
     remove(filename);
 }
