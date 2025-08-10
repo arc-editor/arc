@@ -77,6 +77,7 @@ void editor_insert_new_line();
 void editor_write();
 void editor_write_force();
 void editor_delete();
+void editor_clear_line(void);
 void editor_backspace();
 void editor_move_n_lines_down(int n);
 void editor_move_n_lines_up(int n);
