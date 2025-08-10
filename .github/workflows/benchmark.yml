@@ -25,9 +25,9 @@ jobs:
         run: make
       - name: Get binary sizes
         run: |
-          echo "ARC_SIZE_KB=$(du -k ./build/arc | cut -f1)KB" >> $GITHUB_ENV
-          echo "NVIM_SIZE_KB=$(du -k $(which nvim) | cut -f1)KB" >> $GITHUB_ENV
-          echo "HELIX_SIZE_KB=$(du -k $(which hx) | cut -f1)KB" >> $GITHUB_ENV
+          echo "ARC_SIZE_MB=$(echo "scale=1; $(du -k ./build/arc | cut -f1)/1024" | bc)MB" >> $GITHUB_ENV
+          echo "NVIM_SIZE_MB=$(echo "scale=1; $(du -k $(which nvim) | cut -f1)/1024" | bc)MB" >> $GITHUB_ENV
+          echo "HELIX_SIZE_MB=$(echo "scale=1; $(du -k $(which hx) | cut -f1)/1024" | bc)MB" >> $GITHUB_ENV
       - name: Run tests
         run: make test
 
@@ -99,7 +99,7 @@ jobs:
             echo "| Memory Used (MB) (10KB)  | \`${ARC_10KB_RESULTS[1]}\` | \`${NVIM_10KB_RESULTS[1]}\` | \`${HELIX_10KB_RESULTS[1]}\` |"
             echo "| Startup Time (ms) (10MB) | \`${ARC_10MB_RESULTS[0]}\` | \`${NVIM_10MB_RESULTS[0]}\` | \`${HELIX_10MB_RESULTS[0]}\` |"
             echo "| Memory Used (MB) (10MB)  | \`${ARC_10MB_RESULTS[1]}\` | \`${NVIM_10MB_RESULTS[1]}\` | \`${HELIX_10MB_RESULTS[1]}\` |"
-            echo "| Binary Size (KB)         | \`${{ env.ARC_SIZE_KB }}\` | \`${{ env.NVIM_SIZE_KB }}\` | \`${{ env.HELIX_SIZE_KB }}\` |"
+            echo "| Binary Size (MB)         | \`${{ env.ARC_SIZE_MB }}\` | \`${{ env.NVIM_SIZE_MB }}\` | \`${{ env.HELIX_SIZE_MB }}\` |"
           } > benchmark_results.md
 
       - name: Update README.md
