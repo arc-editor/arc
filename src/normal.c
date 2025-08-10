@@ -296,6 +296,22 @@ int normal_handle_input(const char *ch_str) {
     case 'U':
       editor_redo();
       break;
+    case 'J':
+      {
+        Buffer *buf = editor_get_active_buffer();
+        if (buf->position_y < buf->line_count - 1) {
+            history_start_coalescing(buf->history);
+            editor_move_to_end_of_line();
+            int original_x = buf->position_x;
+            if (original_x > 0) {
+                editor_insert_char(" ");
+            }
+            editor_delete();
+            buf->position_x = original_x;
+            history_end_coalescing(buf->history);
+        }
+      }
+      break;
     case 'V':
       {
         Buffer *buffer = editor_get_active_buffer();
