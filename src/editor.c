@@ -267,6 +267,16 @@ static int is_in_selection(int y, int x) {
     int start_x = buf->selection_start_x;
     int end_y = buf->position_y;
     int end_x = buf->position_x;
+
+    if (buf->visual_mode == VISUAL_MODE_LINE) {
+        if (start_y > end_y) {
+            int tmp = start_y;
+            start_y = end_y;
+            end_y = tmp;
+        }
+        return y >= start_y && y <= end_y;
+    }
+
     if ((end_x <= start_x && end_y <= start_y) || end_y < start_y) start_x++;
 
     if (start_y > end_y || (start_y == end_y && start_x > end_x)) {
@@ -1457,23 +1467,34 @@ void range_expand_B(BufferLine *line, int count, Range *range) {
 
 static void get_target_range(EditorCommand *cmd, Range *range) {
     if (editor_handle_input == visual_handle_input && cmd->action && cmd->action != 'g') {
-        range->x_start = buffer->selection_start_x;
         range->y_start = buffer->selection_start_y;
-        range->x_end = buffer->position_x;
         range->y_end = buffer->position_y;
-        if (range->y_start == range->y_end) {
-            if (range->x_end >= range->x_start) {
-                range->x_end++;
-            } else {
-                range->x_start++;
+
+        if (buffer->visual_mode == VISUAL_MODE_LINE) {
+            if (range->y_start > range->y_end) {
+                int tmp = range->y_start;
+                range->y_start = range->y_end;
+                range->y_end = tmp;
             }
-        } else if (range->y_end > range->y_start) {
-            if (buffer->lines[range->y_end]->char_count > 0) {
-                range->x_end++;
-            }
+            range->x_start = 0;
+            range->x_end = buffer->lines[range->y_end]->char_count;
         } else {
-            if (buffer->lines[range->y_start]->char_count > 0) {
-                range->x_start++;
+            range->x_start = buffer->selection_start_x;
+            range->x_end = buffer->position_x;
+            if (range->y_start == range->y_end) {
+                if (range->x_end >= range->x_start) {
+                    range->x_end++;
+                } else {
+                    range->x_start++;
+                }
+            } else if (range->y_end > range->y_start) {
+                if (buffer->lines[range->y_end]->char_count > 0) {
+                    range->x_end++;
+                }
+            } else {
+                if (buffer->lines[range->y_start]->char_count > 0) {
+                    range->x_start++;
+                }
             }
         }
         return;

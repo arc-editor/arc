@@ -296,9 +296,21 @@ int normal_handle_input(const char *ch_str) {
     case 'U':
       editor_redo();
       break;
+    case 'V':
+      {
+        Buffer *buffer = editor_get_active_buffer();
+        buffer->visual_mode = VISUAL_MODE_LINE;
+        buffer->selection_start_x = buffer->position_x;
+        buffer->selection_start_y = buffer->position_y;
+        editor_handle_input = visual_handle_input;
+        visual_mode_enter();
+        editor_request_redraw();
+      }
+      break;
     case 'v':
       {
         Buffer *buffer = editor_get_active_buffer();
+        buffer->visual_mode = VISUAL_MODE_CHARACTER;
         buffer->selection_start_x = buffer->position_x;
         buffer->selection_start_y = buffer->position_y;
         editor_handle_input = visual_handle_input;

@@ -37,6 +37,7 @@ int visual_handle_input(const char *ch_str) {
 
     switch (ch) {
         case 27: // ESC
+            editor_get_active_buffer()->visual_mode = VISUAL_MODE_NONE;
             editor_handle_input = normal_handle_input;
             editor_request_redraw();
             editor_command_reset(&cmd);
@@ -59,6 +60,7 @@ int visual_handle_input(const char *ch_str) {
             cmd.action = ch;
             editor_command_exec(&cmd);
             editor_command_reset(&cmd);
+            editor_get_active_buffer()->visual_mode = VISUAL_MODE_NONE;
             break;
         default:
             normal_exec_motion(ch);

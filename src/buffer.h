@@ -6,6 +6,12 @@
 #include "theme.h"
 #include "history.h"
 
+typedef enum {
+    VISUAL_MODE_NONE,
+    VISUAL_MODE_CHARACTER,
+    VISUAL_MODE_LINE,
+} VisualMode;
+
 typedef struct __attribute__((packed)) {
     char value[5];
     unsigned char width;
@@ -36,6 +42,7 @@ typedef struct {
     int position_x;
     int selection_start_y;
     int selection_start_x;
+    VisualMode visual_mode;
     int offset_y;
     int offset_x;
     char *read_buffer;
