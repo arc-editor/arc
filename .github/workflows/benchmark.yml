@@ -23,8 +23,11 @@ jobs:
           echo "$(pwd)/helix-${HELIX_VERSION}-x86_64-linux" >> $GITHUB_PATH
       - name: Build arc
         run: make
-      - name: Get arc binary size
-        run: echo "ARC_SIZE_MB=$(du -m ./build/arc | cut -f1)MB" >> $GITHUB_ENV
+      - name: Get binary sizes
+        run: |
+          echo "ARC_SIZE_KB=$(du -k ./build/arc | cut -f1)KB" >> $GITHUB_ENV
+          echo "NVIM_SIZE_KB=$(du -k $(which nvim) | cut -f1)KB" >> $GITHUB_ENV
+          echo "HELIX_SIZE_KB=$(du -k $(which hx) | cut -f1)KB" >> $GITHUB_ENV
       - name: Run tests
         run: make test
 
@@ -90,14 +93,13 @@ jobs:
 
           # Create the markdown table and write to a file
           {
-            echo "| File Size | Application | Startup Time (ms) | Memory Used (MB) | Binary Size (MB) |"
-            echo "|-----------|-------------|-------------------|------------------|------------------|"
-            echo "| 10 KB     | arc         | \`${ARC_10KB_RESULTS[0]}\`          | \`${ARC_10KB_RESULTS[1]}\`     | \`${{ env.ARC_SIZE_MB }}\`           |"
-            echo "| 10 KB     | neovim      | \`${NVIM_10KB_RESULTS[0]}\`         | \`${NVIM_10KB_RESULTS[1]}\`    | N/A              |"
-            echo "| 10 KB     | helix       | \`${HELIX_10KB_RESULTS[0]}\`        | \`${HELIX_10KB_RESULTS[1]}\`   | N/A              |"
-            echo "| 10 MB     | arc         | \`${ARC_10MB_RESULTS[0]}\`          | \`${ARC_10MB_RESULTS[1]}\`     | \`${{ env.ARC_SIZE_MB }}\`           |"
-            echo "| 10 MB     | neovim      | \`${NVIM_10MB_RESULTS[0]}\`         | \`${NVIM_10MB_RESULTS[1]}\`    | N/A              |"
-            echo "| 10 MB     | helix       | \`${HELIX_10MB_RESULTS[0]}\`        | \`${HELIX_10MB_RESULTS[1]}\`   | N/A              |"
+            echo "| Benchmark (File Size)    | \`arc\` | \`neovim\` | \`helix\` |"
+            echo "|--------------------------|---|---|---|"
+            echo "| Startup Time (ms) (10KB) | \`${ARC_10KB_RESULTS[0]}\` | \`${NVIM_10KB_RESULTS[0]}\` | \`${HELIX_10KB_RESULTS[0]}\` |"
+            echo "| Memory Used (MB) (10KB)  | \`${ARC_10KB_RESULTS[1]}\` | \`${NVIM_10KB_RESULTS[1]}\` | \`${HELIX_10KB_RESULTS[1]}\` |"
+            echo "| Startup Time (ms) (10MB) | \`${ARC_10MB_RESULTS[0]}\` | \`${NVIM_10MB_RESULTS[0]}\` | \`${HELIX_10MB_RESULTS[0]}\` |"
+            echo "| Memory Used (MB) (10MB)  | \`${ARC_10MB_RESULTS[1]}\` | \`${NVIM_10MB_RESULTS[1]}\` | \`${HELIX_10MB_RESULTS[1]}\` |"
+            echo "| Binary Size (KB)         | \`${{ env.ARC_SIZE_KB }}\` | \`${{ env.NVIM_SIZE_KB }}\` | \`${{ env.HELIX_SIZE_KB }}\` |"
           } > benchmark_results.md
 
       - name: Update README.md
