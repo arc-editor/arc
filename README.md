@@ -24,14 +24,14 @@ Arc is born from a love of Vim's powerful keybindings and the simplicity of "bat
 Here is a comparison of startup time and memory usage for `arc` against other popular terminal-based editors. These benchmarks are run automatically on every push to the `main` branch.
 
 <!-- BENCHMARK_TABLE_START -->
-| File Size | Application | Startup Time (ms) | Memory Used (MB) |
-|-----------|-------------|-------------------|------------------|
-| 10 KB     | arc         | `0`          | `3.08`     |
-| 10 KB     | neovim      | `10.00`         | `10.13`    |
-| 10 KB     | helix       | `10.00`        | `14.05`   |
-| 10 MB     | arc         | `660.00`          | `147.57`     |
-| 10 MB     | neovim      | `50.00`         | `24.92`    |
-| 10 MB     | helix       | `10.00`        | `13.64`   |
+| File Size | Application | Startup Time (ms) | Memory Used (MB) | Binary Size (MB) |
+|-----------|-------------|-------------------|------------------|------------------|
+| 10 KB     | arc         | `0`          | `3.02`     | `1MB`           |
+| 10 KB     | neovim      | `10.00`         | `10.29`    | N/A              |
+| 10 KB     | helix       | `10.00`        | `14.11`   | N/A              |
+| 10 MB     | arc         | `630.00`          | `147.38`     | `1MB`           |
+| 10 MB     | neovim      | `50.00`         | `24.89`    | N/A              |
+| 10 MB     | helix       | `10.00`        | `14.19`   | N/A              |
 
 <!-- BENCHMARK_TABLE_END -->
 
