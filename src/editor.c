@@ -551,7 +551,7 @@ void editor_did_change_buffer() {
     }
     buffer->version++;
 
-    if (buffer->file_name) {
+    if (buffer->file_name && lsp_is_running()) {
         char *content = buffer_get_content(buffer);
         if (content) {
             char absolute_path[PATH_MAX];
@@ -774,12 +774,14 @@ void editor_open(char *file_name) {
 
         char absolute_path[PATH_MAX];
         if (realpath(file_name, absolute_path) != NULL) {
-            char *content = buffer_get_content(buffer);
-            if (content) {
-                char file_uri[PATH_MAX + 7];
-                snprintf(file_uri, sizeof(file_uri), "file://%s", absolute_path);
-                lsp_did_open(file_uri, "c", content);
-                free(content);
+            if (lsp_is_running()) {
+                char *content = buffer_get_content(buffer);
+                if (content) {
+                    char file_uri[PATH_MAX + 7];
+                    snprintf(file_uri, sizeof(file_uri), "file://%s", absolute_path);
+                    lsp_did_open(file_uri, "c", content);
+                    free(content);
+                }
             }
         }
 

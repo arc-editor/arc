@@ -20,7 +20,10 @@ void lsp_init(void);
 void lsp_shutdown(void);
 int lsp_get_diagnostics(const char *file_path, Diagnostic **diagnostics, int *diagnostic_count);
 // int lsp_get_diagnostics(Diagnostic **out_diagnostics, int *out_diagnostic_count);
+#include <stdbool.h>
+
 void lsp_did_open(const char *file_path, const char *language_id, const char *text);
 void lsp_did_change(const char *file_path, const char *text, int version);
+bool lsp_is_running(void);
 
 #endif // LSP_H

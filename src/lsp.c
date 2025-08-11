@@ -396,3 +396,7 @@ int lsp_get_diagnostics(const char *file_name __attribute__((unused)), Diagnosti
     pthread_mutex_unlock(&diagnostics_mutex);
     return version;
 }
+
+bool lsp_is_running(void) {
+    return lsp_server_pid > 0;
+}
