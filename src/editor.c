@@ -1278,6 +1278,8 @@ void editor_backspace() {
         }
     }
 
+    buffer_reset_offset_x(buffer, editor.screen_cols);
+    buffer_reset_offset_y(buffer, editor.screen_rows);
     editor_did_change_buffer();
     pthread_mutex_unlock(&editor_mutex);
 }
