@@ -627,9 +627,9 @@ void editor_insert_new_line() {
 
     buffer_realloc_lines_for_capacity(buffer);
 
-    for (int i = buffer->line_count; i > buffer->position_y + 1; i--) {
-        buffer->lines[i] = buffer->lines[i - 1];
-    }
+    memmove(&buffer->lines[buffer->position_y + 2],
+            &buffer->lines[buffer->position_y + 1],
+            (buffer->line_count - buffer->position_y - 1) * sizeof(BufferLine *));
 
     buffer->lines[buffer->position_y + 1] = (BufferLine *)malloc(sizeof(BufferLine));
     if (buffer->lines[buffer->position_y + 1] == NULL) {
@@ -1139,9 +1139,9 @@ void editor_delete() {
         line->char_count = new_char_count;
         buffer_line_destroy(next_line);
 
-        for (int i = buffer->position_y + 1; i < buffer->line_count - 1; i++) {
-            buffer->lines[i] = buffer->lines[i + 1];
-        }
+        memmove(&buffer->lines[buffer->position_y + 1],
+                &buffer->lines[buffer->position_y + 2],
+                (buffer->line_count - buffer->position_y - 2) * sizeof(BufferLine *));
         buffer->line_count--;
         buffer_set_line_num_width(buffer);
         if (buffer->parser && buffer->tree) {
@@ -1231,9 +1231,9 @@ void editor_backspace() {
             prev_line->needs_highlight = 1;
         }
 
-        for (int i = buffer->position_y; i < buffer->line_count - 1; i++) {
-            buffer->lines[i] = buffer->lines[i + 1];
-        }
+        memmove(&buffer->lines[buffer->position_y],
+                &buffer->lines[buffer->position_y + 1],
+                (buffer->line_count - buffer->position_y - 1) * sizeof(BufferLine *));
         buffer->line_count--;
         buffer_set_line_num_width(buffer);
         if (buffer->parser && buffer->tree) {
