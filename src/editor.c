@@ -724,6 +724,32 @@ void setup_terminal() {}
 
 #include <stdbool.h>
 
+static void editor_setup_lsp(const char *file_name) {
+    if (!file_name) {
+        return;
+    }
+    char absolute_path[PATH_MAX];
+    if (realpath(file_name, absolute_path) != NULL) {
+        if (!lsp_is_running()) {
+            lsp_init(file_name);
+        }
+        if (lsp_is_running()) {
+            char *content = buffer_get_content(buffer);
+            if (content) {
+                char file_uri[PATH_MAX + 7];
+                snprintf(file_uri, sizeof(file_uri), "file://%s", absolute_path);
+                const char *ext = strrchr(file_name, '.');
+                const char *language_id = "c";
+                if (ext && strcmp(ext, ".cpp") == 0) {
+                    language_id = "cpp";
+                }
+                lsp_did_open(file_uri, language_id, content);
+                free(content);
+            }
+        }
+    }
+}
+
 void editor_init(char *file_name, bool benchmark_mode) {
     if (!benchmark_mode) {
         init_terminal_size();
@@ -749,6 +775,7 @@ void editor_init(char *file_name, bool benchmark_mode) {
     buffer_set_line_num_width(buffer);
     config_load(&editor.config);
     config_load_theme(editor.config.theme, &editor.current_theme);
+    editor_setup_lsp(file_name);
 
     editor.last_search_term[0] = '\0';
     editor.last_search_direction = 1;
@@ -771,19 +798,7 @@ void editor_open(char *file_name) {
         buffer_set_line_num_width(buffer);
         editor_handle_input = normal_handle_input;
         buffer_update_search_matches(buffer, editor.last_search_term);
-
-        char absolute_path[PATH_MAX];
-        if (realpath(file_name, absolute_path) != NULL) {
-            if (lsp_is_running()) {
-                char *content = buffer_get_content(buffer);
-                if (content) {
-                    char file_uri[PATH_MAX + 7];
-                    snprintf(file_uri, sizeof(file_uri), "file://%s", absolute_path);
-                    lsp_did_open(file_uri, "c", content);
-                    free(content);
-                }
-            }
-        }
+        editor_setup_lsp(file_name);
 
         pthread_mutex_unlock(&editor_mutex);
         return;
@@ -808,17 +823,7 @@ void editor_open(char *file_name) {
     buffer_set_line_num_width(buffer);
     editor_handle_input = normal_handle_input;
     buffer_update_search_matches(buffer, editor.last_search_term);
-
-    char absolute_path[PATH_MAX];
-    if (realpath(file_name, absolute_path) != NULL) {
-        char *content = buffer_get_content(buffer);
-        if (content) {
-            char file_uri[PATH_MAX + 7];
-            snprintf(file_uri, sizeof(file_uri), "file://%s", absolute_path);
-            lsp_did_open(file_uri, "c", content);
-            free(content);
-        }
-    }
+    editor_setup_lsp(file_name);
 
     pthread_mutex_unlock(&editor_mutex);
 }

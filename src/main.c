@@ -5,7 +5,6 @@
 #include <stdbool.h>
 
 int main(int argc, char *argv[]) {
-    lsp_init();
     char *filename = NULL;
     bool benchmark_mode = false;
     for (int i = 1; i < argc; i++) {

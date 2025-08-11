@@ -214,7 +214,16 @@ cJSON *lsp_read_message() {
     }
 }
 
-void lsp_init(void) {
+void lsp_init(const char *file_name) {
+  if (!file_name) {
+    return;
+  }
+
+  const char *ext = strrchr(file_name, '.');
+  if (!ext || (strcmp(ext, ".c") != 0 && strcmp(ext, ".h") != 0 && strcmp(ext, ".cpp") != 0)) {
+    return;
+  }
+
   if (pipe(to_server_pipe) == -1 || pipe(from_server_pipe) == -1) {
     log_error("lsp.lsp_init: pipe failed");
     return;
