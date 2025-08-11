@@ -12,14 +12,12 @@ typedef enum {
     VISUAL_MODE_LINE,
 } VisualMode;
 
-typedef struct __attribute__((packed)) {
-    char value[5];
-    unsigned char width;
+typedef struct {
     unsigned char r;
     unsigned char g;
     unsigned char b;
     unsigned char style;
-} Char;
+} CharStyle;
 
 #define STYLE_ITALIC 1
 #define STYLE_BOLD 2
@@ -27,8 +25,11 @@ typedef struct __attribute__((packed)) {
 
 typedef struct {
     int char_count;
-    int capacity;
-    Char *chars;
+    int byte_count;
+    int char_capacity;
+    int byte_capacity;
+    char *text;
+    CharStyle *styles;
     int needs_highlight;
 } BufferLine;
 
@@ -82,6 +83,7 @@ void buffer_realloc_lines_for_capacity(Buffer *buffer);
 void buffer_reset_offset_y(Buffer *buffer, int screen_rows);
 void buffer_reset_offset_x(Buffer *buffer, int screen_cols);
 void buffer_set_logical_position_x(Buffer *buffer, int visual_before);
+void buffer_line_ensure_capacity(BufferLine *line, int new_char_capacity, int new_byte_capacity);
 void buffer_line_init(BufferLine *line);
 void buffer_line_destroy(BufferLine *line);
 void buffer_init(Buffer *b, char *file_name);

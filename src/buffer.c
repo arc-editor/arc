@@ -13,6 +13,47 @@
 #include "history.h"
 #include "utf8.h"
 
+static inline int utf8_char_len(const char *s) {
+    unsigned char c = (unsigned char)*s;
+    if (c < 0x80) return 1;
+    if ((c & 0xE0) == 0xC0) return 2;
+    if ((c & 0xF0) == 0xE0) return 3;
+    if ((c & 0xF8) == 0xF0) return 4;
+    return 1; // Fallback for invalid char
+}
+
+void buffer_line_ensure_capacity(BufferLine *line, int new_char_capacity, int new_byte_capacity) {
+    if (new_char_capacity > line->char_capacity) {
+        int old_capacity = line->char_capacity;
+        line->char_capacity = new_char_capacity > old_capacity * 2 ? new_char_capacity : old_capacity * 2;
+        if (line->char_capacity == 0) line->char_capacity = 4;
+        line->styles = realloc(line->styles, sizeof(CharStyle) * line->char_capacity);
+        if (!line->styles) {
+            log_error("buffer.buffer_line_ensure_capacity: realloc styles failed");
+            exit(1);
+        }
+    }
+    if (new_byte_capacity + 1 > line->byte_capacity) {
+        int old_capacity = line->byte_capacity;
+        line->byte_capacity = new_byte_capacity + 1 > old_capacity * 2 ? new_byte_capacity + 1 : old_capacity * 2;
+        if (line->byte_capacity == 0) line->byte_capacity = 8;
+        line->text = realloc(line->text, line->byte_capacity);
+        if (!line->text) {
+            log_error("buffer.buffer_line_ensure_capacity: realloc text failed");
+            exit(1);
+        }
+    }
+}
+
+static void buffer_line_append_char(BufferLine *line, const char *utf8_char, int char_len) {
+    buffer_line_ensure_capacity(line, line->char_count + 1, line->byte_count + char_len);
+    memcpy(line->text + line->byte_count, utf8_char, char_len);
+    line->byte_count += char_len;
+    line->text[line->byte_count] = '\0';
+    line->styles[line->char_count] = (CharStyle){ .r=255, .g=255, .b=255, .style=0 };
+    line->char_count++;
+}
+
 static char* line_to_string(BufferLine *line);
 
 void buffer_set_line_num_width(Buffer *buffer) {
@@ -26,10 +67,7 @@ void buffer_set_line_num_width(Buffer *buffer) {
 char *buffer_get_content(Buffer *b) {
     size_t total_len = 0;
     for (int i = 0; i < b->line_count; i++) {
-        BufferLine *line = b->lines[i];
-        for (int j = 0; j < line->char_count; j++) {
-            total_len += strlen(line->chars[j].value);
-        }
+        total_len += b->lines[i]->byte_count;
     }
     if (b->line_count > 0) {
         total_len += b->line_count - 1; // for newlines
@@ -44,12 +82,8 @@ char *buffer_get_content(Buffer *b) {
     char *p = content;
     for (int i = 0; i < b->line_count; i++) {
         BufferLine *line = b->lines[i];
-        for (int j = 0; j < line->char_count; j++) {
-            const char *val = line->chars[j].value;
-            size_t len = strlen(val);
-            memcpy(p, val, len);
-            p += len;
-        }
+        memcpy(p, line->text, line->byte_count);
+        p += line->byte_count;
         if (i < b->line_count - 1) {
             *p++ = '\n';
         }
@@ -183,15 +217,11 @@ void buffer_update_search_matches(Buffer *b, const char *term) {
                 b->search_state.matches = realloc(b->search_state.matches, capacity * sizeof(*b->search_state.matches));
             }
 
-            int match_byte_pos = match - line_str;
+            char *p = line_str;
             int match_char_pos = 0;
-            int current_byte_pos = 0;
-            for (int k = 0; k < line->char_count; k++) {
-                if (current_byte_pos == match_byte_pos) {
-                    match_char_pos = k;
-                    break;
-                }
-                current_byte_pos += strlen(line->chars[k].value);
+            while (p < match) {
+                p += utf8_char_len(p);
+                match_char_pos++;
             }
 
             b->search_state.matches[b->search_state.count].y = i;
@@ -228,22 +258,16 @@ void buffer_update_current_search_match(Buffer *b) {
 void buffer_line_apply_syntax_highlighting(Buffer *b, BufferLine *line, uint32_t start_byte, Theme *theme) {
     if (!b->cursor) {
         for (int char_idx = 0; char_idx < line->char_count; char_idx++) {
-            Char *ch = &line->chars[char_idx];
             Style *style = &theme->syntax_variable;
-            ch->r = style->fg_r;
-            ch->g = style->fg_g;
-            ch->b = style->fg_b;
-            ch->style = style->style;
+            line->styles[char_idx].r = style->fg_r;
+            line->styles[char_idx].g = style->fg_g;
+            line->styles[char_idx].b = style->fg_b;
+            line->styles[char_idx].style = style->style;
         }
         return;
     }
 
-    size_t line_byte_len = 0;
-    for (int i = 0; i < line->char_count; i++) {
-        line_byte_len += strlen(line->chars[i].value);
-    }
-
-    ts_query_cursor_set_byte_range(b->cursor, start_byte, start_byte + line_byte_len);
+    ts_query_cursor_set_byte_range(b->cursor, start_byte, start_byte + line->byte_count);
     ts_query_cursor_exec(b->cursor, b->query, b->root);
 
     TSQueryMatch match;
@@ -275,17 +299,24 @@ void buffer_line_apply_syntax_highlighting(Buffer *b, BufferLine *line, uint32_t
         capture_count++;
     }
 
-    uint32_t current_byte = start_byte;
-    for (int char_idx = 0; char_idx < line->char_count; char_idx++) {
-        const char *best_capture = find_best_capture_for_position(captures, capture_count, current_byte);
-        Char *ch = &line->chars[char_idx];
+    uint32_t current_byte_in_line = 0;
+    int char_idx = 0;
+    char *p = line->text;
+    char *end = line->text + line->byte_count;
+    while (p < end) {
+        const char *best_capture = find_best_capture_for_position(captures, capture_count, start_byte + current_byte_in_line);
         Style *style = theme_get_capture_style(best_capture, theme);
-        ch->r = style->fg_r;
-        ch->g = style->fg_g;
-        ch->b = style->fg_b;
-        ch->style = style->style;
-        current_byte += strlen(ch->value);
+        line->styles[char_idx].r = style->fg_r;
+        line->styles[char_idx].g = style->fg_g;
+        line->styles[char_idx].b = style->fg_b;
+        line->styles[char_idx].style = style->style;
+
+        int len = utf8_char_len(p);
+        p += len;
+        current_byte_in_line += len;
+        char_idx++;
     }
+
 
     if (captures) {
         free(captures);
@@ -301,13 +332,8 @@ const char *buffer_read(void *payload, uint32_t start_byte __attribute__((unused
     }
     BufferLine *line = buffer->lines[position.row];
 
-    size_t line_byte_len = 0;
-    for (int i = 0; i < line->char_count; i++) {
-        line_byte_len += strlen(line->chars[i].value);
-    }
-
-    if (line_byte_len + 2 > buffer->read_buffer_capacity) {
-        size_t new_capacity = line_byte_len + 2;
+    if (line->byte_count + 2 > buffer->read_buffer_capacity) {
+        size_t new_capacity = line->byte_count + 2;
         char *new_buffer = realloc(buffer->read_buffer, new_capacity);
         if (!new_buffer) {
             log_error("buffer.buffer_read: realloc read buffer failed");
@@ -317,22 +343,16 @@ const char *buffer_read(void *payload, uint32_t start_byte __attribute__((unused
         buffer->read_buffer_capacity = new_capacity;
     }
 
-    char *p = buffer->read_buffer;
-    for (int i = 0; i < line->char_count; i++) {
-        const char *val = line->chars[i].value;
-        size_t len = strlen(val);
-        memcpy(p, val, len);
-        p += len;
-    }
-    *p = '\n';
-    *(p + 1) = '\0';
+    memcpy(buffer->read_buffer, line->text, line->byte_count);
+    buffer->read_buffer[line->byte_count] = '\n';
+    buffer->read_buffer[line->byte_count + 1] = '\0';
 
-    if (position.column > line_byte_len) {
+    if (position.column > line->byte_count) {
         *bytes_read = 0;
         return "";
     }
 
-    *bytes_read = line_byte_len - position.column + 1;
+    *bytes_read = line->byte_count - position.column + 1;
     return buffer->read_buffer + position.column;
 }
 
@@ -367,31 +387,21 @@ void buffer_parse(Buffer *b) {
 int buffer_get_visual_position_x(Buffer *buffer) {
     BufferLine *line = buffer->lines[buffer->position_y];
     int x = buffer->line_num_width + 1;
-    for (int i = 0; i < buffer->position_x; i++) {
-        if (strcmp(line->chars[i].value, "\t") == 0) {
+    int char_idx = 0;
+    char *p = line->text;
+    char *end = line->text + line->byte_count;
+
+    while (p < end && char_idx < buffer->position_x) {
+        if (*p == '\t') {
             x += buffer->tab_width;
+            p++;
         } else {
-            x += line->chars[i].width;
+            x += utf8_char_width(p);
+            p += utf8_char_len(p);
         }
+        char_idx++;
     }
     return x - buffer->offset_x;
-}
-
-void buffer_line_realloc_for_capacity(BufferLine *line, int new_needed_capacity) {
-    if (new_needed_capacity <= line->capacity) {
-        return;
-    }
-    int new_capacity = line->capacity;
-    while (new_capacity < new_needed_capacity) {
-        new_capacity *= 2;
-    }
-    Char *new_chars = realloc(line->chars, new_capacity * sizeof(Char));
-    if (new_chars == NULL) {
-        log_error("buffer.buffer_line_realloc_for_capacity: failed to reallocate line characters");
-        exit(1);
-    }
-    line->chars = new_chars;
-    line->capacity = new_capacity;
 }
 
 void buffer_realloc_lines_for_capacity(Buffer *buffer) {
@@ -435,34 +445,59 @@ void buffer_set_logical_position_x(Buffer *buffer, int visual_before) {
     if (buffer->position_x > line->char_count) {
         buffer->position_x = line->char_count;
     }
-    int best_x = buffer->position_x;
-    int best_diff = abs(visual_before - 0);
-    for (int i = 0; i <= line->char_count; i++) {
-        buffer->position_x = i;
-        int current_visual = buffer_get_visual_position_x(buffer);
+
+    int best_x = 0;
+    int best_diff = visual_before - (buffer->line_num_width + 1);
+    if (best_diff < 0) best_diff = -best_diff;
+
+    int current_visual = buffer->line_num_width + 1;
+    int char_idx = 0;
+    char *p = line->text;
+    char *end = line->text + line->byte_count;
+
+    while (p < end) {
+        if (*p == '\t') {
+            current_visual += buffer->tab_width;
+            p++;
+        } else {
+            current_visual += utf8_char_width(p);
+            p += utf8_char_len(p);
+        }
+        char_idx++;
+
         int diff = visual_before - current_visual;
-        if (diff < 0) continue;
+        if (diff < 0) diff = -diff;
+
         if (diff < best_diff) {
             best_diff = diff;
-            best_x = i;
+            best_x = char_idx;
         }
     }
-    buffer->position_x = best_x;
+
+    if (buffer->position_x > line->char_count) {
+        buffer->position_x = line->char_count;
+    } else {
+        buffer->position_x = best_x;
+    }
 }
 
 void buffer_line_init(BufferLine *line) {
     line->char_count = 0;
+    line->byte_count = 0;
     line->needs_highlight = 1;
-    line->capacity = 4;
-    line->chars = (Char *)malloc(sizeof(Char) * line->capacity);
-    if (line->chars == NULL) {
-        log_error("buffer.buffer_line_init: failed to allocate BufferLine line");
-        exit(1);
-    }
+    line->char_capacity = 0;
+    line->byte_capacity = 0;
+    line->text = NULL;
+    line->styles = NULL;
 }
 
 void buffer_line_destroy(BufferLine *line) {
-    free(line->chars);
+    if (line->text) {
+        free(line->text);
+    }
+    if (line->styles) {
+        free(line->styles);
+    }
 }
 
 char *get_file_extension(const char *file_name) {
@@ -543,6 +578,7 @@ void buffer_init(Buffer *b, char *file_name) {
         char utf8_buf[5];
         int bytes_read;
         while ((bytes_read = read_utf8_char(fp, utf8_buf, sizeof(utf8_buf))) > 0) {
+            utf8_buf[bytes_read] = '\0';
             if (strcmp(utf8_buf, "\n") == 0) {
                 buffer_realloc_lines_for_capacity(b);
                 b->lines[b->line_count] = (BufferLine *)malloc(sizeof(BufferLine));
@@ -554,12 +590,7 @@ void buffer_init(Buffer *b, char *file_name) {
                 b->line_count++;
             } else {
                 BufferLine *line = b->lines[b->line_count - 1];
-                buffer_line_realloc_for_capacity(line, line->char_count + 1);
-                Char new_char = { .style = 0 };
-                strncpy(new_char.value, utf8_buf, sizeof(new_char.value));
-                new_char.width = utf8_char_width(utf8_buf);
-                line->chars[line->char_count] = new_char;
-                line->char_count++;
+                buffer_line_append_char(line, utf8_buf, bytes_read);
             }
         }
         if (bytes_read == -1) {
@@ -599,60 +630,58 @@ void buffer_destroy(Buffer *b) {
     if (b->history) {
         history_destroy(b->history);
     }
-    free(b->read_buffer);
+    if (b->read_buffer) {
+        free(b->read_buffer);
+    }
 }
 
 int is_line_empty(BufferLine *line) {
-    if (line->char_count == 0) {
-        return 1;
-    }
-    for (int i = 0; i < line->char_count; i++) {
-        if (strcmp(line->chars[i].value, " ") != 0 && strcmp(line->chars[i].value, "\t") != 0) {
-            return 0;
-        }
-    }
-    return 1;
+    return line->char_count == 0;
 }
 
 int buffer_get_visual_x_for_line_pos(Buffer *buffer, int y, int logical_x) {
     if (y >= buffer->line_count) return 0;
     BufferLine *line = buffer->lines[y];
     int x_pos = buffer->line_num_width + 1;
-    for (int i = 0; i < logical_x && i < line->char_count; i++) {
-        if (strcmp(line->chars[i].value, "\t") == 0) {
+    int char_idx = 0;
+    char *p = line->text;
+    char *end = line->text + line->byte_count;
+
+    while (p < end && char_idx < logical_x) {
+        if (*p == '\t') {
             x_pos += buffer->tab_width;
+            p++;
         } else {
-            x_pos += line->chars[i].width;
+            x_pos += utf8_char_width(p);
+            p += utf8_char_len(p);
         }
+        char_idx++;
     }
     return x_pos;
 }
 
 int buffer_get_byte_position_x(Buffer *buffer) {
     BufferLine *line = buffer->lines[buffer->position_y];
+    char *p = line->text;
+    char *end = line->text + line->byte_count;
+    int char_idx = 0;
     int byte_pos = 0;
-    for (int i = 0; i < buffer->position_x; i++) {
-        byte_pos += strlen(line->chars[i].value);
+    while (p < end && char_idx < buffer->position_x) {
+        int len = utf8_char_len(p);
+        p += len;
+        byte_pos += len;
+        char_idx++;
     }
     return byte_pos;
 }
 
 static char* line_to_string(BufferLine *line) {
-    int len = 0;
-    for (int i = 0; i < line->char_count; i++) {
-        len += strlen(line->chars[i].value);
+    if (line->byte_count == 0) {
+        char *s = malloc(1);
+        if (s) s[0] = '\0';
+        return s;
     }
-    char *str = malloc(len + 1);
-    if (!str) return NULL;
-
-    char *ptr = str;
-    for (int i = 0; i < line->char_count; i++) {
-        int char_len = strlen(line->chars[i].value);
-        memcpy(ptr, line->chars[i].value, char_len);
-        ptr += char_len;
-    }
-    *ptr = '\0';
-    return str;
+    return strndup(line->text, line->byte_count);
 }
 
 int buffer_find_forward(Buffer *b, const char *term, int *y, int *x) {
@@ -673,27 +702,18 @@ int buffer_find_forward(Buffer *b, const char *term, int *y, int *x) {
             continue;
         }
 
-        int start_byte_pos = 0;
+        char *p = line_str;
         for(int k=0; k<start_char_pos; k++) {
-            start_byte_pos += strlen(line->chars[k].value);
+            p += utf8_char_len(p);
         }
 
-        if (start_byte_pos >= (int)strlen(line_str)) {
-            free(line_str);
-            continue;
-        }
-
-        char* match = strstr(line_str + start_byte_pos, term);
+        char* match = strstr(p, term);
         if (match) {
-            int match_byte_pos = match - line_str;
+            p = line_str;
             int match_char_pos = 0;
-            int current_byte_pos = 0;
-            for (int k = 0; k < line->char_count; k++) {
-                if (current_byte_pos == match_byte_pos) {
-                    match_char_pos = k;
-                    break;
-                }
-                current_byte_pos += strlen(line->chars[k].value);
+            while (p < match) {
+                p += utf8_char_len(p);
+                match_char_pos++;
             }
             *y = i;
             *x = match_char_pos;
@@ -713,15 +733,11 @@ int buffer_find_forward(Buffer *b, const char *term, int *y, int *x) {
 
         char* match = strstr(line_str, term);
         while (match) {
-            int match_byte_pos = match - line_str;
+            char *p = line_str;
             int match_char_pos = 0;
-            int current_byte_pos = 0;
-            for (int k = 0; k < line->char_count; k++) {
-                if (current_byte_pos == match_byte_pos) {
-                    match_char_pos = k;
-                    break;
-                }
-                current_byte_pos += strlen(line->chars[k].value);
+            while (p < match) {
+                p += utf8_char_len(p);
+                match_char_pos++;
             }
 
             if (i < original_y || match_char_pos <= end_char_pos) {
@@ -754,12 +770,12 @@ int buffer_find_backward(Buffer *b, const char *term, int *y, int *x) {
         int start_char_pos = (i == *y) ? *x - 1 : line->char_count - 1;
 
         for (int j = start_char_pos; j >= 0; j--) {
-            int start_byte_pos = 0;
+            char *p = line_str;
             for(int k=0; k<j; k++) {
-                start_byte_pos += strlen(line->chars[k].value);
+                p += utf8_char_len(p);
             }
 
-            if (strncmp(line_str + start_byte_pos, term, term_len) == 0) {
+            if (strncmp(p, term, term_len) == 0) {
                 *y = i;
                 *x = j;
                 free(line_str);
@@ -779,12 +795,12 @@ int buffer_find_backward(Buffer *b, const char *term, int *y, int *x) {
         int start_char_pos = (i == original_y) ? original_x : line->char_count - 1;
 
         for (int j = start_char_pos; j >= 0; j--) {
-            int start_byte_pos = 0;
+            char *p = line_str;
             for(int k=0; k<j; k++) {
-                start_byte_pos += strlen(line->chars[k].value);
+                p += utf8_char_len(p);
             }
 
-            if (strncmp(line_str + start_byte_pos, term, term_len) == 0) {
+            if (strncmp(p, term, term_len) == 0) {
                 if (i > original_y || j < original_x) {
                     *y = i;
                     *x = j;
