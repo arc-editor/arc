@@ -9,6 +9,10 @@ typedef struct {
     unsigned char style;
 } Style;
 
+#define STYLE_ITALIC 1
+#define STYLE_BOLD 2
+#define STYLE_UNDERLINE 4
+
 typedef struct {
     const char* name;
     int priority;

@@ -150,3 +150,36 @@ size_t utf8_strlen(const char *s) {
     }
     return i;
 }
+
+int utf8_char_len(const char *s) {
+    init_utf8();
+    return mblen(s, MB_CUR_MAX);
+}
+
+int utf8_char_to_byte_index(const char *s, int char_index) {
+    init_utf8();
+    int byte_index = 0;
+    for (int i = 0; i < char_index; i++) {
+        int len = mblen(s + byte_index, MB_CUR_MAX);
+        if (len < 1) {
+            len = 1;
+        }
+        byte_index += len;
+    }
+    return byte_index;
+}
+
+int utf8_char_count(const char *s, int byte_index) {
+    init_utf8();
+    int char_count = 0;
+    int bytes_processed = 0;
+    while (bytes_processed < byte_index) {
+        int len = mblen(s + bytes_processed, MB_CUR_MAX);
+        if (len < 1) {
+            len = 1;
+        }
+        bytes_processed += len;
+        char_count++;
+    }
+    return char_count;
+}

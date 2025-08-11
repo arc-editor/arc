@@ -63,41 +63,21 @@ void editor_command_reset(EditorCommand *cmd) {
     memset(cmd, 0, sizeof(EditorCommand));
 }
 
-void editor_set_style(Style *style, int fg, int bg) {
-    char escape_seq[128];
-    char *p = escape_seq;
-    p += sprintf(p, "\x1b[");
-
-    if (style->style & STYLE_BOLD) {
-        p += sprintf(p, "1;");
-    } else {
-        p += sprintf(p, "22;");
-    }
-    if (style->style & STYLE_ITALIC) {
-        p += sprintf(p, "3;");
-    } else {
-        p += sprintf(p, "23;");
-    }
-    if (style->style & STYLE_UNDERLINE) {
-        p += sprintf(p, "4;");
-    } else {
-        p += sprintf(p, "24;");
-    }
+void editor_set_style(const Style *style, int fg, int bg) {
+    if (!style) return;
+    printf("\x1b[");
+    if (style->style & STYLE_BOLD) printf("1;"); else printf("22;");
+    if (style->style & STYLE_ITALIC) printf("3;"); else printf("23;");
+    if (style->style & STYLE_UNDERLINE) printf("4;"); else printf("24;");
 
     if (fg) {
-        p += sprintf(p, "38;2;%d;%d;%d", style->fg_r, style->fg_g, style->fg_b);
-        if (bg) {
-            p += sprintf(p, ";");
-        }
+        printf("38;2;%d;%d;%d", style->fg_r, style->fg_g, style->fg_b);
+        if (bg) printf(";");
     }
     if (bg) {
-        p += sprintf(p, "48;2;%d;%d;%d", style->bg_r, style->bg_g, style->bg_b);
+        printf("48;2;%d;%d;%d", style->bg_r, style->bg_g, style->bg_b);
     }
-
-    *p++ = 'm';
-    *p = '\0';
-
-    printf("%s", escape_seq);
+    printf("m");
 }
 
 void handle_sigwinch(int arg __attribute__((unused))) {
@@ -300,54 +280,87 @@ static int is_in_selection(int y, int x) {
     return 1;
 }
 
+typedef struct {
+    uint32_t start_byte;
+    uint32_t end_byte;
+    const char *capture_name;
+    int priority;
+} HighlightCapture;
+
+const char* find_best_capture_for_position(HighlightCapture *captures, uint32_t capture_count, uint32_t byte_pos) {
+    const char *best_capture = NULL;
+    int best_priority = -1;
+
+    for (uint32_t i = 0; i < capture_count; i++) {
+        HighlightCapture *cap = &captures[i];
+        if (byte_pos >= cap->start_byte && byte_pos < cap->end_byte) {
+            if (cap->priority > best_priority) {
+                best_priority = cap->priority;
+                best_capture = cap->capture_name;
+            }
+        }
+        if (cap->start_byte > byte_pos) {
+            break;
+        }
+    }
+
+    return best_capture;
+}
+
+int get_capture_priority(const char* capture_name) {
+    const CaptureInfo* info = theme_get_capture_info(capture_name);
+    if (info) {
+        return info->priority;
+    }
+    if (capture_name) {
+        log_warning("buffer.get_capture_priority: unrecognized capture_name %s", capture_name);
+    }
+    return 0;
+}
+
 void draw_buffer(Diagnostic *diagnostics, int diagnostics_count, int update_diagnostics) {
     uint32_t start_byte = 0;
     for (int i = 0; i < buffer->offset_y; i++) {
-        BufferLine *line = buffer->lines[i];
-        for (int j = 0; j < line->char_count; j++) {
-            start_byte += strlen(line->chars[j].value);
-        }
-        start_byte++; // for newline
+        start_byte += buffer->lines[i]->byte_count + 1;
     }
+
     for (int row = buffer->offset_y; row < buffer->offset_y + editor.screen_rows - 1; row++) {
         int relative_y = row - buffer->offset_y;
         printf("\x1b[%d;1H", relative_y + 1);
         char line_num_str[16];
         int line_num_len = snprintf(line_num_str, sizeof(line_num_str), "%*d ", buffer->line_num_width - 1, row + 1);
+
         if (row >= buffer->line_count) {
-            int chars_to_print = editor.screen_cols;
-            if (buffer->offset_x) {
-                editor_set_style(&editor.current_theme.content_line_number_sticky, 0, 1);
-                for (int i = 0; i < line_num_len; i++) {
-                    putchar(' ');
-                    chars_to_print--;
-                }
-            }
             editor_set_style(&editor.current_theme.content_background, 0, 1);
-            while (chars_to_print > 0) {
+            for (int i = 0; i < editor.screen_cols; i++) {
                 putchar(' ');
-                chars_to_print--;
             }
             continue;
         }
-        BufferLine *line = buffer->lines[row];
 
-        if (line->needs_highlight) {
-            buffer_line_apply_syntax_highlighting(buffer, line, start_byte, &editor.current_theme);
-        }
-        if (update_diagnostics) {
-            for (int j = 0; j < line->char_count; j++) {
-                line->chars[j].style &= ~STYLE_UNDERLINE;
-            }
-            for (int i = 0; i < diagnostics_count; i++) {
-                Diagnostic d = diagnostics[i];
-                if (d.line == row) {
-                    for (int j = d.col_start; j < d.col_end && j < line->char_count; j++) {
-                        line->chars[j].style |= STYLE_UNDERLINE;
-                    }
+        BufferLine *line = buffer->lines[row];
+        HighlightCapture *captures = NULL;
+        uint32_t capture_count = 0;
+
+        if (buffer->cursor) {
+            ts_query_cursor_set_byte_range(buffer->cursor, start_byte, start_byte + line->byte_count);
+            ts_query_cursor_exec(buffer->cursor, buffer->query, buffer->root);
+            TSQueryMatch match;
+            uint32_t capture_index;
+            uint32_t capture_capacity = 0;
+            while (ts_query_cursor_next_capture(buffer->cursor, &match, &capture_index)) {
+                TSQueryCapture capture = match.captures[capture_index];
+                if (capture_count >= capture_capacity) {
+                    capture_capacity = capture_capacity ? capture_capacity * 2 : 16;
+                    captures = realloc(captures, capture_capacity * sizeof(HighlightCapture));
                 }
+                uint32_t capture_name_length;
+                const char *capture_name = ts_query_capture_name_for_id(buffer->query, capture.index, &capture_name_length);
+                captures[capture_count] = (HighlightCapture){ts_node_start_byte(capture.node), ts_node_end_byte(capture.node), capture_name, get_capture_priority(capture_name)};
+                capture_count++;
             }
         }
+
         if (buffer->offset_x) {
             editor_set_style(&editor.current_theme.content_line_number_sticky, 1, 1);
         } else if (row == buffer->position_y) {
@@ -357,117 +370,72 @@ void draw_buffer(Diagnostic *diagnostics, int diagnostics_count, int update_diag
         }
         printf("%.*s", line_num_len, line_num_str);
 
-        int is_visual_mode = editor_handle_input == visual_handle_input;
-        Style *line_style;
-        if (row == buffer->position_y) {
-            line_style = &editor.current_theme.content_cursor_line;
-        } else {
-            line_style = &editor.current_theme.content_background;
-        }
+        const Style *line_style = (row == buffer->position_y) ? &editor.current_theme.content_cursor_line : &editor.current_theme.content_background;
         editor_set_style(line_style, 0, 1);
 
         int cols_to_skip = buffer->offset_x;
         int chars_to_print = editor.screen_cols - buffer->line_num_width;
+        char *ptr = line->chars;
+        int current_byte_in_line = 0;
 
-        // Iterate over characters in the line
         for (int ch_idx = 0; ch_idx < line->char_count && chars_to_print > 0; ch_idx++) {
-            Char ch = line->chars[ch_idx];
-            Style* style = line_style;
-            int in_selection = is_visual_mode && is_in_selection(row, ch_idx);
-            int in_search = is_in_search_match(row, ch_idx);
-
-            if (in_search) {
-                style = &editor.current_theme.search_match;
-            } else if (in_selection) {
+            const Style *style = line_style;
+            if (editor_handle_input == visual_handle_input && is_in_selection(row, ch_idx)) {
                 style = &editor.current_theme.content_selection;
+            } else if (is_in_search_match(row, ch_idx)) {
+                style = &editor.current_theme.search_match;
             }
 
-            if (strcmp(ch.value, "\t") == 0) {
-                if (cols_to_skip >= buffer->tab_width) {
-                    cols_to_skip -= buffer->tab_width;
-                    continue;
-                }
+            int char_len = utf8_char_len(ptr);
+            char temp_char[5] = {0};
+            strncpy(temp_char, ptr, char_len);
+
+            if (*ptr == '\t') {
                 int width = buffer->tab_width - (cols_to_skip % buffer->tab_width);
                 cols_to_skip = 0;
-                int is_trailing = 1;
-                for (int i = ch_idx + 1; i < line->char_count; i++) {
-                    if (strcmp(line->chars[i].value, " ") != 0 && strcmp(line->chars[i].value, "\t") != 0) {
-                        is_trailing = 0;
-                        break;
-                    }
-                }
-
-                if (editor.config.whitespace.tab == WHITESPACE_RENDER_ALL || (editor.config.whitespace.tab == WHITESPACE_RENDER_TRAILING && is_trailing)) {
-                    Style whitespace_style = editor.current_theme.content_whitespace;
-                    whitespace_style.bg_r = style->bg_r;
-                    whitespace_style.bg_g = style->bg_g;
-                    whitespace_style.bg_b = style->bg_b;
-                    editor_set_style(&whitespace_style, 1, 1);
-                    printf("%s", editor.config.whitespace.tab_char);
+                editor_set_style(style, 0, 1);
+                for (int i = 0; i < width && chars_to_print > 0; i++) {
+                    printf(" ");
                     chars_to_print--;
-
-                    editor_set_style(style, 0, 1);
-                    for (int i = 0; i < width - 1 && chars_to_print > 0; i++) {
-                        printf(" ");
-                        chars_to_print--;
-                    }
-                } else {
-                    editor_set_style(style, 0, 1);
-                    for (int i = 0; i < width && chars_to_print > 0; i++) {
-                        printf(" ");
-                        chars_to_print--;
-                    }
-                }
-                continue;
-            }
-            if (cols_to_skip) {
-                cols_to_skip--;
-                continue;
-            }
-
-            Style char_style;
-            char_style.fg_r = ch.r;
-            char_style.fg_g = ch.g;
-            char_style.fg_b = ch.b;
-            char_style.bg_r = style->bg_r;
-            char_style.bg_g = style->bg_g;
-            char_style.bg_b = style->bg_b;
-            char_style.style = ch.style;
-
-            if (strcmp(ch.value, " ") == 0) {
-                int is_trailing = 1;
-                for (int i = ch_idx + 1; i < line->char_count; i++) {
-                    if (strcmp(line->chars[i].value, " ") != 0 && strcmp(line->chars[i].value, "\t") != 0) {
-                        is_trailing = 0;
-                        break;
-                    }
-                }
-                if (editor.config.whitespace.space == WHITESPACE_RENDER_ALL || (editor.config.whitespace.space == WHITESPACE_RENDER_TRAILING && is_trailing)) {
-                    Style whitespace_style = editor.current_theme.content_whitespace;
-                    whitespace_style.bg_r = style->bg_r;
-                    whitespace_style.bg_g = style->bg_g;
-                    whitespace_style.bg_b = style->bg_b;
-                    editor_set_style(&whitespace_style, 1, 1);
-                    printf("%s", editor.config.whitespace.space_char);
-                } else {
-                    editor_set_style(&char_style, 1, 1);
-                    printf("%s", ch.value);
                 }
             } else {
-                editor_set_style(&char_style, 1, 1);
-                printf("%s", ch.value);
+                if (cols_to_skip) {
+                    cols_to_skip--;
+                } else {
+                    const char *capture_name = find_best_capture_for_position(captures, capture_count, start_byte + current_byte_in_line);
+                    Style char_style = *theme_get_capture_style(capture_name, &editor.current_theme);
+                    char_style.bg_r = style->bg_r;
+                    char_style.bg_g = style->bg_g;
+                    char_style.bg_b = style->bg_g;
+
+                    if (update_diagnostics) {
+                        for (int i = 0; i < diagnostics_count; i++) {
+                            if (diagnostics[i].line == row && ch_idx >= diagnostics[i].col_start && ch_idx < diagnostics[i].col_end) {
+                                char_style.style |= STYLE_UNDERLINE;
+                                break;
+                            }
+                        }
+                    }
+
+                    editor_set_style(&char_style, 1, 1);
+                    printf("%s", temp_char);
+                    chars_to_print--;
+                }
             }
-            chars_to_print--;
+            ptr += char_len;
+            current_byte_in_line += char_len;
         }
+
         editor_set_style(line_style, 1, 1);
         while (chars_to_print > 0) {
             putchar(' ');
             chars_to_print--;
         }
-        for (int i = 0; i < line->char_count; i++) {
-            start_byte += strlen(line->chars[i].value);
+
+        if (captures) {
+            free(captures);
         }
-        start_byte++; // for newline
+        start_byte += line->byte_count + 1;
     }
     printf("\x1b[0m");
 }
@@ -617,10 +585,7 @@ void editor_insert_new_line() {
 
     uint32_t start_byte = 0;
     for (int i = 0; i < buffer->position_y; i++) {
-        for (int j = 0; j < buffer->lines[i]->char_count; j++) {
-            start_byte += strlen(buffer->lines[i]->chars[j].value);
-        }
-        start_byte++; // for newline
+        start_byte += buffer->lines[i]->byte_count + 1;
     }
     int byte_pos_x = buffer_get_byte_position_x(buffer);
     start_byte += byte_pos_x;
@@ -638,14 +603,17 @@ void editor_insert_new_line() {
     }
     buffer_line_init(buffer->lines[buffer->position_y + 1]);
 
-    int chars_to_move = current_line->char_count - buffer->position_x;
-    if (chars_to_move > 0) {
-        buffer_line_realloc_for_capacity(buffer->lines[buffer->position_y + 1], chars_to_move);
-        memcpy(buffer->lines[buffer->position_y + 1]->chars,
-               &current_line->chars[buffer->position_x],
-               chars_to_move * sizeof(Char));
-        buffer->lines[buffer->position_y + 1]->char_count = chars_to_move;
-        current_line->char_count = buffer->position_x;
+    int bytes_to_move = current_line->byte_count - byte_pos_x;
+    if (bytes_to_move > 0) {
+        BufferLine *new_line = buffer->lines[buffer->position_y + 1];
+        buffer_line_realloc_for_capacity(new_line, bytes_to_move + 1);
+        memcpy(new_line->chars, &current_line->chars[byte_pos_x], bytes_to_move);
+        new_line->chars[bytes_to_move] = '\0';
+        new_line->byte_count = bytes_to_move;
+        new_line->char_count = utf8_strlen(new_line->chars);
+        current_line->byte_count = byte_pos_x;
+        current_line->chars[current_line->byte_count] = '\0';
+        current_line->char_count = utf8_strlen(current_line->chars);
     }
 
     if (buffer->parser) {
@@ -915,39 +883,21 @@ void editor_start(char *file_name, int benchmark_mode) {
 void editor_insert_char(const char *ch) {
     pthread_mutex_lock(&editor_mutex);
     BufferLine *line = buffer->lines[buffer->position_y];
-    buffer_line_realloc_for_capacity(line, line->char_count + 1);
+    int ch_len = strlen(ch);
+    buffer_line_realloc_for_capacity(line, line->byte_count + ch_len + 1);
 
-    unsigned char new_style = 0;
-    if (buffer->parser && buffer->tree && buffer->position_x > 0 && buffer->position_x < line->char_count) {
-        Char *prev_char = &line->chars[buffer->position_x - 1];
-        Char *next_char = &line->chars[buffer->position_x];
+    int byte_pos_x = buffer_get_byte_position_x(buffer);
 
-        if ((prev_char->style & STYLE_UNDERLINE) && (next_char->style & STYLE_UNDERLINE)) {
-            TSNode root_node = ts_tree_root_node(buffer->tree);
-            TSPoint prev_point = {(uint32_t)buffer->position_y, (uint32_t)buffer->position_x - 1};
-            TSPoint next_point = {(uint32_t)buffer->position_y, (uint32_t)buffer->position_x};
-            TSNode prev_leaf = ts_node_named_descendant_for_point_range(root_node, prev_point, prev_point);
-            TSNode next_leaf = ts_node_named_descendant_for_point_range(root_node, next_point, next_point);
-            if (!ts_node_is_null(prev_leaf) && ts_node_eq(prev_leaf, next_leaf)) {
-                new_style |= STYLE_UNDERLINE;
-            }
-        }
+    if (byte_pos_x < line->byte_count) {
+        memmove(&line->chars[byte_pos_x + ch_len],
+                &line->chars[byte_pos_x],
+                line->byte_count - byte_pos_x);
     }
 
-    Char new;
-    strncpy(new.value, ch, sizeof(new.value));
-    new.width = utf8_char_width(ch);
-    new.style = new_style;
-    new.r = 255; new.g = 255; new.b = 255;
-
-    if (buffer->position_x < line->char_count) {
-        memmove(&line->chars[buffer->position_x + 1],
-                &line->chars[buffer->position_x],
-                (line->char_count - buffer->position_x) * sizeof(Char));
-    }
-
-    line->chars[buffer->position_x] = new;
-    line->char_count++;
+    memcpy(&line->chars[byte_pos_x], ch, ch_len);
+    line->byte_count += ch_len;
+    line->chars[line->byte_count] = '\0';
+    line->char_count = utf8_strlen(line->chars);
     editor_add_insertion_to_history(ch);
     buffer->position_x++;
     buffer_reset_offset_x(buffer, editor.screen_cols);
@@ -956,21 +906,17 @@ void editor_insert_char(const char *ch) {
     if (buffer->parser && buffer->tree) {
         uint32_t start_byte = 0;
         for (int i = 0; i < buffer->position_y; i++) {
-            for (int j = 0; j < buffer->lines[i]->char_count; j++) {
-                start_byte += strlen(buffer->lines[i]->chars[j].value);
-            }
-            start_byte++; // for newline
+            start_byte += buffer->lines[i]->byte_count + 1;
         }
-        int byte_pos_x = buffer_get_byte_position_x(buffer);
-        start_byte += byte_pos_x - strlen(ch);
+        start_byte += byte_pos_x;
 
         ts_tree_edit(buffer->tree, &(TSInputEdit){
             .start_byte = start_byte,
             .old_end_byte = start_byte,
-            .new_end_byte = start_byte + strlen(ch),
-            .start_point = {(uint32_t)buffer->position_y, (uint32_t)(byte_pos_x - strlen(ch))},
-            .old_end_point = {(uint32_t)buffer->position_y, (uint32_t)(byte_pos_x - strlen(ch))},
-            .new_end_point = {(uint32_t)buffer->position_y, (uint32_t)byte_pos_x}
+            .new_end_byte = start_byte + ch_len,
+            .start_point = {(uint32_t)buffer->position_y, (uint32_t)byte_pos_x},
+            .old_end_point = {(uint32_t)buffer->position_y, (uint32_t)byte_pos_x},
+            .new_end_point = {(uint32_t)buffer->position_y, (uint32_t)(byte_pos_x + ch_len)}
         });
         line->needs_highlight = 1;
         buffer->needs_parse = 1;
@@ -1074,9 +1020,7 @@ void editor_write_force() {
     }
     for (int line_idx = 0; line_idx < buffer->line_count; line_idx++) {
         BufferLine *line = buffer->lines[line_idx];
-        for (int char_idx = 0; char_idx < line->char_count; char_idx++) {
-            fputs(line->chars[char_idx].value, fp);
-        }
+        fwrite(line->chars, 1, line->byte_count, fp);
         if (line_idx < buffer->line_count - 1) {
             fputc('\n', fp);
         }
@@ -1112,10 +1056,7 @@ void editor_delete() {
 
     uint32_t start_byte = 0;
     for (int i = 0; i < buffer->position_y; i++) {
-        for (int j = 0; j < buffer->lines[i]->char_count; j++) {
-            start_byte += strlen(buffer->lines[i]->chars[j].value);
-        }
-        start_byte++; // for newline
+        start_byte += buffer->lines[i]->byte_count + 1;
     }
     int byte_pos_x = buffer_get_byte_position_x(buffer);
     start_byte += byte_pos_x;
@@ -1133,10 +1074,12 @@ void editor_delete() {
             next_line->needs_highlight = 1;
         }
         BufferLine *next_line = buffer->lines[buffer->position_y + 1];
-        int new_char_count = line->char_count + next_line->char_count;
-        buffer_line_realloc_for_capacity(line, new_char_count);
-        memcpy(&line->chars[line->char_count], next_line->chars, next_line->char_count * sizeof(Char));
-        line->char_count = new_char_count;
+        int new_byte_count = line->byte_count + next_line->byte_count;
+        buffer_line_realloc_for_capacity(line, new_byte_count + 1);
+        memcpy(&line->chars[line->byte_count], next_line->chars, next_line->byte_count);
+        line->byte_count = new_byte_count;
+        line->chars[line->byte_count] = '\0';
+        line->char_count = utf8_strlen(line->chars);
         buffer_line_destroy(next_line);
 
         memmove(&buffer->lines[buffer->position_y + 1],
@@ -1155,22 +1098,27 @@ void editor_delete() {
             });
         }
     } else {
-        Char deleted_char = line->chars[buffer->position_x];
+        int char_len = utf8_char_len(&line->chars[byte_pos_x]);
+        char deleted_char[5];
+        strncpy(deleted_char, &line->chars[byte_pos_x], char_len);
+        deleted_char[char_len] = '\0';
         if (!is_undo_redo_active) {
-            history_add_change(buffer->history, CHANGE_TYPE_DELETE, buffer->position_y, buffer->position_x, deleted_char.value);
+            history_add_change(buffer->history, CHANGE_TYPE_DELETE, buffer->position_y, buffer->position_x, deleted_char);
         }
-        memmove(&line->chars[buffer->position_x],
-                &line->chars[buffer->position_x + 1],
-                (line->char_count - buffer->position_x - 1) * sizeof(Char));
-        line->char_count--;
+        memmove(&line->chars[byte_pos_x],
+                &line->chars[byte_pos_x + char_len],
+                line->byte_count - byte_pos_x - char_len);
+        line->byte_count -= char_len;
+        line->chars[line->byte_count] = '\0';
+        line->char_count = utf8_strlen(line->chars);
         if (buffer->parser && buffer->tree) {
             line->needs_highlight = 1;
             ts_tree_edit(buffer->tree, &(TSInputEdit){
                 .start_byte = start_byte,
-                .old_end_byte = start_byte + strlen(deleted_char.value),
+                .old_end_byte = start_byte + char_len,
                 .new_end_byte = start_byte,
                 .start_point = { (uint32_t)buffer->position_y, (uint32_t)byte_pos_x },
-                .old_end_point = { (uint32_t)buffer->position_y, (uint32_t)(byte_pos_x + strlen(deleted_char.value)) },
+                .old_end_point = { (uint32_t)buffer->position_y, (uint32_t)(byte_pos_x + char_len) },
                 .new_end_point = { (uint32_t)buffer->position_y, (uint32_t)byte_pos_x }
             });
         }
@@ -1206,10 +1154,7 @@ void editor_backspace() {
 
     uint32_t start_byte = 0;
     for (int i = 0; i < buffer->position_y; i++) {
-        for (int j = 0; j < buffer->lines[i]->char_count; j++) {
-            start_byte += strlen(buffer->lines[i]->chars[j].value);
-        }
-        start_byte++; // for newline
+        start_byte += buffer->lines[i]->byte_count + 1;
     }
     int byte_pos_x = buffer_get_byte_position_x(buffer);
     start_byte += byte_pos_x;
@@ -1223,10 +1168,12 @@ void editor_backspace() {
         if (!is_undo_redo_active) {
             history_add_change(buffer->history, CHANGE_TYPE_DELETE, buffer->position_y - 1, prev_line->char_count, "\n");
         }
-        int new_char_count = prev_line->char_count + line->char_count;
-        buffer_line_realloc_for_capacity(prev_line, new_char_count);
-        memcpy(&prev_line->chars[prev_line->char_count], line->chars, line->char_count * sizeof(Char));
-        prev_line->char_count = new_char_count;
+        int new_byte_count = prev_line->byte_count + line->byte_count;
+        buffer_line_realloc_for_capacity(prev_line, new_byte_count + 1);
+        memcpy(&prev_line->chars[prev_line->byte_count], line->chars, line->byte_count);
+        prev_line->byte_count = new_byte_count;
+        prev_line->chars[prev_line->byte_count] = '\0';
+        prev_line->char_count = utf8_strlen(prev_line->chars);
         if (buffer->parser) {
             prev_line->needs_highlight = 1;
         }
@@ -1237,43 +1184,45 @@ void editor_backspace() {
         buffer->line_count--;
         buffer_set_line_num_width(buffer);
         if (buffer->parser && buffer->tree) {
-            int prev_line_byte_len = 0;
-            for (int i = 0; i < prev_line->char_count; i++) {
-                prev_line_byte_len += strlen(prev_line->chars[i].value);
-            }
             ts_tree_edit(buffer->tree, &(TSInputEdit){
                 .start_byte = start_byte - 1,
                 .old_end_byte = start_byte,
                 .new_end_byte = start_byte - 1,
                 .start_point = { (uint32_t)buffer->position_y, 0 },
                 .old_end_point = { (uint32_t)buffer->position_y, 0 },
-                .new_end_point = { (uint32_t)(buffer->position_y - 1), (uint32_t)prev_line_byte_len }
+                .new_end_point = { (uint32_t)(buffer->position_y - 1), (uint32_t)prev_line->byte_count }
             });
         }
         buffer->position_y--;
         buffer_reset_offset_y(buffer, editor.screen_rows);
-        buffer->position_x = buffer->lines[buffer->position_y]->char_count - line->char_count;
+        buffer->position_x = prev_line->char_count;
         buffer_line_destroy(line);
 
     } else {
-        Char deleted_char = line->chars[buffer->position_x - 1];
+        int prev_byte_pos_x = utf8_char_to_byte_index(line->chars, buffer->position_x - 1);
+        int char_len = byte_pos_x - prev_byte_pos_x;
+        char deleted_char[5];
+        strncpy(deleted_char, &line->chars[prev_byte_pos_x], char_len);
+        deleted_char[char_len] = '\0';
         if (!is_undo_redo_active) {
-            history_add_change(buffer->history, CHANGE_TYPE_DELETE, buffer->position_y, buffer->position_x - 1, deleted_char.value);
+            history_add_change(buffer->history, CHANGE_TYPE_DELETE, buffer->position_y, buffer->position_x - 1, deleted_char);
         }
-        memmove(&line->chars[buffer->position_x - 1],
-                &line->chars[buffer->position_x],
-                (line->char_count - buffer->position_x) * sizeof(Char));
-        line->char_count--;
+        memmove(&line->chars[prev_byte_pos_x],
+                &line->chars[byte_pos_x],
+                line->byte_count - byte_pos_x);
+        line->byte_count -= char_len;
+        line->chars[line->byte_count] = '\0';
+        line->char_count = utf8_strlen(line->chars);
         buffer->position_x--;
         if (buffer->parser && buffer->tree) {
             line->needs_highlight = 1;
             ts_tree_edit(buffer->tree, &(TSInputEdit){
-                .start_byte = start_byte - strlen(deleted_char.value),
+                .start_byte = start_byte - char_len,
                 .old_end_byte = start_byte,
-                .new_end_byte = start_byte - strlen(deleted_char.value),
-                .start_point = { (uint32_t)buffer->position_y, (uint32_t)(byte_pos_x - strlen(deleted_char.value)) },
+                .new_end_byte = start_byte - char_len,
+                .start_point = { (uint32_t)buffer->position_y, (uint32_t)(byte_pos_x - char_len) },
                 .old_end_point = { (uint32_t)buffer->position_y, (uint32_t)byte_pos_x },
-                .new_end_point = { (uint32_t)buffer->position_y, (uint32_t)(byte_pos_x - strlen(deleted_char.value)) }
+                .new_end_point = { (uint32_t)buffer->position_y, (uint32_t)(byte_pos_x - char_len) }
              });
         }
     }
@@ -1397,28 +1346,32 @@ void range_expand_e(BufferLine *line, int count, Range *range) {
         if (!line->char_count) {
             continue;
         }
-        while (is_whitespace(line->chars[range->x_end].value[0])) {
+        int byte_pos = buffer_get_byte_position_x(buffer);
+        while (is_whitespace(line->chars[byte_pos])) {
             range_expand_right(&line, range);
             moved = 1;
+            byte_pos = buffer_get_byte_position_x(buffer);
         }
         int touched = 0;
-        if (!is_word_char(line->chars[range->x_end].value[0])) {
+        if (!is_word_char(line->chars[byte_pos])) {
             if (moved) {
                 continue;
             }
-            while (range->x_end < line->char_count - 1 && !is_word_char(line->chars[range->x_end + 1].value[0]) && !is_whitespace(line->chars[range->x_end + 1].value[0])) {
+            while (range->x_end < line->char_count - 1 && !is_word_char(line->chars[byte_pos + 1]) && !is_whitespace(line->chars[byte_pos + 1])) {
                 touched = 1;
                 range_expand_right(&line, range);
+                byte_pos = buffer_get_byte_position_x(buffer);
             }
         }
         if (touched) {
             continue;
         }
-        if (!is_word_char(line->chars[range->x_end].value[0])) {
+        if (!is_word_char(line->chars[byte_pos])) {
             continue;
         }
-        while (range->x_end < line->char_count - 1 && is_word_char(line->chars[range->x_end + 1].value[0])) {
+        while (range->x_end < line->char_count - 1 && is_word_char(line->chars[byte_pos + 1])) {
             range_expand_right(&line, range);
+            byte_pos = buffer_get_byte_position_x(buffer);
         }
     }
 }
@@ -1434,11 +1387,14 @@ void range_expand_E(BufferLine *line, int count, Range *range) {
         if (!line->char_count) {
             continue;
         }
-        while (is_whitespace(line->chars[range->x_end].value[0])) {
+        int byte_pos = buffer_get_byte_position_x(buffer);
+        while (is_whitespace(line->chars[byte_pos])) {
             range_expand_right(&line, range);
+            byte_pos = buffer_get_byte_position_x(buffer);
         }
-        while (range->x_end < line->char_count - 1 && !is_whitespace(line->chars[range->x_end + 1].value[0])) {
+        while (range->x_end < line->char_count - 1 && !is_whitespace(line->chars[byte_pos + 1])) {
             range_expand_right(&line, range);
+            byte_pos = buffer_get_byte_position_x(buffer);
         }
     }
 }
@@ -1454,24 +1410,30 @@ void range_expand_b(BufferLine *line, int count, Range *range) {
         if (!line->char_count) {
             continue;
         }
-        while (is_whitespace(line->chars[range->x_end].value[0])) {
+        int byte_pos = buffer_get_byte_position_x(buffer);
+        while (is_whitespace(line->chars[byte_pos])) {
             range_expand_left(&line, range);
+            byte_pos = buffer_get_byte_position_x(buffer);
         }
         int touched = 0;
-        if (!is_word_char(line->chars[range->x_end].value[0])) {
-            while (range->x_end > 0 && !is_word_char(line->chars[range->x_end - 1].value[0]) && !is_whitespace(line->chars[range->x_end - 1].value[0])) {
+        if (!is_word_char(line->chars[byte_pos])) {
+            int prev_byte_pos = utf8_char_to_byte_index(line->chars, range->x_end - 1);
+            while (range->x_end > 0 && !is_word_char(line->chars[prev_byte_pos]) && !is_whitespace(line->chars[prev_byte_pos])) {
                 touched = 1;
                 range_expand_left(&line, range);
+                prev_byte_pos = utf8_char_to_byte_index(line->chars, range->x_end - 1);
             }
         }
         if (touched) {
             continue;
         }
-        if (!is_word_char(line->chars[range->x_end].value[0])) {
+        if (!is_word_char(line->chars[byte_pos])) {
             continue;
         }
-        while (range->x_end > 0 && is_word_char(line->chars[range->x_end - 1].value[0])) {
+        int prev_byte_pos = utf8_char_to_byte_index(line->chars, range->x_end - 1);
+        while (range->x_end > 0 && is_word_char(line->chars[prev_byte_pos])) {
             range_expand_left(&line, range);
+            prev_byte_pos = utf8_char_to_byte_index(line->chars, range->x_end - 1);
         }
     }
 }
@@ -1484,11 +1446,15 @@ void range_expand_B(BufferLine *line, int count, Range *range) {
                 break;
             }
         }
-        while (is_whitespace(line->chars[range->x_end].value[0])) {
+        int byte_pos = buffer_get_byte_position_x(buffer);
+        while (is_whitespace(line->chars[byte_pos])) {
             range_expand_left(&line, range);
+            byte_pos = buffer_get_byte_position_x(buffer);
         }
-        while (range->x_end > 0 && !is_whitespace(line->chars[range->x_end - 1].value[0])) {
+        int prev_byte_pos = utf8_char_to_byte_index(line->chars, range->x_end - 1);
+        while (range->x_end > 0 && !is_whitespace(line->chars[prev_byte_pos])) {
             range_expand_left(&line, range);
+            prev_byte_pos = utf8_char_to_byte_index(line->chars, range->x_end - 1);
         }
     }
 }
@@ -1618,32 +1584,45 @@ static void get_target_range(EditorCommand *cmd, Range *range) {
             break;
         case 'w':
             if (cmd->action) {
+                int byte_pos_x = buffer_get_byte_position_x(buffer);
                 if (cmd->specifier[0] == 'i') {
-                    if (is_word_char(line->chars[buffer->position_x].value[0])) {
-                        while (range->x_start > 0 && is_word_char(line->chars[range->x_start - 1].value[0])) range->x_start--;
-                        while (range->x_end < line->char_count - 1 && is_word_char(line->chars[range->x_end + 1].value[0])) range->x_end++;
-                        range->x_end++;
+                    if (is_word_char(line->chars[byte_pos_x])) {
+                        int start_byte_pos = byte_pos_x;
+                        while (start_byte_pos > 0 && is_word_char(line->chars[start_byte_pos - 1])) start_byte_pos--;
+                        range->x_start = utf8_char_count(line->chars, start_byte_pos);
+
+                        int end_byte_pos = byte_pos_x;
+                        while (end_byte_pos < line->byte_count - 1 && is_word_char(line->chars[end_byte_pos + 1])) end_byte_pos++;
+                        range->x_end = utf8_char_count(line->chars, end_byte_pos) + 1;
                     }
                 } else if (cmd->specifier[0] == 'a') {
-                    if (is_word_char(line->chars[buffer->position_x].value[0])) {
-                        while (range->x_start > 0 && is_word_char(line->chars[range->x_start - 1].value[0])) range->x_start--;
-                        while (range->x_end < line->char_count - 1 && is_word_char(line->chars[range->x_end + 1].value[0])) range->x_end++;
+                    if (is_word_char(line->chars[byte_pos_x])) {
+                        int start_byte_pos = byte_pos_x;
+                        while (start_byte_pos > 0 && is_word_char(line->chars[start_byte_pos - 1])) start_byte_pos--;
+                        range->x_start = utf8_char_count(line->chars, start_byte_pos);
 
-                        int x_end = range->x_end;
-                        while (range->x_end < line->char_count - 1 && is_whitespace(line->chars[range->x_end + 1].value[0])) range->x_end++;
-                        range->x_end++;
-                        if (x_end + 1 == range->x_end) {
-                            while (range->x_start > 0 && is_whitespace(line->chars[range->x_start - 1].value[0])) range->x_start--;
+                        int end_byte_pos = byte_pos_x;
+                        while (end_byte_pos < line->byte_count - 1 && is_word_char(line->chars[end_byte_pos + 1])) end_byte_pos++;
+
+                        int x_end_byte = end_byte_pos;
+                        while (end_byte_pos < line->byte_count - 1 && is_whitespace(line->chars[end_byte_pos + 1])) end_byte_pos++;
+                        range->x_end = utf8_char_count(line->chars, end_byte_pos) + 1;
+
+                        if (x_end_byte + 1 == end_byte_pos) {
+                            while (start_byte_pos > 0 && is_whitespace(line->chars[start_byte_pos - 1])) start_byte_pos--;
+                            range->x_start = utf8_char_count(line->chars, start_byte_pos);
                         }
                     } else {
-                        int end_of_space = buffer->position_x;
-                        while(end_of_space < line->char_count && is_whitespace(line->chars[end_of_space].value[0])) end_of_space++;
-                        if (end_of_space < line->char_count) {
-                            range->x_start = buffer->position_x;
-                            while(range->x_start > 0 && is_whitespace(line->chars[range->x_start - 1].value[0])) range->x_start--;
-                            range->x_end = end_of_space;
-                            while(range->x_end < line->char_count - 1 && is_word_char(line->chars[range->x_end + 1].value[0])) range->x_end++;
-                            range->x_end++;
+                        int end_of_space = byte_pos_x;
+                        while(end_of_space < line->byte_count && is_whitespace(line->chars[end_of_space])) end_of_space++;
+                        if (end_of_space < line->byte_count) {
+                            int start_byte_pos = byte_pos_x;
+                            while(start_byte_pos > 0 && is_whitespace(line->chars[start_byte_pos - 1])) start_byte_pos--;
+                            range->x_start = utf8_char_count(line->chars, start_byte_pos);
+
+                            int end_byte_pos = end_of_space;
+                            while(end_byte_pos < line->byte_count - 1 && is_word_char(line->chars[end_byte_pos + 1])) end_byte_pos++;
+                            range->x_end = utf8_char_count(line->chars, end_byte_pos) + 1;
                         }
                     }
                 }
@@ -1654,56 +1633,72 @@ static void get_target_range(EditorCommand *cmd, Range *range) {
                 if (range->x_end >= line->char_count - 1) {
                     range_expand_right(&line, range);
                     if (line->char_count) {
-                        while (is_whitespace(line->chars[range->x_end].value[0])) {
+                        int byte_pos = buffer_get_byte_position_x(buffer);
+                        while (is_whitespace(line->chars[byte_pos])) {
                             range_expand_right(&line, range);
+                            byte_pos = buffer_get_byte_position_x(buffer);
                         }
                     }
                     continue;
                 }
                 int touched = 0;
-                while (!is_word_char(line->chars[range->x_end].value[0]) && !is_whitespace(line->chars[range->x_end].value[0])) {
+                int byte_pos = buffer_get_byte_position_x(buffer);
+                while (!is_word_char(line->chars[byte_pos]) && !is_whitespace(line->chars[byte_pos])) {
                     touched = 1;
                     if (range_expand_right(&line, range)) break;
+                    byte_pos = buffer_get_byte_position_x(buffer);
                 }
                 if (!touched) {
-                    while (is_word_char(line->chars[range->x_end].value[0])) {
+                    while (is_word_char(line->chars[byte_pos])) {
                         if (range_expand_right(&line, range)) break;
+                        byte_pos = buffer_get_byte_position_x(buffer);
                     }
                 }
 
-                while (range->x_end < line->char_count && is_whitespace(line->chars[range->x_end].value[0])) {
+                while (range->x_end < line->char_count && is_whitespace(line->chars[byte_pos])) {
                     if (range_expand_right(&line, range) && !line->char_count) break;
+                    byte_pos = buffer_get_byte_position_x(buffer);
                 }
             }
             break;
         case 'W':
             if (cmd->action) {
+                int byte_pos_x = buffer_get_byte_position_x(buffer);
                 if (cmd->specifier[0] == 'i') {
-                    if (!is_whitespace(line->chars[buffer->position_x].value[0])) {
-                        while (range->x_start > 0 && !is_whitespace(line->chars[range->x_start - 1].value[0])) range->x_start--;
-                        while (range->x_end < line->char_count - 1 && !is_whitespace(line->chars[range->x_end + 1].value[0])) range->x_end++;
-                        range->x_end++;
+                    if (!is_whitespace(line->chars[byte_pos_x])) {
+                        int start_byte_pos = byte_pos_x;
+                        while (start_byte_pos > 0 && !is_whitespace(line->chars[start_byte_pos - 1])) start_byte_pos--;
+                        range->x_start = utf8_char_count(line->chars, start_byte_pos);
+                        int end_byte_pos = byte_pos_x;
+                        while (end_byte_pos < line->byte_count - 1 && !is_whitespace(line->chars[end_byte_pos + 1])) end_byte_pos++;
+                        range->x_end = utf8_char_count(line->chars, end_byte_pos) + 1;
                     }
                 } else if (cmd->specifier[0] == 'a') {
-                    if (!is_whitespace(line->chars[buffer->position_x].value[0])) {
-                        while (range->x_start > 0 && !is_whitespace(line->chars[range->x_start - 1].value[0])) range->x_start--;
-                        while (range->x_end < line->char_count - 1 && !is_whitespace(line->chars[range->x_end + 1].value[0])) range->x_end++;
+                    if (!is_whitespace(line->chars[byte_pos_x])) {
+                        int start_byte_pos = byte_pos_x;
+                        while (start_byte_pos > 0 && !is_whitespace(line->chars[start_byte_pos - 1])) start_byte_pos--;
+                        range->x_start = utf8_char_count(line->chars, start_byte_pos);
+                        int end_byte_pos = byte_pos_x;
+                        while (end_byte_pos < line->byte_count - 1 && !is_whitespace(line->chars[end_byte_pos + 1])) end_byte_pos++;
 
-                        int x_end = range->x_end;
-                        while (range->x_end < line->char_count - 1 && is_whitespace(line->chars[range->x_end + 1].value[0])) range->x_end++;
-                        range->x_end++;
-                        if (x_end + 1 == range->x_end) {
-                            while (range->x_start > 0 && is_whitespace(line->chars[range->x_start - 1].value[0])) range->x_start--;
+                        int x_end_byte = end_byte_pos;
+                        while (end_byte_pos < line->byte_count - 1 && is_whitespace(line->chars[end_byte_pos + 1])) end_byte_pos++;
+                        range->x_end = utf8_char_count(line->chars, end_byte_pos) + 1;
+
+                        if (x_end_byte + 1 == end_byte_pos) {
+                            while (start_byte_pos > 0 && is_whitespace(line->chars[start_byte_pos - 1])) start_byte_pos--;
+                            range->x_start = utf8_char_count(line->chars, start_byte_pos);
                         }
                     } else {
-                        int end_of_space = buffer->position_x;
-                        while(end_of_space < line->char_count && is_whitespace(line->chars[end_of_space].value[0])) end_of_space++;
-                        if (end_of_space < line->char_count) {
-                            range->x_start = buffer->position_x;
-                            while(range->x_start > 0 && is_whitespace(line->chars[range->x_start - 1].value[0])) range->x_start--;
-                            range->x_end = end_of_space;
-                            while(range->x_end < line->char_count - 1 && !is_whitespace(line->chars[range->x_end + 1].value[0])) range->x_end++;
-                            range->x_end++;
+                        int end_of_space = byte_pos_x;
+                        while(end_of_space < line->byte_count && is_whitespace(line->chars[end_of_space])) end_of_space++;
+                        if (end_of_space < line->byte_count) {
+                            int start_byte_pos = byte_pos_x;
+                            while(start_byte_pos > 0 && is_whitespace(line->chars[start_byte_pos - 1])) start_byte_pos--;
+                            range->x_start = utf8_char_count(line->chars, start_byte_pos);
+                            int end_byte_pos = end_of_space;
+                            while(end_byte_pos < line->byte_count - 1 && !is_whitespace(line->chars[end_byte_pos + 1])) end_byte_pos++;
+                            range->x_end = utf8_char_count(line->chars, end_byte_pos) + 1;
                         }
                     }
                 }
@@ -1714,18 +1709,23 @@ static void get_target_range(EditorCommand *cmd, Range *range) {
                 if (range->x_end >= line->char_count - 1) {
                     range_expand_right(&line, range);
                     if (line->char_count) {
-                        while (is_whitespace(line->chars[range->x_end].value[0])) {
+                        int byte_pos = buffer_get_byte_position_x(buffer);
+                        while (is_whitespace(line->chars[byte_pos])) {
                             range_expand_right(&line, range);
+                            byte_pos = buffer_get_byte_position_x(buffer);
                         }
                     }
                     continue;
                 }
-                while (!is_whitespace(line->chars[range->x_end].value[0])) {
+                int byte_pos = buffer_get_byte_position_x(buffer);
+                while (!is_whitespace(line->chars[byte_pos])) {
                     if (range_expand_right(&line, range)) break;
+                    byte_pos = buffer_get_byte_position_x(buffer);
                 }
 
-                while (range->x_end < line->char_count && is_whitespace(line->chars[range->x_end].value[0])) {
+                while (range->x_end < line->char_count && is_whitespace(line->chars[byte_pos])) {
                     if (range_expand_right(&line, range) && !line->char_count) break;
+                    byte_pos = buffer_get_byte_position_x(buffer);
                 }
             }
             break;
@@ -1768,8 +1768,11 @@ static void get_target_range(EditorCommand *cmd, Range *range) {
         case 'f':
             for (int i = 0; i < count; i++) {
                 int found = 0;
+                int start_byte_pos = buffer_get_byte_position_x(buffer);
+                char *p = line->chars + start_byte_pos;
                 for (int j = range->x_end + 1; j < line->char_count; j++) {
-                    if (strcmp(line->chars[j].value, cmd->specifier) == 0) {
+                    p += utf8_char_len(p);
+                    if (strncmp(p, cmd->specifier, strlen(cmd->specifier)) == 0) {
                         range->x_end = j;
                         found = 1;
                         break;
@@ -1782,7 +1785,8 @@ static void get_target_range(EditorCommand *cmd, Range *range) {
             for (int i = 0; i < count; i++) {
                 int found = 0;
                 for (int j = range->x_end - 1; j >= 0; j--) {
-                    if (strcmp(line->chars[j].value, cmd->specifier) == 0) {
+                    int byte_pos = utf8_char_to_byte_index(line->chars, j);
+                    if (strncmp(line->chars + byte_pos, cmd->specifier, strlen(cmd->specifier)) == 0) {
                         range->x_end = j;
                         found = 1;
                         break;
@@ -1794,8 +1798,11 @@ static void get_target_range(EditorCommand *cmd, Range *range) {
         case 't':
             for (int i = 0; i < count; i++) {
                 int found = 0;
+                int start_byte_pos = buffer_get_byte_position_x(buffer);
+                char *p = line->chars + start_byte_pos;
                 for (int j = range->x_end + 2; j < line->char_count; j++) {
-                    if (strcmp(line->chars[j].value, cmd->specifier) == 0) {
+                    p += utf8_char_len(p);
+                    if (strncmp(p, cmd->specifier, strlen(cmd->specifier)) == 0) {
                         range->x_end = j - 1;
                         found = 1;
                         break;
@@ -1808,7 +1815,8 @@ static void get_target_range(EditorCommand *cmd, Range *range) {
             for (int i = 0; i < count; i++) {
                 int found = 0;
                 for (int j = range->x_end - 2; j >= 0; j--) {
-                    if (strcmp(line->chars[j].value, cmd->specifier) == 0) {
+                    int byte_pos = utf8_char_to_byte_index(line->chars, j);
+                    if (strncmp(line->chars + byte_pos, cmd->specifier, strlen(cmd->specifier)) == 0) {
                         range->x_end = j + 1;
                         found = 1;
                         break;
@@ -1864,9 +1872,9 @@ static char* buffer_get_text_in_range(Buffer *b, int top, int left, int bottom, 
         BufferLine *line = b->lines[y];
         int start_x = (y == top) ? left : 0;
         int end_x = (y == bottom) ? right : line->char_count;
-        for (int x = start_x; x < end_x; x++) {
-            len += strlen(line->chars[x].value);
-        }
+        int start_byte = utf8_char_to_byte_index(line->chars, start_x);
+        int end_byte = utf8_char_to_byte_index(line->chars, end_x);
+        len += end_byte - start_byte;
         if (y < bottom) {
             len++; // for '\n'
         }
@@ -1882,11 +1890,11 @@ static char* buffer_get_text_in_range(Buffer *b, int top, int left, int bottom, 
         BufferLine *line = b->lines[y];
         int start_x = (y == top) ? left : 0;
         int end_x = (y == bottom) ? right : line->char_count;
-        for (int x = start_x; x < end_x; x++) {
-            size_t char_len = strlen(line->chars[x].value);
-            memcpy(p, line->chars[x].value, char_len);
-            p += char_len;
-        }
+        int start_byte = utf8_char_to_byte_index(line->chars, start_x);
+        int end_byte = utf8_char_to_byte_index(line->chars, end_x);
+        int bytes_to_copy = end_byte - start_byte;
+        memcpy(p, line->chars + start_byte, bytes_to_copy);
+        p += bytes_to_copy;
         if (y < bottom) {
             *p++ = '\n';
         }
@@ -1920,6 +1928,7 @@ void range_delete(Buffer *b, Range *range, EditorCommand *cmd) {
         }
 
         buffer_line_destroy(b->lines[top]);
+        free(b->lines[top]);
         memmove(&b->lines[top], &b->lines[top + 1], (b->line_count - top - 1) * sizeof(BufferLine *));
         b->line_count--;
         return;
@@ -1936,15 +1945,9 @@ void range_delete(Buffer *b, Range *range, EditorCommand *cmd) {
     if (b->parser && b->tree) {
         uint32_t start_byte = 0;
         for (int i = 0; i < top; i++) {
-            for (int j = 0; j < b->lines[i]->char_count; j++) {
-                start_byte += strlen(b->lines[i]->chars[j].value);
-            }
-            start_byte++; // newline
+            start_byte += b->lines[i]->byte_count + 1;
         }
-        uint32_t start_byte_in_line = 0;
-        for (int i = 0; i < left; i++) {
-            start_byte_in_line += strlen(b->lines[top]->chars[i].value);
-        }
+        uint32_t start_byte_in_line = utf8_char_to_byte_index(b->lines[top]->chars, left);
         start_byte += start_byte_in_line;
 
         uint32_t deleted_bytes = 0;
@@ -1952,22 +1955,13 @@ void range_delete(Buffer *b, Range *range, EditorCommand *cmd) {
             BufferLine *line = b->lines[i];
             int start_j = (i == top) ? left : 0;
             int end_j = (i == bottom) ? right : line->char_count;
-            for (int j = start_j; j < end_j; j++) {
-                deleted_bytes += strlen(line->chars[j].value);
-            }
+            deleted_bytes += utf8_char_to_byte_index(line->chars, end_j) - utf8_char_to_byte_index(line->chars, start_j);
             if (i < bottom) {
                 deleted_bytes++; // newline
             }
         }
 
-        uint32_t end_byte_in_line = 0;
-        if (top == bottom) {
-            end_byte_in_line = start_byte_in_line + deleted_bytes;
-        } else {
-            for (int i = 0; i < right; i++) {
-                end_byte_in_line += strlen(b->lines[bottom]->chars[i].value);
-            }
-        }
+        uint32_t end_byte_in_line = utf8_char_to_byte_index(b->lines[bottom]->chars, right);
 
         ts_tree_edit(b->tree, &(TSInputEdit){
             .start_byte = start_byte,
@@ -1979,14 +1973,16 @@ void range_delete(Buffer *b, Range *range, EditorCommand *cmd) {
         });
     }
 
-    // trim top line
-    int bottom_remaining_chars = b->lines[bottom]->char_count - right;
-    int new_char_count = left + bottom_remaining_chars;
-    buffer_line_realloc_for_capacity(b->lines[top], new_char_count);
-    memmove(&b->lines[top]->chars[left], &b->lines[bottom]->chars[right], bottom_remaining_chars * sizeof(Char));
-    b->lines[top]->char_count = new_char_count;
+    int left_byte = utf8_char_to_byte_index(b->lines[top]->chars, left);
+    int right_byte = utf8_char_to_byte_index(b->lines[bottom]->chars, right);
+    int bottom_remaining_bytes = b->lines[bottom]->byte_count - right_byte;
+    int new_byte_count = left_byte + bottom_remaining_bytes;
+    buffer_line_realloc_for_capacity(b->lines[top], new_byte_count + 1);
+    memmove(&b->lines[top]->chars[left_byte], &b->lines[bottom]->chars[right_byte], bottom_remaining_bytes);
+    b->lines[top]->byte_count = new_byte_count;
+    b->lines[top]->chars[new_byte_count] = '\0';
+    b->lines[top]->char_count = utf8_strlen(b->lines[top]->chars);
 
-    // destroy all completely removed lines and shift
     if (bottom > top) {
         for (int i = top + 1; i <= bottom; i++) {
             buffer_line_destroy(b->lines[i]);
