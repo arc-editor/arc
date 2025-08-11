@@ -4,6 +4,8 @@
 #include <string.h>
 #include <wchar.h>
 #include <locale.h>
+#include <unistd.h>
+#include <errno.h>
 
 #include "utf8.h"
 #include "log.h"
@@ -62,12 +64,18 @@ int read_utf8_char(FILE *fp, char *buf, size_t buf_size) {
 }
 
 int read_utf8_char_from_stdin(char *buf, size_t buf_size) {
-    int c = getchar();
-    if (c == EOF) {
-        return 0; // End of file
+    char first_byte_char;
+    ssize_t nread;
+
+    do {
+        nread = read(STDIN_FILENO, &first_byte_char, 1);
+    } while (nread == -1 && errno == EINTR);
+
+    if (nread <= 0) {
+        return 0; // EOF or error
     }
 
-    unsigned char first_byte = (unsigned char)c;
+    unsigned char first_byte = (unsigned char)first_byte_char;
     int len;
 
     if (first_byte < 0x80) { // 0xxxxxxx
@@ -79,26 +87,28 @@ int read_utf8_char_from_stdin(char *buf, size_t buf_size) {
     } else if ((first_byte & 0xF8) == 0xF0) { // 11110xxx
         len = 4;
     } else {
-        // Invalid UTF-8 start byte. For simplicity, treat as a single byte.
         len = 1;
     }
 
     if ((size_t)len >= buf_size) {
-        // This should not happen if buf_size is large enough
         return -1; // Error
     }
 
     buf[0] = first_byte;
-    for (int i = 1; i < len; i++) {
-        c = getchar();
-        if (c == EOF) {
-            // Unexpected EOF
-            return -1; // Error
+    if (len > 1) {
+        ssize_t total_read = 0;
+        while (total_read < len - 1) {
+            nread = read(STDIN_FILENO, buf + 1 + total_read, len - 1 - total_read);
+            if (nread == -1) {
+                if (errno == EINTR) continue;
+                return -1; // other read error
+            }
+            if (nread == 0) return -1; // EOF in the middle of a char
+            total_read += nread;
         }
-        buf[i] = (unsigned char)c;
     }
-    buf[len] = '\0';
 
+    buf[len] = '\0';
     return len;
 }
 
