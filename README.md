@@ -27,9 +27,9 @@ Here is a comparison of startup time and memory usage for `arc` against other po
 | Benchmark (File Size)    | `arc` | `neovim` | `helix` |
 |--------------------------|---|---|---|
 | Startup Time (ms) (10KB) | `0` | `10.00` | `10.00` |
-| Memory Used (MB) (10KB)  | `3.02` | `10.27` | `13.74` |
+| Memory Used (MB) (10KB)  | `3.06` | `10.29` | `13.73` |
 | Startup Time (ms) (10MB) | `620.00` | `50.00` | `10.00` |
-| Memory Used (MB) (10MB)  | `147.54` | `24.77` | `13.99` |
+| Memory Used (MB) (10MB)  | `147.57` | `24.73` | `13.60` |
 | Binary Size (MB)         | `.4MB` | `4.6MB` | `18.2MB` |
 
 <!-- BENCHMARK_TABLE_END -->
