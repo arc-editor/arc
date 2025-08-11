@@ -43,7 +43,7 @@ void *lsp_reader_thread_func(void *arg __attribute__((unused))) {
         cJSON_Delete(message);
         continue;
       }
-      
+
       cJSON *diagnostics_json = cJSON_GetObjectItem(params, "diagnostics");
       if (!diagnostics_json) {
         cJSON_Delete(message);
@@ -146,8 +146,7 @@ cJSON *lsp_read_message() {
         char *header_end = strstr(read_buffer, "\r\n\r\n");
         if (!header_end) {
             // Need more data for header
-            ssize_t bytes_read = read(from_server_pipe[0], read_buffer + buffer_pos, 
-                                    sizeof(read_buffer) - buffer_pos - 1);
+            ssize_t bytes_read = read(from_server_pipe[0], read_buffer + buffer_pos, sizeof(read_buffer) - buffer_pos - 1);
             if (bytes_read <= 0) {
                 return NULL; // EOF or error
             }

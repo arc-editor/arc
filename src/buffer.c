@@ -423,7 +423,7 @@ void buffer_reset_offset_y(Buffer *buffer, int screen_rows) {
 
 void buffer_reset_offset_x(Buffer *buffer, int screen_cols) {
     int visual_x = buffer_get_visual_position_x(buffer) + buffer->offset_x;
-    if (visual_x <= screen_cols) {
+    if (visual_x <= screen_cols - 5) {
         buffer->offset_x = 0;
     } else {
         buffer->offset_x = visual_x - screen_cols + 5;

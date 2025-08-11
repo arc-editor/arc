@@ -312,8 +312,17 @@ void draw_buffer(Diagnostic *diagnostics, int diagnostics_count, int update_diag
     for (int row = buffer->offset_y; row < buffer->offset_y + editor.screen_rows - 1; row++) {
         int relative_y = row - buffer->offset_y;
         printf("\x1b[%d;1H", relative_y + 1);
+        char line_num_str[16];
+        int line_num_len = snprintf(line_num_str, sizeof(line_num_str), "%*d ", buffer->line_num_width - 1, row + 1);
         if (row >= buffer->line_count) {
             int chars_to_print = editor.screen_cols;
+            if (buffer->offset_x) {
+                editor_set_style(&editor.current_theme.content_line_number_sticky, 0, 1);
+                for (int i = 0; i < line_num_len; i++) {
+                    putchar(' ');
+                    chars_to_print--;
+                }
+            }
             editor_set_style(&editor.current_theme.content_background, 0, 1);
             while (chars_to_print > 0) {
                 putchar(' ');
@@ -339,8 +348,6 @@ void draw_buffer(Diagnostic *diagnostics, int diagnostics_count, int update_diag
                 }
             }
         }
-        char line_num_str[16];
-        int line_num_len = snprintf(line_num_str, sizeof(line_num_str), "%*d ", buffer->line_num_width - 1, row + 1);
         if (buffer->offset_x) {
             editor_set_style(&editor.current_theme.content_line_number_sticky, 1, 1);
         } else if (row == buffer->position_y) {
