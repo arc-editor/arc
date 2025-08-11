@@ -17,6 +17,7 @@
 #include <stdarg.h>
 #include <sys/stat.h>
 #include "log.h"
+#include "buffer_lines.h"
 #include "picker.h"
 #include "picker_file.h"
 #include "tree_sitter/api.h"
@@ -303,13 +304,19 @@ static int is_in_selection(int y, int x) {
 void draw_buffer(Diagnostic *diagnostics, int diagnostics_count, int update_diagnostics) {
     uint32_t start_byte = 0;
     for (int i = 0; i < buffer->offset_y; i++) {
-        BufferLine *line = buffer->lines[i];
+        BufferLine *line = buffer_lines_get(buffer->lines, i);
         for (int j = 0; j < line->char_count; j++) {
             start_byte += strlen(line->chars[j].value);
         }
         start_byte++; // for newline
     }
-    for (int row = buffer->offset_y; row < buffer->offset_y + editor.screen_rows - 1; row++) {
+
+    int lines_to_draw = editor.screen_rows - 1;
+    BufferLine **lines_to_render = malloc(lines_to_draw * sizeof(BufferLine*));
+    int rendered_line_count = buffer_lines_get_range(buffer->lines, buffer->offset_y, lines_to_draw, lines_to_render);
+
+    for (int row_idx = 0; row_idx < rendered_line_count; row_idx++) {
+        int row = buffer->offset_y + row_idx;
         int relative_y = row - buffer->offset_y;
         printf("\x1b[%d;1H", relative_y + 1);
         char line_num_str[16];
@@ -330,7 +337,7 @@ void draw_buffer(Diagnostic *diagnostics, int diagnostics_count, int update_diag
             }
             continue;
         }
-        BufferLine *line = buffer->lines[row];
+        BufferLine *line = lines_to_render[row_idx];
 
         if (line->needs_highlight) {
             buffer_line_apply_syntax_highlighting(buffer, line, start_byte, &editor.current_theme);
@@ -469,7 +476,18 @@ void draw_buffer(Diagnostic *diagnostics, int diagnostics_count, int update_diag
         }
         start_byte++; // for newline
     }
+
+    for (int row_idx = rendered_line_count; row_idx < lines_to_draw; row_idx++) {
+        int relative_y = row_idx;
+        printf("\x1b[%d;1H", relative_y + 1);
+        editor_set_style(&editor.current_theme.content_background, 0, 1);
+        for (int i = 0; i < editor.screen_cols; i++) {
+            putchar(' ');
+        }
+    }
+
     printf("\x1b[0m");
+    free(lines_to_render);
 }
 
 void draw_cursor() {
@@ -613,45 +631,42 @@ static void editor_add_insertion_to_history(const char* text) {
 
 void editor_insert_new_line() {
     pthread_mutex_lock(&editor_mutex);
-    BufferLine *current_line = buffer->lines[buffer->position_y];
+    BufferLine *current_line = buffer_lines_get(buffer->lines, buffer->position_y);
 
     uint32_t start_byte = 0;
     for (int i = 0; i < buffer->position_y; i++) {
-        for (int j = 0; j < buffer->lines[i]->char_count; j++) {
-            start_byte += strlen(buffer->lines[i]->chars[j].value);
+        BufferLine *line = buffer_lines_get(buffer->lines, i);
+        for (int j = 0; j < line->char_count; j++) {
+            start_byte += strlen(line->chars[j].value);
         }
         start_byte++; // for newline
     }
     int byte_pos_x = buffer_get_byte_position_x(buffer);
     start_byte += byte_pos_x;
 
-    buffer_realloc_lines_for_capacity(buffer);
-
-    for (int i = buffer->line_count; i > buffer->position_y + 1; i--) {
-        buffer->lines[i] = buffer->lines[i - 1];
-    }
-
-    buffer->lines[buffer->position_y + 1] = (BufferLine *)malloc(sizeof(BufferLine));
-    if (buffer->lines[buffer->position_y + 1] == NULL) {
+    BufferLine *new_line = (BufferLine *)malloc(sizeof(BufferLine));
+    if (new_line == NULL) {
         log_error("editor.editor_insert_new_line: failed to allocate BufferLine");
         exit(1);
     }
-    buffer_line_init(buffer->lines[buffer->position_y + 1]);
+    buffer_line_init(new_line);
 
     int chars_to_move = current_line->char_count - buffer->position_x;
     if (chars_to_move > 0) {
-        buffer_line_realloc_for_capacity(buffer->lines[buffer->position_y + 1], chars_to_move);
-        memcpy(buffer->lines[buffer->position_y + 1]->chars,
+        buffer_line_realloc_for_capacity(new_line, chars_to_move);
+        memcpy(new_line->chars,
                &current_line->chars[buffer->position_x],
                chars_to_move * sizeof(Char));
-        buffer->lines[buffer->position_y + 1]->char_count = chars_to_move;
+        new_line->char_count = chars_to_move;
         current_line->char_count = buffer->position_x;
     }
 
     if (buffer->parser) {
         current_line->needs_highlight = 1;
-        buffer->lines[buffer->position_y + 1]->needs_highlight = 1;
+        new_line->needs_highlight = 1;
     }
+
+    buffer_lines_insert_line(&buffer->lines, new_line, buffer->position_y + 1);
 
     buffer->line_count++;
     if (buffer->parser && buffer->tree) {
@@ -907,7 +922,7 @@ void editor_start(char *file_name, int benchmark_mode) {
 
 void editor_insert_char(const char *ch) {
     pthread_mutex_lock(&editor_mutex);
-    BufferLine *line = buffer->lines[buffer->position_y];
+    BufferLine *line = buffer_lines_get(buffer->lines, buffer->position_y);
     buffer_line_realloc_for_capacity(line, line->char_count + 1);
 
     unsigned char new_style = 0;
@@ -949,8 +964,9 @@ void editor_insert_char(const char *ch) {
     if (buffer->parser && buffer->tree) {
         uint32_t start_byte = 0;
         for (int i = 0; i < buffer->position_y; i++) {
-            for (int j = 0; j < buffer->lines[i]->char_count; j++) {
-                start_byte += strlen(buffer->lines[i]->chars[j].value);
+            BufferLine *line = buffer_lines_get(buffer->lines, i);
+            for (int j = 0; j < line->char_count; j++) {
+                start_byte += strlen(line->chars[j].value);
             }
             start_byte++; // for newline
         }
@@ -973,7 +989,7 @@ void editor_insert_char(const char *ch) {
 
 void editor_move_cursor_right() {
     pthread_mutex_lock(&editor_mutex);
-    BufferLine *line = buffer->lines[buffer->position_y];
+    BufferLine *line = buffer_lines_get(buffer->lines, buffer->position_y);
     if (buffer->position_x < line->char_count) {
         buffer->position_x++;
     } else if (buffer->position_y < buffer->line_count - 1) {
@@ -994,7 +1010,7 @@ void editor_move_cursor_left() {
         buffer->position_x--;
     } else if (buffer->position_y > 0) {
         buffer->position_y--;
-        buffer->position_x = buffer->lines[buffer->position_y]->char_count;
+        buffer->position_x = buffer_lines_get(buffer->lines, buffer->position_y)->char_count;
     }
     buffer_reset_offset_y(buffer, editor.screen_rows);
     buffer_reset_offset_x(buffer, editor.screen_cols);
@@ -1046,7 +1062,7 @@ void editor_move_to_start_of_line(void) {
 
 void editor_move_to_end_of_line(void) {
     pthread_mutex_lock(&editor_mutex);
-    BufferLine *line = buffer->lines[buffer->position_y];
+    BufferLine *line = buffer_lines_get(buffer->lines, buffer->position_y);
     buffer->position_x = line->char_count;
     buffer_reset_offset_x(buffer, editor.screen_cols);
     buffer_update_current_search_match(buffer);
@@ -1066,7 +1082,7 @@ void editor_write_force() {
         return;
     }
     for (int line_idx = 0; line_idx < buffer->line_count; line_idx++) {
-        BufferLine *line = buffer->lines[line_idx];
+        BufferLine *line = buffer_lines_get(buffer->lines, line_idx);
         for (int char_idx = 0; char_idx < line->char_count; char_idx++) {
             fputs(line->chars[char_idx].value, fp);
         }
@@ -1101,12 +1117,13 @@ void editor_write() {
 
 void editor_delete() {
     pthread_mutex_lock(&editor_mutex);
-    BufferLine *line = buffer->lines[buffer->position_y];
+    BufferLine *line = buffer_lines_get(buffer->lines, buffer->position_y);
 
     uint32_t start_byte = 0;
     for (int i = 0; i < buffer->position_y; i++) {
-        for (int j = 0; j < buffer->lines[i]->char_count; j++) {
-            start_byte += strlen(buffer->lines[i]->chars[j].value);
+        BufferLine *l = buffer_lines_get(buffer->lines, i);
+        for (int j = 0; j < l->char_count; j++) {
+            start_byte += strlen(l->chars[j].value);
         }
         start_byte++; // for newline
     }
@@ -1122,19 +1139,17 @@ void editor_delete() {
             history_add_change(buffer->history, CHANGE_TYPE_DELETE, buffer->position_y, buffer->position_x, "\n");
         }
         if (buffer->parser) {
-            BufferLine *next_line = buffer->lines[buffer->position_y + 1];
+            BufferLine *next_line = buffer_lines_get(buffer->lines, buffer->position_y + 1);
             next_line->needs_highlight = 1;
         }
-        BufferLine *next_line = buffer->lines[buffer->position_y + 1];
+        BufferLine *next_line = buffer_lines_get(buffer->lines, buffer->position_y + 1);
         int new_char_count = line->char_count + next_line->char_count;
         buffer_line_realloc_for_capacity(line, new_char_count);
         memcpy(&line->chars[line->char_count], next_line->chars, next_line->char_count * sizeof(Char));
         line->char_count = new_char_count;
         buffer_line_destroy(next_line);
-
-        for (int i = buffer->position_y + 1; i < buffer->line_count - 1; i++) {
-            buffer->lines[i] = buffer->lines[i + 1];
-        }
+        free(next_line);
+        buffer_lines_delete_line(&buffer->lines, buffer->position_y + 1);
         buffer->line_count--;
         buffer_set_line_num_width(buffer);
         if (buffer->parser && buffer->tree) {
@@ -1181,7 +1196,7 @@ void editor_clear_line(void) {
         .y_start = b->position_y,
         .y_end = b->position_y,
         .x_start = 0,
-        .x_end = b->lines[b->position_y]->char_count,
+        .x_end = buffer_lines_get(b->lines, b->position_y)->char_count,
     };
     if (range.x_start != range.x_end) {
         range_delete(b, &range, &cmd);
@@ -1195,12 +1210,13 @@ void editor_clear_line(void) {
 
 void editor_backspace() {
     pthread_mutex_lock(&editor_mutex);
-    BufferLine *line = buffer->lines[buffer->position_y];
+    BufferLine *line = buffer_lines_get(buffer->lines, buffer->position_y);
 
     uint32_t start_byte = 0;
     for (int i = 0; i < buffer->position_y; i++) {
-        for (int j = 0; j < buffer->lines[i]->char_count; j++) {
-            start_byte += strlen(buffer->lines[i]->chars[j].value);
+        BufferLine *l = buffer_lines_get(buffer->lines, i);
+        for (int j = 0; j < l->char_count; j++) {
+            start_byte += strlen(l->chars[j].value);
         }
         start_byte++; // for newline
     }
@@ -1212,7 +1228,7 @@ void editor_backspace() {
             pthread_mutex_unlock(&editor_mutex);
             return;
         }
-        BufferLine *prev_line = buffer->lines[buffer->position_y - 1];
+        BufferLine *prev_line = buffer_lines_get(buffer->lines, buffer->position_y - 1);
         if (!is_undo_redo_active) {
             history_add_change(buffer->history, CHANGE_TYPE_DELETE, buffer->position_y - 1, prev_line->char_count, "\n");
         }
@@ -1224,9 +1240,7 @@ void editor_backspace() {
             prev_line->needs_highlight = 1;
         }
 
-        for (int i = buffer->position_y; i < buffer->line_count - 1; i++) {
-            buffer->lines[i] = buffer->lines[i + 1];
-        }
+        buffer_lines_delete_line(&buffer->lines, buffer->position_y);
         buffer->line_count--;
         buffer_set_line_num_width(buffer);
         if (buffer->parser && buffer->tree) {
@@ -1245,9 +1259,9 @@ void editor_backspace() {
         }
         buffer->position_y--;
         buffer_reset_offset_y(buffer, editor.screen_rows);
-        buffer->position_x = buffer->lines[buffer->position_y]->char_count - line->char_count;
+        buffer->position_x = buffer_lines_get(buffer->lines, buffer->position_y)->char_count - line->char_count;
         buffer_line_destroy(line);
-
+        free(line);
     } else {
         Char deleted_char = line->chars[buffer->position_x - 1];
         if (!is_undo_redo_active) {
@@ -1331,7 +1345,7 @@ int range_expand_right(BufferLine **line, Range *range) {
             return 0;
         }
         range->y_end++;
-        *line = buffer->lines[range->y_end];
+        *line = buffer_lines_get(buffer->lines, range->y_end);
         range->x_end = 0;
         return 1;
     }
@@ -1345,7 +1359,7 @@ int range_expand_left(BufferLine **line, Range *range) {
             return 0;
         }
         range->y_end--;
-        *line = buffer->lines[range->y_end];
+        *line = buffer_lines_get(buffer->lines, range->y_end);
         range->x_end = (*line)->char_count - 1;
         if (range->x_end < 0) range->x_end = 0;
         return 1;
@@ -1359,7 +1373,7 @@ int range_expand_down(BufferLine **line, Range *range) {
         return 0;
     }
     range->y_end++;
-    *line = buffer->lines[range->y_end];
+    *line = buffer_lines_get(buffer->lines, range->y_end);
     range->x_end = (*line)->char_count - 1;
     return 1;
 }
@@ -1370,7 +1384,7 @@ int range_expand_up(BufferLine **line, Range *range) {
         return 0;
     }
     range->y_end--;
-    *line = buffer->lines[range->y_end];
+    *line = buffer_lines_get(buffer->lines, range->y_end);
     range->x_end = 0;
     return 1;
 }
@@ -1496,7 +1510,7 @@ static void get_target_range(EditorCommand *cmd, Range *range) {
                 range->y_end = tmp;
             }
             range->x_start = 0;
-            range->x_end = buffer->lines[range->y_end]->char_count;
+            range->x_end = buffer_lines_get(buffer->lines, range->y_end)->char_count;
         } else {
             range->x_start = buffer->selection_start_x;
             range->x_end = buffer->position_x;
@@ -1507,11 +1521,11 @@ static void get_target_range(EditorCommand *cmd, Range *range) {
                     range->x_start++;
                 }
             } else if (range->y_end > range->y_start) {
-                if (buffer->lines[range->y_end]->char_count > 0) {
+                if (buffer_lines_get(buffer->lines, range->y_end)->char_count > 0) {
                     range->x_end++;
                 }
             } else {
-                if (buffer->lines[range->y_start]->char_count > 0) {
+                if (buffer_lines_get(buffer->lines, range->y_start)->char_count > 0) {
                     range->x_start++;
                 }
             }
@@ -1519,7 +1533,7 @@ static void get_target_range(EditorCommand *cmd, Range *range) {
         return;
     }
 
-    BufferLine *line = buffer->lines[buffer->position_y];
+    BufferLine *line = buffer_lines_get(buffer->lines, buffer->position_y);
     int count = cmd->count ? cmd->count : 1;
     range->x_start = buffer->position_x;
     range->y_start = buffer->position_y;
@@ -1532,11 +1546,11 @@ static void get_target_range(EditorCommand *cmd, Range *range) {
                 int count = cmd->count ? cmd->count : 1;
                 for (int i = 0; i < count; i++) {
                     // find next empty line
-                    while (y < buffer->line_count - 1 && !is_line_empty(buffer->lines[y])) {
+                    while (y < buffer->line_count - 1 && !is_line_empty(buffer_lines_get(buffer->lines, y))) {
                         y++;
                     }
                     // find next non-empty line
-                    while (y < buffer->line_count - 1 && is_line_empty(buffer->lines[y])) {
+                    while (y < buffer->line_count - 1 && is_line_empty(buffer_lines_get(buffer->lines, y))) {
                         y++;
                     }
                 }
@@ -1552,17 +1566,17 @@ static void get_target_range(EditorCommand *cmd, Range *range) {
                     int count = cmd->count ? cmd->count : 1;
                     for (int i = 0; i < count; i++) {
                         int start_of_current = y;
-                        while (start_of_current > 0 && !is_line_empty(buffer->lines[start_of_current - 1])) {
+                        while (start_of_current > 0 && !is_line_empty(buffer_lines_get(buffer->lines, start_of_current - 1))) {
                             start_of_current--;
                         }
                         if (y != start_of_current && i == 0) {
                             y = start_of_current;
                         } else {
                             if (y > 0) y--;
-                            while (y > 0 && is_line_empty(buffer->lines[y])) {
+                            while (y > 0 && is_line_empty(buffer_lines_get(buffer->lines, y))) {
                                 y--;
                             }
-                            while (y > 0 && !is_line_empty(buffer->lines[y-1])) {
+                            while (y > 0 && !is_line_empty(buffer_lines_get(buffer->lines, y-1))) {
                                 y--;
                             }
                         }
@@ -1578,7 +1592,7 @@ static void get_target_range(EditorCommand *cmd, Range *range) {
                 }
 
                 int original_y = range->y_start;
-                if (is_line_empty(buffer->lines[original_y])) {
+                if (is_line_empty(buffer_lines_get(buffer->lines, original_y))) {
                     if (cmd->specifier[0] == 'a') {
                         // dap on an empty line should delete that line.
                     } else {
@@ -1587,24 +1601,24 @@ static void get_target_range(EditorCommand *cmd, Range *range) {
                         range->y_end = range->y_start;
                     }
                 } else {
-                    while (range->y_start > 0 && !is_line_empty(buffer->lines[range->y_start - 1])) {
+                    while (range->y_start > 0 && !is_line_empty(buffer_lines_get(buffer->lines, range->y_start - 1))) {
                         range->y_start--;
                     }
-                    while (range->y_end < buffer->line_count - 1 && !is_line_empty(buffer->lines[range->y_end + 1])) {
+                    while (range->y_end < buffer->line_count - 1 && !is_line_empty(buffer_lines_get(buffer->lines, range->y_end + 1))) {
                         range->y_end++;
                     }
                 }
 
                 if (cmd->specifier[0] == 'a') {
-                    if (range->y_end < buffer->line_count - 1 && is_line_empty(buffer->lines[range->y_end + 1])) {
+                    if (range->y_end < buffer->line_count - 1 && is_line_empty(buffer_lines_get(buffer->lines, range->y_end + 1))) {
                         range->y_end++;
-                    } else if (range->y_start > 0 && is_line_empty(buffer->lines[range->y_start - 1])) {
+                    } else if (range->y_start > 0 && is_line_empty(buffer_lines_get(buffer->lines, range->y_start - 1))) {
                         range->y_start--;
                     }
                 }
 
                 range->x_start = 0;
-                range->x_end = buffer->lines[range->y_end]->char_count;
+                range->x_end = buffer_lines_get(buffer->lines, range->y_end)->char_count;
             }
             break;
         case 'w':
@@ -1722,7 +1736,7 @@ static void get_target_range(EditorCommand *cmd, Range *range) {
             break;
         case 'e':
             if (cmd->action == 'g') {
-                line = buffer->lines[buffer->line_count - 1];
+                line = buffer_lines_get(buffer->lines, buffer->line_count - 1);
                 range->x_end = line->char_count;
                 range->y_end = buffer->line_count - 1;
             } else {
@@ -1738,7 +1752,7 @@ static void get_target_range(EditorCommand *cmd, Range *range) {
             break;
         case 'b':
             if (cmd->action == 'g') {
-                line = buffer->lines[0];
+                line = buffer_lines_get(buffer->lines, 0);
                 range->x_end = 0;
                 range->y_end = 0;
             } else {
@@ -1852,7 +1866,7 @@ int range_get_bottom_boundary(Range *range) {
 static char* buffer_get_text_in_range(Buffer *b, int top, int left, int bottom, int right) {
     size_t len = 0;
     for (int y = top; y <= bottom; y++) {
-        BufferLine *line = b->lines[y];
+        BufferLine *line = buffer_lines_get(b->lines, y);
         int start_x = (y == top) ? left : 0;
         int end_x = (y == bottom) ? right : line->char_count;
         for (int x = start_x; x < end_x; x++) {
@@ -1870,7 +1884,7 @@ static char* buffer_get_text_in_range(Buffer *b, int top, int left, int bottom, 
 
     char *p = text;
     for (int y = top; y <= bottom; y++) {
-        BufferLine *line = b->lines[y];
+        BufferLine *line = buffer_lines_get(b->lines, y);
         int start_x = (y == top) ? left : 0;
         int end_x = (y == bottom) ? right : line->char_count;
         for (int x = start_x; x < end_x; x++) {
@@ -1895,7 +1909,7 @@ void range_delete(Buffer *b, Range *range, EditorCommand *cmd) {
 
     if (cmd->target == 'p' && top == bottom) {
         if (!is_undo_redo_active) {
-            char *line_text = buffer_get_text_in_range(b, top, 0, top, b->lines[top]->char_count);
+            char *line_text = buffer_get_text_in_range(b, top, 0, top, buffer_lines_get(b->lines, top)->char_count);
             if (line_text) {
                 size_t len = strlen(line_text);
                 char *deleted_text = malloc(len + 2);
@@ -1909,9 +1923,10 @@ void range_delete(Buffer *b, Range *range, EditorCommand *cmd) {
                 history_add_change(b->history, CHANGE_TYPE_DELETE, top, 0, "\n");
             }
         }
-
-        buffer_line_destroy(b->lines[top]);
-        memmove(&b->lines[top], &b->lines[top + 1], (b->line_count - top - 1) * sizeof(BufferLine *));
+        BufferLine *line = buffer_lines_get(b->lines, top);
+        buffer_line_destroy(line);
+        free(line);
+        buffer_lines_delete_line(&b->lines, top);
         b->line_count--;
         return;
     }
@@ -1927,20 +1942,21 @@ void range_delete(Buffer *b, Range *range, EditorCommand *cmd) {
     if (b->parser && b->tree) {
         uint32_t start_byte = 0;
         for (int i = 0; i < top; i++) {
-            for (int j = 0; j < b->lines[i]->char_count; j++) {
-                start_byte += strlen(b->lines[i]->chars[j].value);
+            BufferLine *line = buffer_lines_get(b->lines, i);
+            for (int j = 0; j < line->char_count; j++) {
+                start_byte += strlen(line->chars[j].value);
             }
             start_byte++; // newline
         }
         uint32_t start_byte_in_line = 0;
         for (int i = 0; i < left; i++) {
-            start_byte_in_line += strlen(b->lines[top]->chars[i].value);
+            start_byte_in_line += strlen(buffer_lines_get(b->lines, top)->chars[i].value);
         }
         start_byte += start_byte_in_line;
 
         uint32_t deleted_bytes = 0;
         for (int i = top; i <= bottom; i++) {
-            BufferLine *line = b->lines[i];
+            BufferLine *line = buffer_lines_get(b->lines, i);
             int start_j = (i == top) ? left : 0;
             int end_j = (i == bottom) ? right : line->char_count;
             for (int j = start_j; j < end_j; j++) {
@@ -1955,8 +1971,9 @@ void range_delete(Buffer *b, Range *range, EditorCommand *cmd) {
         if (top == bottom) {
             end_byte_in_line = start_byte_in_line + deleted_bytes;
         } else {
+            BufferLine *bottom_line = buffer_lines_get(b->lines, bottom);
             for (int i = 0; i < right; i++) {
-                end_byte_in_line += strlen(b->lines[bottom]->chars[i].value);
+                end_byte_in_line += strlen(bottom_line->chars[i].value);
             }
         }
 
@@ -1971,22 +1988,25 @@ void range_delete(Buffer *b, Range *range, EditorCommand *cmd) {
     }
 
     // trim top line
-    int bottom_remaining_chars = b->lines[bottom]->char_count - right;
+    BufferLine *top_line = buffer_lines_get(b->lines, top);
+    BufferLine *bottom_line = buffer_lines_get(b->lines, bottom);
+    int bottom_remaining_chars = bottom_line->char_count - right;
     int new_char_count = left + bottom_remaining_chars;
-    buffer_line_realloc_for_capacity(b->lines[top], new_char_count);
-    memmove(&b->lines[top]->chars[left], &b->lines[bottom]->chars[right], bottom_remaining_chars * sizeof(Char));
-    b->lines[top]->char_count = new_char_count;
+    buffer_line_realloc_for_capacity(top_line, new_char_count);
+    memmove(&top_line->chars[left], &bottom_line->chars[right], bottom_remaining_chars * sizeof(Char));
+    top_line->char_count = new_char_count;
 
     // destroy all completely removed lines and shift
     if (bottom > top) {
         for (int i = top + 1; i <= bottom; i++) {
-            buffer_line_destroy(b->lines[i]);
-            free(b->lines[i]);
+            BufferLine *line = buffer_lines_get(b->lines, i);
+            buffer_line_destroy(line);
+            free(line);
         }
 
         int lines_to_remove = bottom - top;
-        if (b->line_count > bottom) {
-            memmove(&b->lines[top + 1], &b->lines[bottom + 1], (b->line_count - bottom - 1) * sizeof(BufferLine *));
+        for (int i = 0; i < lines_to_remove; i++) {
+            buffer_lines_delete_line(&b->lines, top + 1);
         }
         b->line_count -= lines_to_remove;
     }
@@ -2041,13 +2061,13 @@ void editor_command_exec(EditorCommand *cmd) {
         switch (cmd->target) {
             case 'f':
             case 't':
-                if (range.x_end < buffer->lines[range.y_end]->char_count) {
+                if (range.x_end < buffer_lines_get(buffer->lines, range.y_end)->char_count) {
                     range.x_end++;
                 }
                 break;
             case 'F':
             case 'T':
-                if (range.x_start < buffer->lines[range.y_start]->char_count) {
+                if (range.x_start < buffer_lines_get(buffer->lines, range.y_start)->char_count) {
                     range.x_start++;
                 }
                 break;
@@ -2087,16 +2107,18 @@ void editor_command_exec(EditorCommand *cmd) {
                     if (lines_to_remove <= 0 || (top == bottom && left == right)) break;
 
                     for (int i = top; i <= bottom; i++) {
-                        buffer_line_destroy(buffer->lines[i]);
-                        free(buffer->lines[i]);
+                        BufferLine *line = buffer_lines_get(buffer->lines, i);
+                        buffer_line_destroy(line);
+                        free(line);
                     }
-                    if (buffer->line_count > bottom + 1) {
-                        memmove(&buffer->lines[top], &buffer->lines[bottom + 1], (buffer->line_count - bottom - 1) * sizeof(BufferLine *));
+                    for (int i = 0; i < lines_to_remove; i++) {
+                        buffer_lines_delete_line(&buffer->lines, top);
                     }
                     buffer->line_count -= lines_to_remove;
                     if (buffer->line_count == 0) {
-                        buffer->lines[0] = (BufferLine *)malloc(sizeof(BufferLine));
-                        buffer_line_init(buffer->lines[0]);
+                        BufferLine *new_line = (BufferLine *)malloc(sizeof(BufferLine));
+                        buffer_line_init(new_line);
+                        buffer_lines_insert_line(&buffer->lines, new_line, 0);
                         buffer->line_count = 1;
                     }
                     if (top < buffer->line_count) {

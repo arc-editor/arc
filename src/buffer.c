@@ -7,6 +7,7 @@
 #include <sys/stat.h>
 #include <math.h>
 #include "buffer.h"
+#include "buffer_lines.h"
 #include "log.h"
 #include "config.h"
 #include "theme.h"
@@ -26,7 +27,7 @@ void buffer_set_line_num_width(Buffer *buffer) {
 char *buffer_get_content(Buffer *b) {
     size_t total_len = 0;
     for (int i = 0; i < b->line_count; i++) {
-        BufferLine *line = b->lines[i];
+        BufferLine *line = buffer_lines_get(b->lines, i);
         for (int j = 0; j < line->char_count; j++) {
             total_len += strlen(line->chars[j].value);
         }
@@ -43,7 +44,7 @@ char *buffer_get_content(Buffer *b) {
 
     char *p = content;
     for (int i = 0; i < b->line_count; i++) {
-        BufferLine *line = b->lines[i];
+        BufferLine *line = buffer_lines_get(b->lines, i);
         for (int j = 0; j < line->char_count; j++) {
             const char *val = line->chars[j].value;
             size_t len = strlen(val);
@@ -172,7 +173,7 @@ void buffer_update_search_matches(Buffer *b, const char *term) {
     b->search_state.matches = malloc(capacity * sizeof(*b->search_state.matches));
 
     for (int i = 0; i < b->line_count; i++) {
-        BufferLine *line = b->lines[i];
+        BufferLine *line = buffer_lines_get(b->lines, i);
         char *line_str = line_to_string(line);
         if (!line_str) continue;
 
@@ -299,7 +300,7 @@ const char *buffer_read(void *payload, uint32_t start_byte __attribute__((unused
         *bytes_read = 0;
         return "";
     }
-    BufferLine *line = buffer->lines[position.row];
+    BufferLine *line = buffer_lines_get(buffer->lines, position.row);
 
     size_t line_byte_len = 0;
     for (int i = 0; i < line->char_count; i++) {
@@ -355,7 +356,7 @@ void buffer_parse(Buffer *b) {
             int start_line = (int)changed_ranges[i].start_point.row;
             int end_line = (int)changed_ranges[i].end_point.row;
             for (int j = start_line; j <= end_line && j < b->line_count; j++) {
-                b->lines[j]->needs_highlight = 1;
+                buffer_lines_get(b->lines, j)->needs_highlight = 1;
             }
         }
         free(changed_ranges);
@@ -365,7 +366,7 @@ void buffer_parse(Buffer *b) {
 }
 
 int buffer_get_visual_position_x(Buffer *buffer) {
-    BufferLine *line = buffer->lines[buffer->position_y];
+    BufferLine *line = buffer_lines_get(buffer->lines, buffer->position_y);
     int x = buffer->line_num_width + 1;
     for (int i = 0; i < buffer->position_x; i++) {
         if (strcmp(line->chars[i].value, "\t") == 0) {
@@ -394,23 +395,6 @@ void buffer_line_realloc_for_capacity(BufferLine *line, int new_needed_capacity)
     line->capacity = new_capacity;
 }
 
-void buffer_realloc_lines_for_capacity(Buffer *buffer) {
-    if (buffer->line_count + 1 <= buffer->capacity) {
-        return;
-    }
-    int new_capacity = buffer->capacity;
-    while (new_capacity < buffer->line_count + 1) {
-        new_capacity *= 2;
-    }
-    BufferLine **new_lines = realloc(buffer->lines, new_capacity * sizeof(BufferLine *));
-    if (new_lines == NULL) {
-        log_error("buffer.realloc_buffer_lines_for_capacity: failed to reallocate lines");
-        exit(1);
-    }
-    buffer->lines = new_lines;
-    buffer->capacity = new_capacity;
-}
-
 void buffer_reset_offset_y(Buffer *buffer, int screen_rows) {
     if (buffer->offset_y < 0) buffer->offset_y = 0;
     if (buffer->position_y - buffer->offset_y > screen_rows - 7) {
@@ -431,7 +415,7 @@ void buffer_reset_offset_x(Buffer *buffer, int screen_cols) {
 }
 
 void buffer_set_logical_position_x(Buffer *buffer, int visual_before) {
-    BufferLine *line = buffer->lines[buffer->position_y];
+    BufferLine *line = buffer_lines_get(buffer->lines, buffer->position_y);
     if (buffer->position_x > line->char_count) {
         buffer->position_x = line->char_count;
     }
@@ -497,17 +481,15 @@ void buffer_init(Buffer *b, char *file_name) {
     b->search_state.matches = NULL;
     b->search_state.count = 0;
     b->search_state.current = -1;
-    b->lines = (BufferLine **)malloc(sizeof(BufferLine *) * b->capacity);
-    if (b->lines == NULL) {
-        log_error("buffer.buffer_init: failed to allocate lines for buffer");
-        exit(1);
-    }
-    b->lines[0] = (BufferLine *)malloc(sizeof(BufferLine));
-    if (b->lines[0] == NULL) {
+    b->lines = buffer_lines_new_leaf_node(0);
+    b->line_count = 0;
+    BufferLine *first_line = (BufferLine *)malloc(sizeof(BufferLine));
+    if (first_line == NULL) {
         log_error("buffer.buffer_init: failed to allocate first BufferLine");
         exit(1);
     }
-    buffer_line_init(b->lines[0]);
+    buffer_line_init(first_line);
+    buffer_lines_insert_line(&b->lines, first_line, 0);
     b->line_count = 1;
     b->query = NULL;
     b->cursor = NULL;
@@ -544,16 +526,16 @@ void buffer_init(Buffer *b, char *file_name) {
         int bytes_read;
         while ((bytes_read = read_utf8_char(fp, utf8_buf, sizeof(utf8_buf))) > 0) {
             if (strcmp(utf8_buf, "\n") == 0) {
-                buffer_realloc_lines_for_capacity(b);
-                b->lines[b->line_count] = (BufferLine *)malloc(sizeof(BufferLine));
-                if (b->lines[b->line_count] == NULL) {
+                BufferLine *new_line = (BufferLine *)malloc(sizeof(BufferLine));
+                if (new_line == NULL) {
                     log_error("buffer.buffer_init: failed to allocate BufferLine");
                     exit(1);
                 }
-                buffer_line_init(b->lines[b->line_count]);
+                buffer_line_init(new_line);
+                buffer_lines_insert_line(&b->lines, new_line, b->line_count);
                 b->line_count++;
             } else {
-                BufferLine *line = b->lines[b->line_count - 1];
+                BufferLine *line = buffer_lines_get(b->lines, b->line_count - 1);
                 buffer_line_realloc_for_capacity(line, line->char_count + 1);
                 Char new_char = { .style = 0 };
                 strncpy(new_char.value, utf8_buf, sizeof(new_char.value));
@@ -576,11 +558,7 @@ void buffer_init(Buffer *b, char *file_name) {
 }
 
 void buffer_destroy(Buffer *b) {
-    for (int i = 0; i < b->line_count; i++) {
-        buffer_line_destroy(b->lines[i]);
-        free(b->lines[i]);
-    }
-    free(b->lines);
+    buffer_lines_free_node(b->lines);
     if (b->file_name) {
         free(b->file_name);
     }
@@ -616,7 +594,7 @@ int is_line_empty(BufferLine *line) {
 
 int buffer_get_visual_x_for_line_pos(Buffer *buffer, int y, int logical_x) {
     if (y >= buffer->line_count) return 0;
-    BufferLine *line = buffer->lines[y];
+    BufferLine *line = buffer_lines_get(buffer->lines, y);
     int x_pos = buffer->line_num_width + 1;
     for (int i = 0; i < logical_x && i < line->char_count; i++) {
         if (strcmp(line->chars[i].value, "\t") == 0) {
@@ -629,7 +607,7 @@ int buffer_get_visual_x_for_line_pos(Buffer *buffer, int y, int logical_x) {
 }
 
 int buffer_get_byte_position_x(Buffer *buffer) {
-    BufferLine *line = buffer->lines[buffer->position_y];
+    BufferLine *line = buffer_lines_get(buffer->lines, buffer->position_y);
     int byte_pos = 0;
     for (int i = 0; i < buffer->position_x; i++) {
         byte_pos += strlen(line->chars[i].value);
@@ -663,7 +641,7 @@ int buffer_find_forward(Buffer *b, const char *term, int *y, int *x) {
     int original_x = *x;
 
     for (int i = *y; i < b->line_count; i++) {
-        BufferLine *line = b->lines[i];
+        BufferLine *line = buffer_lines_get(b->lines, i);
         char *line_str = line_to_string(line);
         if (!line_str) continue;
 
@@ -705,7 +683,7 @@ int buffer_find_forward(Buffer *b, const char *term, int *y, int *x) {
 
     // Wrap around
     for (int i = 0; i <= original_y; i++) {
-        BufferLine *line = b->lines[i];
+        BufferLine *line = buffer_lines_get(b->lines, i);
         char *line_str = line_to_string(line);
         if (!line_str) continue;
 
@@ -746,7 +724,7 @@ int buffer_find_backward(Buffer *b, const char *term, int *y, int *x) {
     int original_x = *x;
 
     for (int i = *y; i >= 0; i--) {
-        BufferLine *line = b->lines[i];
+        BufferLine *line = buffer_lines_get(b->lines, i);
         if (!line) continue;
         char *line_str = line_to_string(line);
         if (!line_str) continue;
@@ -771,7 +749,7 @@ int buffer_find_backward(Buffer *b, const char *term, int *y, int *x) {
 
     // Wrap around
     for (int i = b->line_count - 1; i >= original_y; i--) {
-        BufferLine *line = b->lines[i];
+        BufferLine *line = buffer_lines_get(b->lines, i);
         if (!line) continue;
         char *line_str = line_to_string(line);
         if (!line_str) continue;

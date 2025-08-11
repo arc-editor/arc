@@ -10,6 +10,7 @@
 #include "picker.h"
 #include "editor.h"
 #include "log.h"
+#include "buffer_lines.h"
 #include "picker_search.h"
 
 // Data structure for a single search result
@@ -152,7 +153,7 @@ static void on_select(int selection_idx, int *close_picker) {
     // Set column number, clamping to valid range
     b->position_x = result->column_number;
     if (b->position_y < b->line_count) {
-      BufferLine *current_line = b->lines[b->position_y];
+      BufferLine *current_line = buffer_lines_get(b->lines, b->position_y);
       if (b->position_x >= current_line->char_count) {
           b->position_x = current_line->char_count > 0 ? current_line->char_count - 1 : 0;
       }

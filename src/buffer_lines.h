@@ -1,15 +1,7 @@
 #ifndef BUFFER_LINES_H
 #define BUFFER_LINES_H
 
-#include "buffer.h"
-
-typedef struct BufferLinesNode {
-  BufferLine **lines;
-  int line_count;
-  int offset;
-  struct BufferLinesNode **children;
-  int children_count;
-} BufferLinesNode;
+#include "buffer_types.h"
 
 BufferLinesNode *buffer_lines_new_leaf_node(int offset);
 BufferLinesNode *buffer_lines_new_internal_node(int offset);
