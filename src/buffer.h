@@ -19,17 +19,27 @@ typedef struct {
     unsigned char style;
 } CharStyle;
 
+typedef struct __attribute__((packed)) {
+    char value[5];
+    unsigned char width;
+} Char;
+
+typedef struct {
+    CharStyle style;
+    int length;
+} StyleRun;
+
 #define STYLE_ITALIC 1
 #define STYLE_BOLD 2
 #define STYLE_UNDERLINE 4
 
 typedef struct {
     int char_count;
-    int byte_count;
-    int char_capacity;
-    int byte_capacity;
-    char *text;
-    CharStyle *styles;
+    int capacity;
+    Char *chars;
+    int run_count;
+    int run_capacity;
+    StyleRun *runs;
     int needs_highlight;
 } BufferLine;
 
@@ -79,11 +89,11 @@ void buffer_parse(Buffer *b);
 int buffer_get_visual_position_x(Buffer *buffer);
 int buffer_get_byte_position_x(Buffer *buffer);
 void buffer_line_realloc_for_capacity(BufferLine *line, int new_needed_capacity);
+void buffer_line_ensure_run_capacity(BufferLine *line, int new_run_capacity);
 void buffer_realloc_lines_for_capacity(Buffer *buffer);
 void buffer_reset_offset_y(Buffer *buffer, int screen_rows);
 void buffer_reset_offset_x(Buffer *buffer, int screen_cols);
 void buffer_set_logical_position_x(Buffer *buffer, int visual_before);
-void buffer_line_ensure_capacity(BufferLine *line, int new_char_capacity, int new_byte_capacity);
 void buffer_line_init(BufferLine *line);
 void buffer_line_destroy(BufferLine *line);
 void buffer_init(Buffer *b, char *file_name);
