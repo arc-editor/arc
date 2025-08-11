@@ -80,8 +80,6 @@ int buffer_get_byte_position_x(Buffer *buffer);
 void buffer_line_realloc_for_capacity(BufferLine *line, int new_needed_capacity);
 void buffer_realloc_lines_for_capacity(Buffer *buffer);
 void buffer_reset_offset_y(Buffer *buffer, int screen_rows);
-void buffer_move_position_left(Buffer *buffer);
-void buffer_move_position_right(Buffer *buffer, int screen_cols);
 void buffer_reset_offset_x(Buffer *buffer, int screen_cols);
 void buffer_set_logical_position_x(Buffer *buffer, int visual_before);
 void buffer_line_init(BufferLine *line);
