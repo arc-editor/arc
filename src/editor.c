@@ -1031,6 +1031,7 @@ void editor_move_cursor_up() {
 void editor_move_to_start_of_line(void) {
     pthread_mutex_lock(&editor_mutex);
     buffer->position_x = 0;
+    buffer_reset_offset_x(buffer, editor.screen_cols);
     buffer_update_current_search_match(buffer);
     buffer->needs_draw = 1;
     pthread_mutex_unlock(&editor_mutex);
@@ -1040,6 +1041,7 @@ void editor_move_to_end_of_line(void) {
     pthread_mutex_lock(&editor_mutex);
     BufferLine *line = buffer->lines[buffer->position_y];
     buffer->position_x = line->char_count;
+    buffer_reset_offset_x(buffer, editor.screen_cols);
     buffer_update_current_search_match(buffer);
     buffer->needs_draw = 1;
     pthread_mutex_unlock(&editor_mutex);
