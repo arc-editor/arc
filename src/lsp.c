@@ -261,7 +261,7 @@ void lsp_init(void) {
     cJSON_AddStringToObject(client_info, "name", "arc");
     cJSON_AddStringToObject(client_info, "version", "0.1");
     cJSON_AddItemToObject(params, "clientInfo", client_info);
-   
+
     char cwd[1024];
     if (getcwd(cwd, sizeof(cwd)) != NULL) {
       char root_uri[1024 + 7]; // Extra space for "file://"
@@ -292,7 +292,6 @@ void lsp_did_open(const char *file_path, const char *language_id, const char *te
 
   cJSON *params = cJSON_CreateObject();
   cJSON *text_document = cJSON_CreateObject();
-  
   // Ensure file_path is a proper URI
   char uri[2048];
   if (strncmp(file_path, "file://", 7) == 0) {
@@ -301,7 +300,6 @@ void lsp_did_open(const char *file_path, const char *language_id, const char *te
     snprintf(uri, sizeof(uri), "file://%s", file_path);
   }
   uri[sizeof(uri) - 1] = '\0';
-  
   cJSON_AddStringToObject(text_document, "uri", uri);
   cJSON_AddStringToObject(text_document, "languageId", language_id);
   cJSON_AddNumberToObject(text_document, "version", 1);
@@ -320,7 +318,6 @@ void lsp_did_change(const char *file_path, const char *text, int version) {
 
   cJSON *params = cJSON_CreateObject();
   cJSON *text_document = cJSON_CreateObject();
-  
   // Ensure file_path is a proper URI
   char uri[2048];
   if (strncmp(file_path, "file://", 7) == 0) {
@@ -329,7 +326,6 @@ void lsp_did_change(const char *file_path, const char *text, int version) {
     snprintf(uri, sizeof(uri), "file://%s", file_path);
   }
   uri[sizeof(uri) - 1] = '\0';
-  
   cJSON_AddStringToObject(text_document, "uri", uri);
   cJSON_AddNumberToObject(text_document, "version", version);
   cJSON_AddItemToObject(params, "textDocument", text_document);
@@ -374,7 +370,6 @@ void lsp_shutdown(void) {
     close(to_server_pipe[1]);
     close(from_server_pipe[0]);
     log_info("lsp.lsp_shutdown: LSP server shut down");
-    
     lsp_server_pid = -1;
     buffer_pos = 0; // Reset buffer
   }
@@ -382,7 +377,6 @@ void lsp_shutdown(void) {
 
 int lsp_get_diagnostics(const char *file_name __attribute__((unused)), Diagnostic **out_diagnostics, int *out_diagnostic_count) {
     pthread_mutex_lock(&diagnostics_mutex);
-    
     *out_diagnostic_count = diagnostic_count;
     if (diagnostic_count > 0) {
         *out_diagnostics = malloc(sizeof(Diagnostic) * diagnostic_count);
@@ -399,7 +393,6 @@ int lsp_get_diagnostics(const char *file_name __attribute__((unused)), Diagnosti
     } else {
         *out_diagnostics = NULL;
     }
-
     int version = diagnostics_version;
     pthread_mutex_unlock(&diagnostics_mutex);
     return version;
