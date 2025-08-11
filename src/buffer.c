@@ -421,22 +421,6 @@ void buffer_reset_offset_y(Buffer *buffer, int screen_rows) {
     }
 }
 
-void buffer_move_position_left(Buffer *buffer) {
-    buffer->position_x--;
-    int visual_x = buffer_get_visual_position_x(buffer);
-    if (visual_x - buffer->line_num_width < 6 && buffer->offset_x) {
-        buffer->offset_x--;
-    }
-}
-
-void buffer_move_position_right(Buffer *buffer, int screen_cols) {
-    buffer->position_x++;
-    int visual_x = buffer_get_visual_position_x(buffer);
-    if (visual_x > screen_cols - 5) {
-        buffer->offset_x++;
-    }
-}
-
 void buffer_reset_offset_x(Buffer *buffer, int screen_cols) {
     int visual_x = buffer_get_visual_position_x(buffer) + buffer->offset_x;
     if (visual_x <= screen_cols) {

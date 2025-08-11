@@ -967,19 +967,14 @@ void editor_insert_char(const char *ch) {
 void editor_move_cursor_right() {
     pthread_mutex_lock(&editor_mutex);
     BufferLine *line = buffer->lines[buffer->position_y];
-    if (buffer->position_y == buffer->line_count - 1 &&
-        buffer->position_x >= line->char_count) {
-        pthread_mutex_unlock(&editor_mutex);
-        return;
-    }
-    if ((buffer->position_x >= line->char_count) && (buffer->position_y != buffer->line_count - 1)) {
-        buffer->position_x = 0;
+    if (buffer->position_x < line->char_count) {
+        buffer->position_x++;
+    } else if (buffer->position_y < buffer->line_count - 1) {
         buffer->position_y++;
-        buffer_reset_offset_y(buffer, editor.screen_rows);
-        buffer->offset_x = 0;
-    } else {
-        buffer_move_position_right(buffer, editor.screen_cols);
+        buffer->position_x = 0;
     }
+    buffer_reset_offset_y(buffer, editor.screen_rows);
+    buffer_reset_offset_x(buffer, editor.screen_cols);
     buffer_update_current_search_match(buffer);
     buffer->needs_draw = 1;
     pthread_mutex_unlock(&editor_mutex);
@@ -988,19 +983,14 @@ void editor_move_cursor_right() {
 
 void editor_move_cursor_left() {
     pthread_mutex_lock(&editor_mutex);
-    BufferLine *line = buffer->lines[buffer->position_y];
-    if (buffer->position_x == 0) {
-        if (buffer->position_y == 0) {
-            pthread_mutex_unlock(&editor_mutex);
-            return;
-        }
+    if (buffer->position_x > 0) {
+        buffer->position_x--;
+    } else if (buffer->position_y > 0) {
         buffer->position_y--;
-        buffer_reset_offset_y(buffer, editor.screen_rows);
-        line = buffer->lines[buffer->position_y];
-        buffer->position_x = line->char_count + 1;
-        buffer_reset_offset_x(buffer, editor.screen_cols);
+        buffer->position_x = buffer->lines[buffer->position_y]->char_count;
     }
-    buffer_move_position_left(buffer);
+    buffer_reset_offset_y(buffer, editor.screen_rows);
+    buffer_reset_offset_x(buffer, editor.screen_cols);
     buffer_update_current_search_match(buffer);
     buffer->needs_draw = 1;
     pthread_mutex_unlock(&editor_mutex);
