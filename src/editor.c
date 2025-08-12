@@ -2337,6 +2337,9 @@ void editor_undo(void) {
         }
         history_push_redo(buffer->history, change);
         editor_did_change_buffer();
+        if (buffer->history->undo_stack.count == 0) {
+            buffer->dirty = 0;
+        }
         buffer_reset_offset_x(buffer, editor.screen_cols);
         buffer_reset_offset_y(buffer, editor.screen_rows);
     }
