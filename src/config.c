@@ -899,6 +899,7 @@ void config_load(Config *config) {
     config->whitespace.tab = WHITESPACE_RENDER_TRAILING;
     config->whitespace.space_char = strdup("·");
     config->whitespace.tab_char = strdup("→");
+    config->toml_result.ok = false;
 
     char *path = get_path("/config.toml");
     if (!path) {
@@ -906,43 +907,44 @@ void config_load(Config *config) {
         return;
     }
     
-    toml_result_t result = toml_parse_file_ex(path);
-    if (!result.ok) {
-        log_warning("config.config_load: cannot parse %s - %s", path, result.errmsg);
-        return;
+    config->toml_result = toml_parse_file_ex(path);
+    if (!config->toml_result.ok) {
+        log_warning("config.config_load: cannot parse %s - %s", path, config->toml_result.errmsg);
     }
 
-    toml_datum_t theme_data = toml_seek(result.toptab, "theme");
+    toml_datum_t theme_data = toml_seek(config->toml_result.toptab, "theme");
     if (theme_data.type == TOML_STRING) {
         config->theme = strdup(theme_data.u.s);
     }
 
-    toml_datum_t space_data = toml_seek(result.toptab, "editor.whitespace.render.space");
+    toml_datum_t space_data = toml_seek(config->toml_result.toptab, "editor.whitespace.render.space");
     config->whitespace.space = parse_whitespace_render(space_data);
 
-    toml_datum_t tab_data = toml_seek(result.toptab, "editor.whitespace.render.tab");
+    toml_datum_t tab_data = toml_seek(config->toml_result.toptab, "editor.whitespace.render.tab");
     config->whitespace.tab = parse_whitespace_render(tab_data);
 
-    toml_datum_t space_char_data = toml_seek(result.toptab, "editor.whitespace.characters.space");
+    toml_datum_t space_char_data = toml_seek(config->toml_result.toptab, "editor.whitespace.characters.space");
     if (space_char_data.type == TOML_STRING) {
         free(config->whitespace.space_char);
         config->whitespace.space_char = strdup(space_char_data.u.s);
     }
 
-    toml_datum_t tab_char_data = toml_seek(result.toptab, "editor.whitespace.characters.tab");
+    toml_datum_t tab_char_data = toml_seek(config->toml_result.toptab, "editor.whitespace.characters.tab");
     if (tab_char_data.type == TOML_STRING) {
         free(config->whitespace.tab_char);
         config->whitespace.tab_char = strdup(tab_char_data.u.s);
     }
 
     free(path);
-    toml_free(result);
 }
 
 void config_destroy(Config *config) {
     free(config->theme);
     free(config->whitespace.space_char);
     free(config->whitespace.tab_char);
+    if (config->toml_result.ok) {
+        toml_free(config->toml_result);
+    }
 }
 
 void config_load_theme(char *name, Theme *theme) {

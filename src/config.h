@@ -3,6 +3,7 @@
 
 #include "tree_sitter/api.h"
 #include "theme.h"
+#include "tomlc17.h"
 
 typedef enum {
     WHITESPACE_RENDER_NONE,
@@ -20,6 +21,7 @@ typedef struct {
 typedef struct {
   char *theme;
   WhitespaceConfig whitespace;
+  toml_result_t toml_result;
 } Config;
 
 typedef TSLanguage *(*TSLanguageFn)(void);

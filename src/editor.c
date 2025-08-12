@@ -742,7 +742,7 @@ static void editor_setup_lsp(const char *file_name) {
     char absolute_path[PATH_MAX];
     if (realpath(file_name, absolute_path) != NULL) {
         if (!lsp_is_running()) {
-            lsp_init(file_name);
+            lsp_init(&editor.config, file_name);
         }
         if (lsp_is_running()) {
             char *content = buffer_get_content(buffer);

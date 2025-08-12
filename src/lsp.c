@@ -214,13 +214,45 @@ cJSON *lsp_read_message() {
     }
 }
 
-void lsp_init(const char *file_name) {
+#include "config.h"
+
+void lsp_init(const Config *config, const char *file_name) {
   if (!file_name) {
     return;
   }
 
   const char *ext = strrchr(file_name, '.');
-  if (!ext || (strcmp(ext, ".c") != 0 && strcmp(ext, ".h") != 0 && strcmp(ext, ".cpp") != 0)) {
+  if (!ext) {
+    return;
+  }
+
+  char key[256];
+  snprintf(key, sizeof(key), "lsp.%s", ext + 1);
+
+  const char *command = NULL;
+  if (config->toml_result.ok) {
+      toml_datum_t cmd_datum = toml_seek(config->toml_result.toptab, key);
+      if (cmd_datum.type == TOML_STRING) {
+          command = cmd_datum.u.s;
+      }
+  }
+
+  if (!command) {
+      // Try defaults
+      if (strcmp(ext + 1, "c") == 0 || strcmp(ext + 1, "h") == 0 || strcmp(ext + 1, "cpp") == 0) {
+          command = "clangd";
+      } else if (strcmp(ext + 1, "py") == 0) {
+          command = "pylsp";
+      } else if (strcmp(ext + 1, "rs") == 0) {
+          command = "rust-analyzer";
+      } else if (strcmp(ext + 1, "go") == 0) {
+          command = "gopls";
+      } else if (strcmp(ext + 1, "ts") == 0 || strcmp(ext + 1, "js") == 0) {
+          command = "typescript-language-server --stdio";
+      }
+  }
+
+  if (!command) {
     return;
   }
 
@@ -250,8 +282,24 @@ void lsp_init(const char *file_name) {
       close(dev_null);
     }
 
-    execlp("clangd", "clangd", NULL);
-    log_error("lsp.lsp_init: execlp failed");
+    char *cmd_copy = strdup(command);
+    if (!cmd_copy) {
+        log_error("lsp.lsp_init: strdup failed");
+        exit(1);
+    }
+    char *args[64];
+    int i = 0;
+    char *token = strtok(cmd_copy, " ");
+    while (token != NULL && i < 63) {
+        args[i++] = token;
+        token = strtok(NULL, " ");
+    }
+    args[i] = NULL;
+
+    execvp(args[0], args);
+    free(cmd_copy);
+
+    log_error("lsp.lsp_init: execvp failed for %s", command);
     exit(1);
   } else { // Parent process
     close(to_server_pipe[0]);

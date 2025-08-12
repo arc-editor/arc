@@ -16,7 +16,9 @@ typedef struct {
     char *message;
 } Diagnostic;
 
-void lsp_init(const char *file_name);
+#include "config.h"
+
+void lsp_init(const Config *config, const char *file_name);
 void lsp_shutdown(void);
 int lsp_get_diagnostics(const char *file_path, Diagnostic **diagnostics, int *diagnostic_count);
 // int lsp_get_diagnostics(Diagnostic **out_diagnostics, int *out_diagnostic_count);

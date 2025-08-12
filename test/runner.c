@@ -7,6 +7,7 @@
 #include "test_normal.h"
 #include "test_undo.h"
 #include "test_picker.h"
+#include "test_lsp.h"
 #include <stdio.h>
 #include <unistd.h>
 
@@ -164,6 +165,7 @@ int main(void) {
     test_helper("test_mid_file_multi_line_from_middle_dap", "foo\n\nbar\nbaz\nbat\n\nbam", 3, 0, "dap", "foo\n\nbam");
     test_helper("test_mid_file_multi_line_from_bottom_dap", "foo\n\nbar\nbaz\n\nbat", 3, 0, "dap", "foo\n\nbat");
 
+    test_lsp_suite();
     run_normal_tests();
     run_undo_tests();
     test_picker_suite();
