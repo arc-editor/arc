@@ -9,6 +9,7 @@
 #include "picker_buffer.h"
 #include "picker_search.h"
 #include "visual.h"
+#include "utf8.h"
 
 EditorCommand cmd;
 EditorCommand prev_cmd;
@@ -277,9 +278,25 @@ int normal_handle_input(const char *ch_str) {
     editor_command_exec(&repeated);
     if (is_change) {
       is_insertion_bufferable = 0;
-      for (int i = 0; i < buff_count; i++) {
-        // This is broken for utf8
-        // insert_handle_input(insertion_buffer[i]);
+      if (buff_count > 0) {
+          char *p = insertion_buffer;
+          char *end = insertion_buffer + buff_count;
+          while (p < end) {
+              if (*p == '\n') {
+                  editor_insert_new_line();
+                  p++;
+              } else {
+                  char utf8_buf[8];
+                  size_t len = utf8_char_len(p);
+                  if (p + len > end) {
+                      break;
+                  }
+                  strncpy(utf8_buf, p, len);
+                  utf8_buf[len] = '\0';
+                  editor_insert_char(utf8_buf);
+                  p += len;
+              }
+          }
       }
       is_insertion_bufferable = 1;
       editor_handle_input = normal_handle_input;
