@@ -12,24 +12,21 @@ typedef enum {
     VISUAL_MODE_LINE,
 } VisualMode;
 
-typedef struct __attribute__((packed)) {
-    char value[5];
-    unsigned char width;
-    unsigned char r;
-    unsigned char g;
-    unsigned char b;
-    unsigned char style;
-} Char;
-
-#define STYLE_ITALIC 1
-#define STYLE_BOLD 2
-#define STYLE_UNDERLINE 4
+typedef struct {
+    int count;
+    Style style;
+} HighlightRun;
 
 typedef struct {
     int char_count;
+    int text_len;
     int capacity;
-    Char *chars;
+    char *text;
     int needs_highlight;
+
+    HighlightRun *highlight_runs;
+    int highlight_runs_count;
+    int highlight_runs_capacity;
 } BufferLine;
 
 typedef struct {

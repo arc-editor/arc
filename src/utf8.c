@@ -150,3 +150,12 @@ size_t utf8_strlen(const char *s) {
     }
     return i;
 }
+
+int utf8_char_len(const char *s) {
+    init_utf8();
+    int len = mblen(s, MB_CUR_MAX);
+    if (len < 1) {
+        return 1;
+    }
+    return len;
+}

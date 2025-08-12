@@ -10,5 +10,6 @@ int read_utf8_char(FILE *fp, char *buf, size_t buf_size);
 int read_utf8_char_from_stdin(char *buf, size_t buf_size);
 int utf8_char_width(const char *s);
 size_t utf8_strlen(const char *s);
+int utf8_char_len(const char *s);
 
 #endif // UTF8_H
