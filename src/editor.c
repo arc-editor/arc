@@ -2126,6 +2126,14 @@ void editor_command_exec(EditorCommand *cmd) {
                     int lines_to_remove = bottom - top + 1;
                     if (lines_to_remove <= 0 || (top == bottom && left == right)) break;
 
+                    if (!is_undo_redo_active) {
+                        char *deleted_text = buffer_get_text_in_range(buffer, top, left, bottom, right);
+                        if (deleted_text) {
+                            history_add_change(buffer->history, CHANGE_TYPE_DELETE, top, left, deleted_text);
+                            free(deleted_text);
+                        }
+                    }
+
                     for (int i = top; i <= bottom; i++) {
                         buffer_line_destroy(buffer->lines[i]);
                         free(buffer->lines[i]);
