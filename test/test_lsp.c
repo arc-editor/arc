@@ -2,7 +2,6 @@
 #include "test.h"
 #include "../src/config.h"
 #include <string.h>
-#include <stdlib.h>
 #include <unistd.h>
 
 static const char* get_command_for_file(const Config *config, const char *file_name) {

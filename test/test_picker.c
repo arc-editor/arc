@@ -1,14 +1,14 @@
 #include "test.h"
-#include "picker.h"
-#include "normal.h"
-#include "buffer.h"
-#include "editor.h"
+#include "../src/picker.h"
+#include "../src/normal.h"
+#include "../src/buffer.h"
+#include "../src/editor.h"
+#include <stdbool.h>
 
 static void test_open_file_duplicate_buffer() {
     const char *test_name = "test_open_file_duplicate_buffer";
     printf("  - %s\n", test_name);
 
-#include <stdbool.h>
     editor_init(NULL, false);
     editor_set_screen_size(20, 80);
     editor_handle_input = normal_handle_input;

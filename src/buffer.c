@@ -549,24 +549,28 @@ void buffer_init(Buffer *b, char *file_name) {
 
     char *lang_ext = get_file_extension(file_name);
     char *lang_name = NULL;
-    if (strcmp(lang_ext, "c") == 0) {
-        lang_name = "c";
-    } else if (strcmp(lang_ext, "ts") == 0) {
-        lang_name = "typescript";
-    } else if (strcmp(lang_ext, "js") == 0) {
-        lang_name = "javascript";
+    if (lang_ext != NULL) {
+        if (strcmp(lang_ext, "c") == 0) {
+            lang_name = "c";
+        } else if (strcmp(lang_ext, "ts") == 0) {
+            lang_name = "typescript";
+        } else if (strcmp(lang_ext, "js") == 0) {
+            lang_name = "javascript";
+        }
     }
 
-    TSLanguage *lang = config_load_language(lang_name);
-    if (lang) {
-        b->parser = ts_parser_new();
-        ts_parser_set_language(b->parser, lang);
-        b->query = config_load_highlights(lang, lang_name);
-        if (b->query) {
-            b->cursor = ts_query_cursor_new();
-            if (!b->cursor) {
-                log_error("buffer.buffer_init: failed to create query cursor");
-                exit(1);
+    if (lang_name) {
+        TSLanguage *lang = config_load_language(lang_name);
+        if (lang) {
+            b->parser = ts_parser_new();
+            ts_parser_set_language(b->parser, lang);
+            b->query = config_load_highlights(lang, lang_name);
+            if (b->query) {
+                b->cursor = ts_query_cursor_new();
+                if (!b->cursor) {
+                    log_error("buffer.buffer_init: failed to create query cursor");
+                    exit(1);
+                }
             }
         }
     }
