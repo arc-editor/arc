@@ -19,21 +19,6 @@ Arc is born from a love of Vim's powerful keybindings and the simplicity of "bat
 *   **Theming:** Customize the look and feel of the editor.
 *   **LSP Support:** Language Server Protocol support is planned for future development.
 
-## Performance
-
-Here is a comparison of startup time and memory usage for `arc` against other popular terminal-based editors. These benchmarks are run automatically on every push to the `main` branch.
-
-<!-- BENCHMARK_TABLE_START -->
-| Benchmark (File Size)    | `arc` | `neovim` | `helix` |
-|--------------------------|---|---|---|
-| Startup Time (ms) (10KB) | `0` | `10.00` | `10.00` |
-| Memory Used (MB) (10KB)  | `2.89` | `10.24` | `14.00` |
-| Startup Time (ms) (10MB) | `250.00` | `50.00` | `10.00` |
-| Memory Used (MB) (10MB)  | `48.74` | `24.71` | `13.88` |
-| Binary Size (MB)         | `.3MB` | `4.6MB` | `18.2MB` |
-
-<!-- BENCHMARK_TABLE_END -->
-
 ## Project Status
 
 **Pre-Alpha:** Arc is currently in the early stages of development. It is usable for some development tasks, but may be unstable and lacks key features like LSP support.
