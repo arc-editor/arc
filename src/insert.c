@@ -12,7 +12,6 @@ int insert_handle_input(const char *ch_str) {
         editor_needs_draw();
         return 1;
     }
-    // normal_register_insertion(ch); // TODO: Fix this
     if ((ch_str[0] == 8 || ch_str[0] == 127) && ch_str[1] == '\0') { // backspace
         editor_backspace();
         return 1;
@@ -22,6 +21,9 @@ int insert_handle_input(const char *ch_str) {
         return 1;
     }
 
+    for (int i = 0; ch_str[i] != '\0'; i++) {
+        normal_register_insertion(ch_str[i]);
+    }
     editor_insert_char(ch_str);
     return 1;
 }
