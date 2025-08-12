@@ -547,7 +547,16 @@ void buffer_init(Buffer *b, char *file_name) {
         b->mtime = st.st_mtime;
     }
 
-    char *lang_name = get_file_extension(file_name);
+    char *lang_ext = get_file_extension(file_name);
+    char *lang_name = NULL;
+    if (strcmp(lang_ext, "c") == 0) {
+        lang_name = "c";
+    } else if (strcmp(lang_ext, "ts") == 0) {
+        lang_name = "typescript";
+    } else if (strcmp(lang_ext, "js") == 0) {
+        lang_name = "javascript";
+    }
+
     TSLanguage *lang = config_load_language(lang_name);
     if (lang) {
         b->parser = ts_parser_new();

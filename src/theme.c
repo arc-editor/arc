@@ -4,11 +4,16 @@
 #include <stdlib.h>
 #include "perfect_hashmap.h"
 #include "tomlc17.h"
-#include "buffer.h"
 #include "theme.h"
 #include "log.h"
 
 static const CaptureInfo capture_info_table[] = {
+    {"constructor", 85, offsetof(Theme, syntax_constant)},
+    {"number", 85, offsetof(Theme, syntax_constant)},
+    {"variable.builtin", 90, offsetof(Theme, syntax_constant)},
+    {"property", 52, offsetof(Theme, syntax_variable_other_member)},
+    {"function.method", 100, offsetof(Theme, syntax_function)},
+
     {"attribute", 15, offsetof(Theme, syntax_attribute)},
     {"comment", 10, offsetof(Theme, syntax_comment)},
     {"constant", 85, offsetof(Theme, syntax_constant)},
