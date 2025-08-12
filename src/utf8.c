@@ -1,4 +1,5 @@
 #define _XOPEN_SOURCE 500
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -6,7 +7,6 @@
 #include <locale.h>
 #include <unistd.h>
 #include <errno.h>
-
 #include "utf8.h"
 #include "log.h"
 
@@ -93,30 +93,6 @@ int utf8_char_width(const char *s) {
 
     return width;
 }
-
-// size_t utf8_strlen(const char *s) {
-//     init_utf8();
-//     size_t i = 0;
-//     const char *p = s;
-//     while (*p) {
-//         int len = mblen(p, MB_CUR_MAX);
-//         if (len < 1) {
-//             len = 1;
-//         }
-//         p += len;
-//         i++;
-//     }
-//     return i;
-// }
-
-// int utf8_char_len(const char *s) {
-//     init_utf8();
-//     int len = mblen(s, MB_CUR_MAX);
-//     if (len < 1) {
-//         return 1;
-//     }
-//     return len;
-// }
 
 int utf8_char_len(const char *s) {
     if (!s || !*s) {
