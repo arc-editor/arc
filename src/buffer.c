@@ -298,6 +298,9 @@ void buffer_line_apply_syntax_highlighting(Buffer *b, BufferLine *line, uint32_t
         new_style.r = style->fg_r;
         new_style.g = style->fg_g;
         new_style.b = style->fg_b;
+        new_style.bg_r = style->bg_r;
+        new_style.bg_g = style->bg_g;
+        new_style.bg_b = style->bg_b;
         new_style.style = style->style;
 
         if (line->run_count > 0 && memcmp(&line->runs[line->run_count - 1].style, &new_style, sizeof(CharStyle)) == 0) {

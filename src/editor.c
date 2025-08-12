@@ -389,10 +389,17 @@ void draw_buffer(Diagnostic *diagnostics, int diagnostics_count, int update_diag
                 char_style.fg_r = run->style.r;
                 char_style.fg_g = run->style.g;
                 char_style.fg_b = run->style.b;
-                char_style.bg_r = style->bg_r;
-                char_style.bg_g = style->bg_g;
-                char_style.bg_b = style->bg_b;
                 char_style.style = run->style.style;
+
+                if (style != line_style) {
+                    char_style.bg_r = style->bg_r;
+                    char_style.bg_g = style->bg_g;
+                    char_style.bg_b = style->bg_b;
+                } else {
+                    char_style.bg_r = run->style.bg_r;
+                    char_style.bg_g = run->style.bg_g;
+                    char_style.bg_b = run->style.bg_b;
+                }
 
                 // ... (whitespace rendering logic) ...
                 editor_set_style(&char_style, 1, 1);

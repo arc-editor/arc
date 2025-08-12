@@ -13,9 +13,8 @@ typedef enum {
 } VisualMode;
 
 typedef struct {
-    unsigned char r;
-    unsigned char g;
-    unsigned char b;
+    unsigned char r, g, b;
+    unsigned char bg_r, bg_g, bg_b;
     unsigned char style;
 } CharStyle;
 
