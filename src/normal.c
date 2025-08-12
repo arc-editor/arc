@@ -1,7 +1,6 @@
 #include <string.h>
 #include <termios.h>
 #include <unistd.h>
-#include "log.h"
 #include "insert.h"
 #include "editor.h"
 #include "history.h"

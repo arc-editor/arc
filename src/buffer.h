@@ -43,7 +43,7 @@ typedef struct {
     int offset_y;
     int offset_x;
     char *read_buffer;
-    size_t read_buffer_capacity;
+    int read_buffer_capacity;
     char *file_name;
     time_t mtime;
     int tab_width;

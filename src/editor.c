@@ -2271,6 +2271,8 @@ void editor_undo(void) {
         }
         history_push_redo(buffer->history, change);
         editor_did_change_buffer();
+        buffer_reset_offset_x(buffer, editor.screen_cols);
+        buffer_reset_offset_y(buffer, editor.screen_rows);
     }
 
     is_undo_redo_active = 0;
@@ -2283,16 +2285,15 @@ void editor_redo(void) {
 
     Change *change = history_pop_redo(buffer->history);
     if (change) {
+        int end_y, end_x;
+        calculate_end_point(change->text, change->y, change->x, &end_y, &end_x);
         if (change->type == CHANGE_TYPE_INSERT) {
             pthread_mutex_unlock(&editor_mutex);
             editor_insert_string_at(change->text, change->y, change->x);
             pthread_mutex_lock(&editor_mutex);
-            buffer->position_y = change->y;
-            buffer->position_x = change->x;
+            buffer->position_y = end_y;
+            buffer->position_x = end_x;
         } else { // CHANGE_TYPE_DELETE
-            int end_y, end_x;
-            calculate_end_point(change->text, change->y, change->x, &end_y, &end_x);
-
             Range range = { .y_start = change->y, .x_start = change->x, .y_end = end_y, .x_end = end_x };
             EditorCommand cmd = {0}; // dummy cmd
             range_delete(buffer, &range, &cmd);
@@ -2301,6 +2302,8 @@ void editor_redo(void) {
         }
         history_push_undo(buffer->history, change);
         editor_did_change_buffer();
+        buffer_reset_offset_x(buffer, editor.screen_cols);
+        buffer_reset_offset_y(buffer, editor.screen_rows);
     }
 
     is_undo_redo_active = 0;

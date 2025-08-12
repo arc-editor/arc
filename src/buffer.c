@@ -1,5 +1,6 @@
 #define _POSIX_C_SOURCE 200809L
 
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -15,10 +16,6 @@
 
 
 void buffer_set_line_num_width(Buffer *buffer) {
-    if (buffer->line_count == 0) {
-        buffer->line_num_width = 3;
-        return;
-    }
     buffer->line_num_width = (int)floor(log10(buffer->line_count)) + 3;
 }
 
@@ -322,7 +319,7 @@ const char *buffer_read(void *payload, uint32_t start_byte __attribute__((unused
     BufferLine *line = buffer->lines[position.row];
 
     if (line->text_len + 2 > buffer->read_buffer_capacity) {
-        size_t new_capacity = line->text_len + 2;
+        int new_capacity = line->text_len + 2;
         char *new_buffer = realloc(buffer->read_buffer, new_capacity);
         if (!new_buffer) {
             log_error("buffer.buffer_read: realloc read buffer failed");
@@ -336,7 +333,7 @@ const char *buffer_read(void *payload, uint32_t start_byte __attribute__((unused
     buffer->read_buffer[line->text_len] = '\n';
     buffer->read_buffer[line->text_len + 1] = '\0';
 
-    if (position.column > (size_t)line->text_len) {
+    if (position.column > (uint32_t)line->text_len) {
         *bytes_read = 0;
         return "";
     }
@@ -465,20 +462,24 @@ void buffer_set_logical_position_x(Buffer *buffer, int visual_before) {
     buffer->position_x = best_x;
 }
 
-void buffer_line_init(BufferLine *line) {
+void buffer_line_init_without_text(BufferLine *line) {
     line->char_count = 0;
     line->text_len = 0;
     line->capacity = 8;
+    line->needs_highlight = 1;
+    line->highlight_runs = NULL;
+    line->highlight_runs_count = 0;
+    line->highlight_runs_capacity = 0;
+}
+
+void buffer_line_init(BufferLine *line) {
+    buffer_line_init_without_text(line);
     line->text = malloc(line->capacity);
     if (line->text == NULL) {
         log_error("buffer.buffer_line_init: failed to allocate line text");
         exit(1);
     }
     line->text[0] = '\0';
-    line->needs_highlight = 1;
-    line->highlight_runs = NULL;
-    line->highlight_runs_count = 0;
-    line->highlight_runs_capacity = 0;
 }
 
 void buffer_line_destroy(BufferLine *line) {
@@ -594,12 +595,13 @@ void buffer_init(Buffer *b, char *file_name) {
 
                 buffer_realloc_lines_for_capacity(b);
                 b->lines[b->line_count] = (BufferLine *)malloc(sizeof(BufferLine));
-                buffer_line_init(b->lines[b->line_count]);
-
+                buffer_line_init_without_text(b->lines[b->line_count]);
                 BufferLine *new_line = b->lines[b->line_count];
-                free(new_line->text); // Free the default buffer from buffer_line_init
-
                 new_line->text = malloc(line_len + 1);
+                if (new_line->text == NULL) {
+                    log_error("buffer.buffer_init: unable to malloc line text");
+                    exit(1);
+                }
                 memcpy(new_line->text, line_buf, line_len + 1);
                 new_line->text_len = line_len;
                 new_line->capacity = line_len + 1;

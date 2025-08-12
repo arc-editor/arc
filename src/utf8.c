@@ -21,48 +21,6 @@ void init_utf8() {
     }
 }
 
-int read_utf8_char(FILE *fp, char *buf, size_t buf_size) {
-    int c = fgetc(fp);
-    if (c == EOF) {
-        return 0; // End of file
-    }
-
-    unsigned char first_byte = (unsigned char)c;
-    int len;
-
-    if (first_byte < 0x80) { // 0xxxxxxx
-        len = 1;
-    } else if ((first_byte & 0xE0) == 0xC0) { // 110xxxxx
-        len = 2;
-    } else if ((first_byte & 0xF0) == 0xE0) { // 1110xxxx
-        len = 3;
-    } else if ((first_byte & 0xF8) == 0xF0) { // 11110xxx
-        len = 4;
-    } else {
-        // Invalid UTF-8 start byte. For simplicity, treat as a single byte.
-        len = 1;
-    }
-
-    if ((size_t)len >= buf_size) {
-        // Buffer not large enough
-        ungetc(c, fp); // Push the byte back
-        return -1; // Error
-    }
-
-    buf[0] = first_byte;
-    for (int i = 1; i < len; i++) {
-        c = fgetc(fp);
-        if (c == EOF) {
-            // Unexpected EOF
-            return -1; // Error
-        }
-        buf[i] = (unsigned char)c;
-    }
-    buf[len] = '\0';
-
-    return len;
-}
-
 int read_utf8_char_from_stdin(char *buf, size_t buf_size) {
     char first_byte_char;
     ssize_t nread;
@@ -136,26 +94,66 @@ int utf8_char_width(const char *s) {
     return width;
 }
 
-size_t utf8_strlen(const char *s) {
-    init_utf8();
-    size_t i = 0;
-    const char *p = s;
-    while (*p) {
-        int len = mblen(p, MB_CUR_MAX);
-        if (len < 1) {
-            len = 1;
-        }
-        p += len;
-        i++;
-    }
-    return i;
-}
+// size_t utf8_strlen(const char *s) {
+//     init_utf8();
+//     size_t i = 0;
+//     const char *p = s;
+//     while (*p) {
+//         int len = mblen(p, MB_CUR_MAX);
+//         if (len < 1) {
+//             len = 1;
+//         }
+//         p += len;
+//         i++;
+//     }
+//     return i;
+// }
+
+// int utf8_char_len(const char *s) {
+//     init_utf8();
+//     int len = mblen(s, MB_CUR_MAX);
+//     if (len < 1) {
+//         return 1;
+//     }
+//     return len;
+// }
 
 int utf8_char_len(const char *s) {
-    init_utf8();
-    int len = mblen(s, MB_CUR_MAX);
-    if (len < 1) {
+    if (!s || !*s) {
+        return 0; // No character, no length
+    }
+    unsigned char first_byte = (unsigned char)s[0];
+    if (first_byte < 0x80) {        // 0xxxxxxx
+        return 1;
+    } else if ((first_byte & 0xE0) == 0xC0) { // 110xxxxx
+        return 2;
+    } else if ((first_byte & 0xF0) == 0xE0) { // 1110xxxx
+        return 3;
+    } else if ((first_byte & 0xF8) == 0xF0) { // 11110xxx
+        return 4;
+    } else {
         return 1;
     }
-    return len;
+}
+
+
+size_t utf8_strlen(const char *s) {
+    if (!s) return 0;
+    size_t char_count = 0;
+    const unsigned char *p = (const unsigned char*)s;
+    while (*p) {
+        char_count++;
+        if (*p < 0x80) { // 0xxxxxxx
+            p += 1;
+        } else if ((*p & 0xE0) == 0xC0) { // 110xxxxx
+            p += 2;
+        } else if ((*p & 0xF0) == 0xE0) { // 1110xxxx
+            p += 3;
+        } else if ((*p & 0xF8) == 0xF0) { // 11110xxx
+            p += 4;
+        } else {
+            p += 1;
+        }
+    }
+    return char_count;
 }
