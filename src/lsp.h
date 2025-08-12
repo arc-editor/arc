@@ -43,5 +43,6 @@ void lsp_did_open(const char *file_path, const char *language_id,
                   const char *text);
 void lsp_did_change(const char *file_path, const char *text, int version);
 bool lsp_is_running(const char *language_id);
+char *find_project_root(const char *file_path);
 
 #endif // LSP_H
