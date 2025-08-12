@@ -550,12 +550,12 @@ void buffer_init(Buffer *b, char *file_name) {
     char *lang_ext = get_file_extension(file_name);
     char *lang_name = NULL;
     if (lang_ext != NULL) {
-        if (strcmp(lang_ext, "c") == 0) {
-            lang_name = "c";
-        } else if (strcmp(lang_ext, "ts") == 0) {
+        if (strcmp(lang_ext, "ts") == 0) {
             lang_name = "typescript";
         } else if (strcmp(lang_ext, "js") == 0) {
             lang_name = "javascript";
+        } else {
+            lang_name = lang_ext;
         }
     }
 
