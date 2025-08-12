@@ -563,30 +563,60 @@ void buffer_init(Buffer *b, char *file_name) {
 
     FILE *fp = fopen(file_name, "r");
     if (fp) {
-        char utf8_buf[5];
-        int bytes_read;
-        while ((bytes_read = read_utf8_char(fp, utf8_buf, sizeof(utf8_buf))) > 0) {
-            if (strcmp(utf8_buf, "\n") == 0) {
+        char *line_buf = NULL;
+        size_t line_cap = 0;
+        ssize_t line_len;
+        int trailing_newline = 0;
+
+        // Read the first line, if it exists
+        if ((line_len = getline(&line_buf, &line_cap, fp)) != -1) {
+            trailing_newline = (line_buf[line_len - 1] == '\n');
+            // Overwrite the initial empty line
+            BufferLine *first_line = b->lines[0];
+            free(first_line->text); // free the initial empty string buffer
+
+            // Strip newline characters
+            if (line_len > 0 && line_buf[line_len - 1] == '\n') line_buf[--line_len] = '\0';
+            if (line_len > 0 && line_buf[line_len - 1] == '\r') line_buf[--line_len] = '\0';
+
+            first_line->text = malloc(line_len + 1);
+            memcpy(first_line->text, line_buf, line_len + 1);
+            first_line->text_len = line_len;
+            first_line->capacity = line_len + 1;
+            first_line->char_count = utf8_strlen(first_line->text);
+            first_line->needs_highlight = 1;
+
+            // Read subsequent lines
+            while ((line_len = getline(&line_buf, &line_cap, fp)) != -1) {
+                trailing_newline = (line_buf[line_len - 1] == '\n');
+                if (line_len > 0 && line_buf[line_len - 1] == '\n') line_buf[--line_len] = '\0';
+                if (line_len > 0 && line_buf[line_len - 1] == '\r') line_buf[--line_len] = '\0';
+
                 buffer_realloc_lines_for_capacity(b);
                 b->lines[b->line_count] = (BufferLine *)malloc(sizeof(BufferLine));
-                if (b->lines[b->line_count] == NULL) {
-                    log_error("buffer.buffer_init: failed to allocate BufferLine");
-                    exit(1);
-                }
                 buffer_line_init(b->lines[b->line_count]);
+
+                BufferLine *new_line = b->lines[b->line_count];
+                free(new_line->text); // Free the default buffer from buffer_line_init
+
+                new_line->text = malloc(line_len + 1);
+                memcpy(new_line->text, line_buf, line_len + 1);
+                new_line->text_len = line_len;
+                new_line->capacity = line_len + 1;
+                new_line->char_count = utf8_strlen(new_line->text);
+
                 b->line_count++;
-            } else {
-                BufferLine *line = b->lines[b->line_count - 1];
-                buffer_line_realloc_for_capacity(line, line->text_len + bytes_read + 1);
-                memcpy(line->text + line->text_len, utf8_buf, bytes_read);
-                line->text_len += bytes_read;
-                line->text[line->text_len] = '\0';
-                line->char_count++;
             }
         }
-        if (bytes_read == -1) {
-            log_error("buffer.buffer_init: error reading UTF-8 character from file");
+
+        if (trailing_newline) {
+            buffer_realloc_lines_for_capacity(b);
+            b->lines[b->line_count] = (BufferLine *)malloc(sizeof(BufferLine));
+            buffer_line_init(b->lines[b->line_count]);
+            b->line_count++;
         }
+
+        free(line_buf);
         fclose(fp);
     } else {
         log_error("buffer.buffer_init: failed to open file");
