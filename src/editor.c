@@ -188,7 +188,7 @@ void draw_statusline() {
     char position[16];
     int position_len = snprintf(position, sizeof(position), " %d:%d ", buffer->position_y + 1, buffer->position_x + 1);
 
-    char line_count[8];
+    char line_count[16];
     int line_count_len = snprintf(line_count, sizeof(line_count), " %d ", buffer->line_count);
 
     int mode_len = strlen(mode);
