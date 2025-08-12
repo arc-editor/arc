@@ -13,31 +13,140 @@
 #include <stdio.h>
 #include <fcntl.h>
 
-static pid_t lsp_server_pid = -1;
-static int to_server_pipe[2];
-static int from_server_pipe[2];
-static pthread_t lsp_reader_thread;
-static Diagnostic *diagnostics = NULL;
-static int diagnostic_count = 0;
-static int diagnostics_version = 0;
-static pthread_mutex_t diagnostics_mutex = PTHREAD_MUTEX_INITIALIZER;
-static int lsp_next_id = 1;
+#define MAX_LSP_SERVERS 10
 
-// Buffer for reading partial messages
-static char read_buffer[16384];
-static int buffer_pos = 0;
+static LspServer *lsp_servers[MAX_LSP_SERVERS] = {NULL};
+static int lsp_server_count = 0;
 
-cJSON *lsp_read_message();
+static const char *get_lang_id_from_filename(const char *file_name) {
+  if (!file_name) {
+    return NULL;
+  }
+  const char *ext = strrchr(file_name, '.');
+  if (!ext) {
+    return NULL;
+  }
+  return ext + 1;
+}
 
-void *lsp_reader_thread_func(void *arg __attribute__((unused))) {
+static LspServer *get_server(const char *language_id) {
+  if (!language_id) {
+    return NULL;
+  }
+  for (int i = 0; i < lsp_server_count; i++) {
+    if (strcmp(lsp_servers[i]->lang_id, language_id) == 0) {
+      return lsp_servers[i];
+    }
+  }
+  return NULL;
+}
+
+static void lsp_send_message(LspServer *server, cJSON *json_rpc) {
+  if (!server || server->pid <= 0)
+    return;
+
+  char *message = cJSON_PrintUnformatted(json_rpc);
+  if (!message)
+    return;
+
+  char header[64];
+  int len = strlen(message);
+  snprintf(header, sizeof(header), "Content-Length: %d\r\n\r\n", len);
+
+  ssize_t header_written =
+      write(server->to_server_pipe[1], header, strlen(header));
+  ssize_t message_written = write(server->to_server_pipe[1], message, len);
+
+  if (header_written < 0 || message_written < 0) {
+    log_error("lsp_send_message: write failed");
+  }
+
+  free(message);
+}
+
+static cJSON *lsp_read_message(LspServer *server) {
   while (1) {
-    cJSON *message = lsp_read_message();
+    char *header_end = strstr(server->read_buffer, "\r\n\r\n");
+    if (!header_end) {
+      ssize_t bytes_read =
+          read(server->from_server_pipe[0],
+               server->read_buffer + server->buffer_pos,
+               sizeof(server->read_buffer) - server->buffer_pos - 1);
+      if (bytes_read <= 0) {
+        return NULL;
+      }
+      server->buffer_pos += bytes_read;
+      server->read_buffer[server->buffer_pos] = '\0';
+      continue;
+    }
+
+    char *content_length_start =
+        strstr(server->read_buffer, "Content-Length: ");
+    if (!content_length_start || content_length_start > header_end) {
+      log_error("lsp_read_message: invalid header format");
+      return NULL;
+    }
+
+    int content_length = atoi(content_length_start + 16);
+    if (content_length <= 0 || content_length > 1048576) {
+      log_error("lsp_read_message: invalid content length %d", content_length);
+      return NULL;
+    }
+
+    char *json_start = header_end + 4;
+    int header_size = json_start - server->read_buffer;
+    int available_json = server->buffer_pos - header_size;
+
+    if (available_json >= content_length) {
+      char *json_copy = malloc(content_length + 1);
+      if (!json_copy) {
+        log_error("lsp_read_message: malloc failed");
+        return NULL;
+      }
+
+      memcpy(json_copy, json_start, content_length);
+      json_copy[content_length] = '\0';
+
+      cJSON *parsed = cJSON_Parse(json_copy);
+      free(json_copy);
+
+      int remaining = server->buffer_pos - (header_size + content_length);
+      if (remaining > 0) {
+        memmove(server->read_buffer, json_start + content_length, remaining);
+      }
+      server->buffer_pos = remaining;
+      server->read_buffer[server->buffer_pos] = '\0';
+
+      return parsed;
+    } else {
+      int needed = content_length - available_json;
+      if (server->buffer_pos + needed >= (int)sizeof(server->read_buffer)) {
+        log_error("lsp_read_message: message too large for buffer");
+        return NULL;
+      }
+
+      ssize_t bytes_read = read(server->from_server_pipe[0],
+                                server->read_buffer + server->buffer_pos, needed);
+      if (bytes_read <= 0) {
+        return NULL;
+      }
+      server->buffer_pos += bytes_read;
+      server->read_buffer[server->buffer_pos] = '\0';
+    }
+  }
+}
+
+static void *lsp_reader_thread_func(void *arg) {
+  LspServer *server = (LspServer *)arg;
+  while (1) {
+    cJSON *message = lsp_read_message(server);
     if (!message) {
-      break; // Server closed connection
+      break;
     }
 
     cJSON *method = cJSON_GetObjectItem(message, "method");
-    if (method && strcmp(method->valuestring, "textDocument/publishDiagnostics") == 0) {
+    if (method &&
+        strcmp(method->valuestring, "textDocument/publishDiagnostics") == 0) {
       cJSON *params = cJSON_GetObjectItem(message, "params");
       if (!params) {
         cJSON_Delete(message);
@@ -50,66 +159,70 @@ void *lsp_reader_thread_func(void *arg __attribute__((unused))) {
         continue;
       }
 
-      pthread_mutex_lock(&diagnostics_mutex);
-      diagnostics_version++;
+      pthread_mutex_lock(&server->diagnostics_mutex);
+      server->diagnostics_version++;
 
-      // Clear old diagnostics
-      for (int i = 0; i < diagnostic_count; i++) {
-        free(diagnostics[i].message);
+      for (int i = 0; i < server->diagnostic_count; i++) {
+        free(server->diagnostics[i].message);
       }
-      free(diagnostics);
-      diagnostics = NULL;
-      diagnostic_count = 0;
+      free(server->diagnostics);
+      server->diagnostics = NULL;
+      server->diagnostic_count = 0;
 
       int new_diagnostic_count = cJSON_GetArraySize(diagnostics_json);
 
       if (new_diagnostic_count > 0) {
-        diagnostics = malloc(sizeof(Diagnostic) * new_diagnostic_count);
-        if (!diagnostics) {
-          pthread_mutex_unlock(&diagnostics_mutex);
+        server->diagnostics =
+            malloc(sizeof(Diagnostic) * new_diagnostic_count);
+        if (!server->diagnostics) {
+          pthread_mutex_unlock(&server->diagnostics_mutex);
           cJSON_Delete(message);
           continue;
         }
 
         for (int i = 0; i < new_diagnostic_count; i++) {
           cJSON *diag_json = cJSON_GetArrayItem(diagnostics_json, i);
-          if (!diag_json) continue;
+          if (!diag_json)
+            continue;
 
           cJSON *range = cJSON_GetObjectItem(diag_json, "range");
-          if (!range) continue;
+          if (!range)
+            continue;
 
           cJSON *start = cJSON_GetObjectItem(range, "start");
           cJSON *end = cJSON_GetObjectItem(range, "end");
-          if (!start || !end) continue;
+          if (!start || !end)
+            continue;
 
           cJSON *message_json = cJSON_GetObjectItem(diag_json, "message");
-          if (!message_json) continue;
+          if (!message_json)
+            continue;
 
           cJSON *severity_json = cJSON_GetObjectItem(diag_json, "severity");
-
           cJSON *line_obj = cJSON_GetObjectItem(start, "line");
           cJSON *char_start_obj = cJSON_GetObjectItem(start, "character");
           cJSON *char_end_obj = cJSON_GetObjectItem(end, "character");
 
-          if (!line_obj || !char_start_obj || !char_end_obj) continue;
+          if (!line_obj || !char_start_obj || !char_end_obj)
+            continue;
 
-          diagnostics[i].line = line_obj->valueint;
-          diagnostics[i].col_start = char_start_obj->valueint;
-          diagnostics[i].col_end = char_end_obj->valueint;
+          server->diagnostics[i].line = line_obj->valueint;
+          server->diagnostics[i].col_start = char_start_obj->valueint;
+          server->diagnostics[i].col_end = char_end_obj->valueint;
 
           if (severity_json) {
-            diagnostics[i].severity = (DiagnosticSeverity)severity_json->valueint;
+            server->diagnostics[i].severity =
+                (DiagnosticSeverity)severity_json->valueint;
           } else {
-            diagnostics[i].severity = LSP_DIAGNOSTIC_SEVERITY_HINT;
+            server->diagnostics[i].severity = LSP_DIAGNOSTIC_SEVERITY_HINT;
           }
 
-          diagnostics[i].message = strdup(message_json->valuestring);
+          server->diagnostics[i].message = strdup(message_json->valuestring);
         }
-
-        diagnostic_count = new_diagnostic_count;
+        server->diagnostic_count = new_diagnostic_count;
       }
 
-      pthread_mutex_unlock(&diagnostics_mutex);
+      pthread_mutex_unlock(&server->diagnostics_mutex);
       editor_request_redraw();
     }
 
@@ -119,162 +232,84 @@ void *lsp_reader_thread_func(void *arg __attribute__((unused))) {
   return NULL;
 }
 
-void lsp_send_message(cJSON *json_rpc) {
-  if (lsp_server_pid <= 0) return;
-
-  char *message = cJSON_PrintUnformatted(json_rpc);
-  if (!message) return;
-
-  char header[64];
-  int len = strlen(message);
-  snprintf(header, sizeof(header), "Content-Length: %d\r\n\r\n", len);
-
-  // Write header and message atomically if possible
-  ssize_t header_written = write(to_server_pipe[1], header, strlen(header));
-  ssize_t message_written = write(to_server_pipe[1], message, len);
-
-  if (header_written < 0 || message_written < 0) {
-    log_error("lsp_send_message: write failed");
-  }
-
-  free(message);
-}
-
-cJSON *lsp_read_message() {
-    while (1) {
-        // Look for complete header in buffer
-        char *header_end = strstr(read_buffer, "\r\n\r\n");
-        if (!header_end) {
-            // Need more data for header
-            ssize_t bytes_read = read(from_server_pipe[0], read_buffer + buffer_pos, sizeof(read_buffer) - buffer_pos - 1);
-            if (bytes_read <= 0) {
-                return NULL; // EOF or error
-            }
-            buffer_pos += bytes_read;
-            read_buffer[buffer_pos] = '\0';
-            continue;
-        }
-
-        // Parse Content-Length from header
-        char *content_length_start = strstr(read_buffer, "Content-Length: ");
-        if (!content_length_start || content_length_start > header_end) {
-            log_error("lsp_read_message: invalid header format");
-            return NULL;
-        }
-
-        int content_length = atoi(content_length_start + 16);
-        if (content_length <= 0 || content_length > 1048576) { // 1MB limit
-            log_error("lsp_read_message: invalid content length %d", content_length);
-            return NULL;
-        }
-
-        char *json_start = header_end + 4;
-        int header_size = json_start - read_buffer;
-        int available_json = buffer_pos - header_size;
-
-        // Check if we have the complete JSON message
-        if (available_json >= content_length) {
-            // We have a complete message
-            char *json_copy = malloc(content_length + 1);
-            if (!json_copy) {
-                log_error("lsp_read_message: malloc failed");
-                return NULL;
-            }
-
-            memcpy(json_copy, json_start, content_length);
-            json_copy[content_length] = '\0';
-
-            cJSON *parsed = cJSON_Parse(json_copy);
-            free(json_copy);
-
-            // Move remaining data to beginning of buffer
-            int remaining = buffer_pos - (header_size + content_length);
-            if (remaining > 0) {
-                memmove(read_buffer, json_start + content_length, remaining);
-            }
-            buffer_pos = remaining;
-            read_buffer[buffer_pos] = '\0';
-
-            return parsed;
-        } else {
-            // Need more data for JSON content
-            int needed = content_length - available_json;
-            if (buffer_pos + needed >= (int)sizeof(read_buffer)) {
-                log_error("lsp_read_message: message too large for buffer");
-                return NULL;
-            }
-
-            ssize_t bytes_read = read(from_server_pipe[0], read_buffer + buffer_pos, needed);
-            if (bytes_read <= 0) {
-                return NULL; // EOF or error
-            }
-            buffer_pos += bytes_read;
-            read_buffer[buffer_pos] = '\0';
-        }
-    }
-}
-
-#include "config.h"
-
 void lsp_init(const Config *config, const char *file_name) {
-  if (!file_name) {
+  const char *lang_id = get_lang_id_from_filename(file_name);
+  if (!lang_id || get_server(lang_id) != NULL) {
     return;
   }
 
-  const char *ext = strrchr(file_name, '.');
-  if (!ext) {
+  if (lsp_server_count >= MAX_LSP_SERVERS) {
+    log_error("lsp_init: max number of LSP servers reached");
     return;
   }
 
   char key[256];
-  snprintf(key, sizeof(key), "lsp.%s", ext + 1);
+  snprintf(key, sizeof(key), "lsp.%s", lang_id);
 
   const char *command = NULL;
   if (config->toml_result.ok) {
-      toml_datum_t cmd_datum = toml_seek(config->toml_result.toptab, key);
-      if (cmd_datum.type == TOML_STRING) {
-          command = cmd_datum.u.s;
-      }
+    toml_datum_t cmd_datum = toml_seek(config->toml_result.toptab, key);
+    if (cmd_datum.type == TOML_STRING) {
+      command = cmd_datum.u.s;
+    }
   }
 
   if (!command) {
-      // Try defaults
-      if (strcmp(ext + 1, "c") == 0 || strcmp(ext + 1, "h") == 0 || strcmp(ext + 1, "cpp") == 0) {
-          command = "clangd";
-      } else if (strcmp(ext + 1, "py") == 0) {
-          command = "pylsp";
-      } else if (strcmp(ext + 1, "rs") == 0) {
-          command = "rust-analyzer";
-      } else if (strcmp(ext + 1, "go") == 0) {
-          command = "gopls";
-      } else if (strcmp(ext + 1, "ts") == 0 || strcmp(ext + 1, "js") == 0) {
-          command = "typescript-language-server --stdio";
-      }
+    if (strcmp(lang_id, "c") == 0 || strcmp(lang_id, "h") == 0 ||
+        strcmp(lang_id, "cpp") == 0) {
+      command = "clangd";
+    } else if (strcmp(lang_id, "py") == 0) {
+      command = "pylsp";
+    } else if (strcmp(lang_id, "rs") == 0) {
+      command = "rust-analyzer";
+    } else if (strcmp(lang_id, "go") == 0) {
+      command = "gopls";
+    } else if (strcmp(lang_id, "ts") == 0 || strcmp(lang_id, "js") == 0) {
+      command = "typescript-language-server --stdio";
+    }
   }
 
   if (!command) {
     return;
   }
 
-  if (pipe(to_server_pipe) == -1 || pipe(from_server_pipe) == -1) {
-    log_error("lsp.lsp_init: pipe failed");
+  LspServer *server = malloc(sizeof(LspServer));
+  if (!server) {
+    log_error("lsp_init: malloc failed");
     return;
   }
 
-  lsp_server_pid = fork();
-  if (lsp_server_pid == -1) {
-    log_error("lsp.lsp_init: fork failed");
+  strncpy(server->lang_id, lang_id, sizeof(server->lang_id) - 1);
+  server->lang_id[sizeof(server->lang_id) - 1] = '\0';
+  server->diagnostics = NULL;
+  server->diagnostic_count = 0;
+  server->diagnostics_version = 0;
+  pthread_mutex_init(&server->diagnostics_mutex, NULL);
+  server->buffer_pos = 0;
+  server->next_id = 1;
+
+  if (pipe(server->to_server_pipe) == -1 ||
+      pipe(server->from_server_pipe) == -1) {
+    log_error("lsp_init: pipe failed");
+    free(server);
     return;
   }
 
-  if (lsp_server_pid == 0) { // Child process
-    close(to_server_pipe[1]);
-    dup2(to_server_pipe[0], STDIN_FILENO);
-    close(to_server_pipe[0]);
+  server->pid = fork();
+  if (server->pid == -1) {
+    log_error("lsp_init: fork failed");
+    free(server);
+    return;
+  }
 
-    close(from_server_pipe[0]);
-    dup2(from_server_pipe[1], STDOUT_FILENO);
-    close(from_server_pipe[1]);
+  if (server->pid == 0) { // Child process
+    close(server->to_server_pipe[1]);
+    dup2(server->to_server_pipe[0], STDIN_FILENO);
+    close(server->to_server_pipe[0]);
+
+    close(server->from_server_pipe[0]);
+    dup2(server->from_server_pipe[1], STDOUT_FILENO);
+    close(server->from_server_pipe[1]);
 
     int dev_null = open("/dev/null", O_WRONLY);
     if (dev_null != -1) {
@@ -284,31 +319,33 @@ void lsp_init(const Config *config, const char *file_name) {
 
     char *cmd_copy = strdup(command);
     if (!cmd_copy) {
-        log_error("lsp.lsp_init: strdup failed");
-        exit(1);
+      log_error("lsp_init: strdup failed");
+      exit(1);
     }
     char *args[64];
     int i = 0;
     char *token = strtok(cmd_copy, " ");
     while (token != NULL && i < 63) {
-        args[i++] = token;
-        token = strtok(NULL, " ");
+      args[i++] = token;
+      token = strtok(NULL, " ");
     }
     args[i] = NULL;
 
     execvp(args[0], args);
     free(cmd_copy);
-
-    log_error("lsp.lsp_init: execvp failed for %s", command);
+    log_error("lsp_init: execvp failed for %s", command);
     exit(1);
   } else { // Parent process
-    close(to_server_pipe[0]);
-    close(from_server_pipe[1]);
-    log_info("lsp.lsp_init: LSP server started with PID %d", lsp_server_pid);
+    close(server->to_server_pipe[0]);
+    close(server->from_server_pipe[1]);
+    log_info("LSP server for %s started with PID %d", server->lang_id,
+             server->pid);
+
+    lsp_servers[lsp_server_count++] = server;
 
     cJSON *root = cJSON_CreateObject();
     cJSON_AddStringToObject(root, "jsonrpc", "2.0");
-    cJSON_AddNumberToObject(root, "id", lsp_next_id++);
+    cJSON_AddNumberToObject(root, "id", server->next_id++);
     cJSON_AddStringToObject(root, "method", "initialize");
 
     cJSON *params = cJSON_CreateObject();
@@ -320,7 +357,7 @@ void lsp_init(const Config *config, const char *file_name) {
 
     char cwd[1024];
     if (getcwd(cwd, sizeof(cwd)) != NULL) {
-      char root_uri[1024 + 7]; // Extra space for "file://"
+      char root_uri[1024 + 7];
       snprintf(root_uri, sizeof(root_uri), "file://%s", cwd);
       cJSON_AddStringToObject(params, "rootUri", root_uri);
     } else {
@@ -329,26 +366,30 @@ void lsp_init(const Config *config, const char *file_name) {
 
     cJSON *capabilities = cJSON_CreateObject();
     cJSON_AddItemToObject(params, "capabilities", capabilities);
-
     cJSON_AddItemToObject(root, "params", params);
 
-    lsp_send_message(root);
+    lsp_send_message(server, root);
     cJSON_Delete(root);
 
-    if (pthread_create(&lsp_reader_thread, NULL, lsp_reader_thread_func, NULL) != 0) {
-      log_error("lsp.lsp_init: failed to create reader thread");
+    if (pthread_create(&server->reader_thread, NULL, lsp_reader_thread_func,
+                       server) != 0) {
+      log_error("lsp_init: failed to create reader thread");
     }
   }
 }
 
-void lsp_did_open(const char *file_path, const char *language_id, const char *text) {
+void lsp_did_open(const char *file_path, const char *language_id,
+                  const char *text) {
+  LspServer *server = get_server(language_id);
+  if (!server)
+    return;
+
   cJSON *root = cJSON_CreateObject();
   cJSON_AddStringToObject(root, "jsonrpc", "2.0");
   cJSON_AddStringToObject(root, "method", "textDocument/didOpen");
 
   cJSON *params = cJSON_CreateObject();
   cJSON *text_document = cJSON_CreateObject();
-  // Ensure file_path is a proper URI
   char uri[2048];
   if (strncmp(file_path, "file://", 7) == 0) {
     strncpy(uri, file_path, sizeof(uri) - 1);
@@ -363,18 +404,22 @@ void lsp_did_open(const char *file_path, const char *language_id, const char *te
   cJSON_AddItemToObject(params, "textDocument", text_document);
   cJSON_AddItemToObject(root, "params", params);
 
-  lsp_send_message(root);
+  lsp_send_message(server, root);
   cJSON_Delete(root);
 }
 
 void lsp_did_change(const char *file_path, const char *text, int version) {
+  const char *lang_id = get_lang_id_from_filename(file_path);
+  LspServer *server = get_server(lang_id);
+  if (!server)
+    return;
+
   cJSON *root = cJSON_CreateObject();
   cJSON_AddStringToObject(root, "jsonrpc", "2.0");
   cJSON_AddStringToObject(root, "method", "textDocument/didChange");
 
   cJSON *params = cJSON_CreateObject();
   cJSON *text_document = cJSON_CreateObject();
-  // Ensure file_path is a proper URI
   char uri[2048];
   if (strncmp(file_path, "file://", 7) == 0) {
     strncpy(uri, file_path, sizeof(uri) - 1);
@@ -394,66 +439,82 @@ void lsp_did_change(const char *file_path, const char *text, int version) {
 
   cJSON_AddItemToObject(root, "params", params);
 
-  lsp_send_message(root);
+  lsp_send_message(server, root);
   cJSON_Delete(root);
 }
 
-void lsp_shutdown(void) {
-  if (lsp_server_pid > 0) {
-    // Sending shutdown request
+static void lsp_shutdown(LspServer *server) {
+  if (server && server->pid > 0) {
     cJSON *root = cJSON_CreateObject();
     cJSON_AddStringToObject(root, "jsonrpc", "2.0");
-    cJSON_AddNumberToObject(root, "id", lsp_next_id++);
+    cJSON_AddNumberToObject(root, "id", server->next_id++);
     cJSON_AddStringToObject(root, "method", "shutdown");
-    lsp_send_message(root);
+    lsp_send_message(server, root);
     cJSON_Delete(root);
 
-    // Small delay to let shutdown process
-    // usleep(100000); // 100ms
-
-    // Sending exit notification
     root = cJSON_CreateObject();
     cJSON_AddStringToObject(root, "jsonrpc", "2.0");
     cJSON_AddStringToObject(root, "method", "exit");
-    lsp_send_message(root);
+    lsp_send_message(server, root);
     cJSON_Delete(root);
 
-    // Wait for the reader thread to finish (with timeout)
-    pthread_join(lsp_reader_thread, NULL);
+    pthread_join(server->reader_thread, NULL);
 
-    kill(lsp_server_pid, SIGTERM);
-    waitpid(lsp_server_pid, NULL, 0);
-    close(to_server_pipe[1]);
-    close(from_server_pipe[0]);
-    log_info("lsp.lsp_shutdown: LSP server shut down");
-    lsp_server_pid = -1;
-    buffer_pos = 0; // Reset buffer
+    kill(server->pid, SIGTERM);
+    waitpid(server->pid, NULL, 0);
+    close(server->to_server_pipe[1]);
+    close(server->from_server_pipe[0]);
+    log_info("LSP server for %s shut down", server->lang_id);
+
+    for (int i = 0; i < server->diagnostic_count; i++) {
+      free(server->diagnostics[i].message);
+    }
+    free(server->diagnostics);
+    pthread_mutex_destroy(&server->diagnostics_mutex);
+    free(server);
   }
 }
 
-int lsp_get_diagnostics(const char *file_name __attribute__((unused)), Diagnostic **out_diagnostics, int *out_diagnostic_count) {
-    pthread_mutex_lock(&diagnostics_mutex);
-    *out_diagnostic_count = diagnostic_count;
-    if (diagnostic_count > 0) {
-        *out_diagnostics = malloc(sizeof(Diagnostic) * diagnostic_count);
-        if (*out_diagnostics) {
-            for (int i = 0; i < diagnostic_count; i++) {
-                (*out_diagnostics)[i] = diagnostics[i]; // Copy struct members
-                (*out_diagnostics)[i].message = strdup(diagnostics[i].message); // Deep copy the string
-            }
-        } else {
-            // Malloc failed, return an empty set
-            *out_diagnostic_count = 0;
-            *out_diagnostics = NULL;
-        }
-    } else {
-        *out_diagnostics = NULL;
-    }
-    int version = diagnostics_version;
-    pthread_mutex_unlock(&diagnostics_mutex);
-    return version;
+void lsp_shutdown_all(void) {
+  for (int i = 0; i < lsp_server_count; i++) {
+    lsp_shutdown(lsp_servers[i]);
+    lsp_servers[i] = NULL;
+  }
+  lsp_server_count = 0;
 }
 
-bool lsp_is_running(void) {
-    return lsp_server_pid > 0;
+int lsp_get_diagnostics(const char *file_path, Diagnostic **out_diagnostics,
+                        int *out_diagnostic_count) {
+  const char *lang_id = get_lang_id_from_filename(file_path);
+  LspServer *server = get_server(lang_id);
+  if (!server) {
+    *out_diagnostic_count = 0;
+    *out_diagnostics = NULL;
+    return 0;
+  }
+
+  pthread_mutex_lock(&server->diagnostics_mutex);
+  *out_diagnostic_count = server->diagnostic_count;
+  if (server->diagnostic_count > 0) {
+    *out_diagnostics = malloc(sizeof(Diagnostic) * server->diagnostic_count);
+    if (*out_diagnostics) {
+      for (int i = 0; i < server->diagnostic_count; i++) {
+        (*out_diagnostics)[i] = server->diagnostics[i];
+        (*out_diagnostics)[i].message =
+            strdup(server->diagnostics[i].message);
+      }
+    } else {
+      *out_diagnostic_count = 0;
+      *out_diagnostics = NULL;
+    }
+  } else {
+    *out_diagnostics = NULL;
+  }
+  int version = server->diagnostics_version;
+  pthread_mutex_unlock(&server->diagnostics_mutex);
+  return version;
+}
+
+bool lsp_is_running(const char *language_id) {
+  return get_server(language_id) != NULL;
 }

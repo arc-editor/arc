@@ -511,6 +511,17 @@ void draw_diagnostics(const Diagnostic *diagnostics, int diagnostics_count) {
     }
 }
 
+static const char *get_lang_id_from_filename(const char *file_name) {
+    if (!file_name) {
+        return NULL;
+    }
+    const char *ext = strrchr(file_name, '.');
+    if (!ext) {
+        return NULL;
+    }
+    return ext + 1;
+}
+
 void editor_draw() {
     if (!buffer->needs_draw) {
         return;
@@ -561,16 +572,17 @@ void editor_did_change_buffer() {
     }
     buffer->version++;
 
-    if (buffer->file_name && lsp_is_running()) {
-        char *content = buffer_get_content(buffer);
-        if (content) {
-            char absolute_path[PATH_MAX];
-            if (realpath(buffer->file_name, absolute_path) != NULL) {
-                char file_uri[PATH_MAX + 7];
-                snprintf(file_uri, sizeof(file_uri), "file://%s", absolute_path);
-                lsp_did_change(file_uri, content, buffer->version);
+    if (buffer->file_name) {
+        const char *lang_id = get_lang_id_from_filename(buffer->file_name);
+        if (lsp_is_running(lang_id)) {
+            char *content = buffer_get_content(buffer);
+            if (content) {
+                char absolute_path[PATH_MAX];
+                if (realpath(buffer->file_name, absolute_path) != NULL) {
+                    lsp_did_change(absolute_path, content, buffer->version);
+                }
+                free(content);
             }
-            free(content);
         }
     }
     buffer_clear_search_state(buffer);
@@ -739,22 +751,18 @@ static void editor_setup_lsp(const char *file_name) {
     if (!file_name) {
         return;
     }
+    const char *lang_id = get_lang_id_from_filename(file_name);
+    if (!lang_id) {
+        return;
+    }
+
     char absolute_path[PATH_MAX];
     if (realpath(file_name, absolute_path) != NULL) {
-        if (!lsp_is_running()) {
-            lsp_init(&editor.config, file_name);
-        }
-        if (lsp_is_running()) {
+        lsp_init(&editor.config, file_name);
+        if (lsp_is_running(lang_id)) {
             char *content = buffer_get_content(buffer);
             if (content) {
-                char file_uri[PATH_MAX + 7];
-                snprintf(file_uri, sizeof(file_uri), "file://%s", absolute_path);
-                const char *ext = strrchr(file_name, '.');
-                const char *language_id = "c";
-                if (ext && strcmp(ext, ".cpp") == 0) {
-                    language_id = "cpp";
-                }
-                lsp_did_open(file_uri, language_id, content);
+                lsp_did_open(absolute_path, lang_id, content);
                 free(content);
             }
         }

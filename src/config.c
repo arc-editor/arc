@@ -938,6 +938,15 @@ void config_load(Config *config) {
     free(path);
 }
 
+void config_init(Config *config) {
+    config->theme = strdup("default");
+    config->whitespace.space = WHITESPACE_RENDER_TRAILING;
+    config->whitespace.tab = WHITESPACE_RENDER_TRAILING;
+    config->whitespace.space_char = strdup("·");
+    config->whitespace.tab_char = strdup("→");
+    config->toml_result.ok = false;
+}
+
 void config_destroy(Config *config) {
     free(config->theme);
     free(config->whitespace.space_char);

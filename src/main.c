@@ -21,6 +21,6 @@ int main(int argc, char *argv[]) {
         }
     }
     editor_start(filename, benchmark_mode);
-    lsp_shutdown();
+    lsp_shutdown_all();
     return 0;
 }
