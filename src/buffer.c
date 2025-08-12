@@ -466,6 +466,7 @@ void buffer_line_init_without_text(BufferLine *line) {
     line->char_count = 0;
     line->text_len = 0;
     line->capacity = 8;
+    line->owns_text = false;
     line->needs_highlight = 1;
     line->highlight_runs = NULL;
     line->highlight_runs_count = 0;
@@ -480,10 +481,13 @@ void buffer_line_init(BufferLine *line) {
         exit(1);
     }
     line->text[0] = '\0';
+    line->owns_text = true;
 }
 
 void buffer_line_destroy(BufferLine *line) {
-    free(line->text);
+    if (line->owns_text) {
+        free(line->text);
+    }
     if (line->highlight_runs) {
         free(line->highlight_runs);
     }
@@ -501,15 +505,13 @@ void buffer_init(Buffer *b, char *file_name) {
     b->history = history_create();
     b->tab_width = 4;
     b->line_num_width = 3;
-    if (file_name) {
-        b->file_name = strdup(file_name);
-    } else {
-        b->file_name = NULL;
-    }
+    b->file_name = file_name ? strdup(file_name) : NULL;
+    b->file_content = NULL;
+    b->file_content_size = 0;
     b->needs_draw = 1;
     b->dirty = 0;
     b->needs_parse = 1;
-    b->capacity = 8;
+    b->capacity = 1;
     b->position_y = 0;
     b->read_buffer_capacity = 1024;
     b->read_buffer = malloc(b->read_buffer_capacity);
@@ -522,15 +524,7 @@ void buffer_init(Buffer *b, char *file_name) {
     b->search_state.count = 0;
     b->search_state.current = -1;
     b->lines = (BufferLine **)malloc(sizeof(BufferLine *) * b->capacity);
-    if (b->lines == NULL) {
-        log_error("buffer.buffer_init: failed to allocate lines for buffer");
-        exit(1);
-    }
     b->lines[0] = (BufferLine *)malloc(sizeof(BufferLine));
-    if (b->lines[0] == NULL) {
-        log_error("buffer.buffer_init: failed to allocate first BufferLine");
-        exit(1);
-    }
     buffer_line_init(b->lines[0]);
     b->line_count = 1;
     b->query = NULL;
@@ -538,14 +532,17 @@ void buffer_init(Buffer *b, char *file_name) {
     b->parser = NULL;
     b->tree = NULL;
     b->mtime = 0;
+
     if (file_name == NULL) {
         return;
     }
 
     struct stat st;
-    if (stat(file_name, &st) == 0) {
-        b->mtime = st.st_mtime;
+    if (stat(file_name, &st) != 0) {
+        // File doesn't exist, treat as a new file buffer.
+        return;
     }
+    b->mtime = st.st_mtime;
 
     char *lang_name = get_file_extension(file_name);
     TSLanguage *lang = config_load_language(lang_name);
@@ -562,66 +559,78 @@ void buffer_init(Buffer *b, char *file_name) {
         }
     }
 
-    FILE *fp = fopen(file_name, "r");
-    if (fp) {
-        char *line_buf = NULL;
-        size_t line_cap = 0;
-        ssize_t line_len;
-        int trailing_newline = 0;
+    FILE *fp = fopen(file_name, "rb");
+    if (!fp) {
+        log_error("buffer.buffer_init: failed to open file '%s'", file_name);
+        return;
+    }
 
-        // Read the first line, if it exists
-        if ((line_len = getline(&line_buf, &line_cap, fp)) != -1) {
-            trailing_newline = (line_buf[line_len - 1] == '\n');
-            // Overwrite the initial empty line
-            BufferLine *first_line = b->lines[0];
-            free(first_line->text); // free the initial empty string buffer
+    if (st.st_size > 0) {
+        b->file_content_size = st.st_size;
+        b->file_content = malloc(b->file_content_size + 1);
+        if (!b->file_content) {
+            log_error("buffer.buffer_init: malloc failed for file content");
+            fclose(fp);
+            return;
+        }
+        if (fread(b->file_content, 1, b->file_content_size, fp) != b->file_content_size) {
+            log_error("buffer.buffer_init: fread failed for '%s'", file_name);
+            free(b->file_content);
+            b->file_content = NULL;
+            fclose(fp);
+            return;
+        }
+        b->file_content[b->file_content_size] = '\0';
+    }
+    fclose(fp);
 
-            // Strip newline characters
-            if (line_len > 0 && line_buf[line_len - 1] == '\n') line_buf[--line_len] = '\0';
-            if (line_len > 0 && line_buf[line_len - 1] == '\r') line_buf[--line_len] = '\0';
+    // Destroy the initial empty line
+    buffer_line_destroy(b->lines[0]);
+    free(b->lines[0]);
+    free(b->lines);
+    b->line_count = 0;
 
-            first_line->text = malloc(line_len + 1);
-            memcpy(first_line->text, line_buf, line_len + 1);
-            first_line->text_len = line_len;
-            first_line->capacity = line_len + 1;
-            first_line->char_count = utf8_strlen(first_line->text);
-            first_line->needs_highlight = 1;
+    if (b->file_content == NULL) { // Empty file or read error
+        b->capacity = 1;
+        b->lines = malloc(sizeof(BufferLine*));
+        b->lines[0] = malloc(sizeof(BufferLine));
+        buffer_line_init(b->lines[0]);
+        b->line_count = 1;
+        if (b->parser) buffer_parse(b);
+        return;
+    }
 
-            // Read subsequent lines
-            while ((line_len = getline(&line_buf, &line_cap, fp)) != -1) {
-                trailing_newline = (line_buf[line_len - 1] == '\n');
-                if (line_len > 0 && line_buf[line_len - 1] == '\n') line_buf[--line_len] = '\0';
-                if (line_len > 0 && line_buf[line_len - 1] == '\r') line_buf[--line_len] = '\0';
+    int line_count_alloc = 16;
+    b->lines = malloc(line_count_alloc * sizeof(BufferLine*));
+    b->capacity = line_count_alloc;
 
-                buffer_realloc_lines_for_capacity(b);
-                b->lines[b->line_count] = (BufferLine *)malloc(sizeof(BufferLine));
-                buffer_line_init_without_text(b->lines[b->line_count]);
-                BufferLine *new_line = b->lines[b->line_count];
-                new_line->text = malloc(line_len + 1);
-                if (new_line->text == NULL) {
-                    log_error("buffer.buffer_init: unable to malloc line text");
-                    exit(1);
-                }
-                memcpy(new_line->text, line_buf, line_len + 1);
-                new_line->text_len = line_len;
-                new_line->capacity = line_len + 1;
-                new_line->char_count = utf8_strlen(new_line->text);
+    char *p = b->file_content;
+    char *end = b->file_content + b->file_content_size;
 
-                b->line_count++;
-            }
+    while (p <= end) {
+        if (b->line_count >= b->capacity) {
+            b->capacity *= 2;
+            b->lines = realloc(b->lines, b->capacity * sizeof(BufferLine*));
         }
 
-        if (trailing_newline) {
-            buffer_realloc_lines_for_capacity(b);
-            b->lines[b->line_count] = (BufferLine *)malloc(sizeof(BufferLine));
-            buffer_line_init(b->lines[b->line_count]);
-            b->line_count++;
+        char *line_end = strchr(p, '\n');
+        if (line_end == NULL) {
+            line_end = end;
         }
 
-        free(line_buf);
-        fclose(fp);
-    } else {
-        log_error("buffer.buffer_init: failed to open file");
+        BufferLine *line = malloc(sizeof(BufferLine));
+        buffer_line_init_without_text(line);
+        line->text = p;
+        line->text_len = line_end - p;
+        if (*line_end == '\n') {
+            *line_end = '\0';
+        }
+
+        line->capacity = line->text_len + 1;
+        line->char_count = utf8_strlen(line->text);
+
+        b->lines[b->line_count++] = line;
+        p = line_end + 1;
     }
 
     if (b->parser) {
@@ -637,6 +646,9 @@ void buffer_destroy(Buffer *b) {
     free(b->lines);
     if (b->file_name) {
         free(b->file_name);
+    }
+    if (b->file_content) {
+        free(b->file_content);
     }
     if (b->cursor) {
         ts_query_cursor_delete(b->cursor);

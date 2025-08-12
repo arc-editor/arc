@@ -43,6 +43,20 @@ int (*editor_handle_input)(const char *);
 
 #define buffer (editor.buffers[editor.active_buffer_idx])
 
+static void editor_ensure_line_is_mutable(BufferLine *line) {
+    if (!line->owns_text) {
+        char *new_text = malloc(line->capacity);
+        if (!new_text) {
+            log_error("Failed to allocate memory for mutable line");
+            exit(1);
+        }
+        memcpy(new_text, line->text, line->text_len);
+        new_text[line->text_len] = '\0';
+        line->text = new_text;
+        line->owns_text = true;
+    }
+}
+
 static char get_char_at(BufferLine *line, int char_x) {
     if (char_x >= line->char_count) {
         return '\0';
@@ -631,6 +645,7 @@ static void editor_add_insertion_to_history(const char* text) {
 void editor_insert_new_line() {
     pthread_mutex_lock(&editor_mutex);
     BufferLine *current_line = buffer->lines[buffer->position_y];
+    editor_ensure_line_is_mutable(current_line);
     int byte_pos_x = buffer_get_byte_position_x(buffer);
 
     uint32_t start_byte = 0;
@@ -933,6 +948,7 @@ void editor_start(char *file_name, int benchmark_mode) {
 void editor_insert_char(const char *ch) {
     pthread_mutex_lock(&editor_mutex);
     BufferLine *line = buffer->lines[buffer->position_y];
+    editor_ensure_line_is_mutable(line);
     int ch_len = strlen(ch);
     int byte_pos_x = buffer_get_byte_position_x(buffer);
 
@@ -1105,6 +1121,7 @@ void editor_write() {
 void editor_delete() {
     pthread_mutex_lock(&editor_mutex);
     BufferLine *line = buffer->lines[buffer->position_y];
+    editor_ensure_line_is_mutable(line);
     int byte_pos_x = buffer_get_byte_position_x(buffer);
 
     uint32_t start_byte = 0;
@@ -1222,6 +1239,7 @@ void editor_backspace() {
             return;
         }
         BufferLine *prev_line = buffer->lines[buffer->position_y - 1];
+        editor_ensure_line_is_mutable(prev_line);
         if (!is_undo_redo_active) {
             history_add_change(buffer->history, CHANGE_TYPE_DELETE, buffer->position_y - 1, prev_line->char_count, "\n");
         }
@@ -1260,6 +1278,7 @@ void editor_backspace() {
         free(line);
 
     } else {
+        editor_ensure_line_is_mutable(line);
         buffer->position_x--;
         byte_pos_x = buffer_get_byte_position_x(buffer);
         int char_len = utf8_char_len(line->text + byte_pos_x);
@@ -1972,6 +1991,8 @@ void range_delete(Buffer *b, Range *range, EditorCommand *cmd) {
     int top = range_get_top_boundary(range);
     int bottom = range_get_bottom_boundary(range);
     if (left == right && top == bottom) return;
+
+    editor_ensure_line_is_mutable(b->lines[top]);
 
     if (cmd->target == 'p' && top == bottom) {
         // This case is for deleting a whole paragraph, which is now handled by the generic logic.

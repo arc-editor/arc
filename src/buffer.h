@@ -2,6 +2,7 @@
 #define BUFFER_H
 
 #include <time.h>
+#include <stdbool.h>
 #include "tree_sitter/api.h"
 #include "theme.h"
 #include "history.h"
@@ -21,6 +22,7 @@ typedef struct {
     int char_count;
     int text_len;
     int capacity;
+    bool owns_text;
     char *text;
     int needs_highlight;
 
@@ -45,6 +47,8 @@ typedef struct {
     char *read_buffer;
     int read_buffer_capacity;
     char *file_name;
+    char *file_content;
+    size_t file_content_size;
     time_t mtime;
     int tab_width;
     int line_num_width;
