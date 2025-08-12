@@ -2002,6 +2002,30 @@ void range_delete(Buffer *b, Range *range, EditorCommand *cmd) {
         p += len;
     }
 
+    if (b->parser && b->tree) {
+        uint32_t start_byte_offset = 0;
+        for (int i = 0; i < top; i++) {
+            start_byte_offset += b->lines[i]->text_len + 1; // +1 for newline
+        }
+        uint32_t start_byte = start_byte_offset + left_byte;
+
+        uint32_t old_end_byte = start_byte_offset;
+        for (int i = top; i < bottom; i++) {
+            old_end_byte += b->lines[i]->text_len + 1;
+        }
+        old_end_byte += right_byte;
+
+        ts_tree_edit(b->tree, &(TSInputEdit){
+            .start_byte = start_byte,
+            .old_end_byte = old_end_byte,
+            .new_end_byte = start_byte,
+            .start_point = { (uint32_t)top, (uint32_t)left_byte },
+            .old_end_point = { (uint32_t)bottom, (uint32_t)right_byte },
+            .new_end_point = { (uint32_t)top, (uint32_t)left_byte }
+        });
+        b->needs_parse = 1;
+    }
+
     BufferLine *top_line = b->lines[top];
     BufferLine *bottom_line = b->lines[bottom];
 
@@ -2017,6 +2041,10 @@ void range_delete(Buffer *b, Range *range, EditorCommand *cmd) {
     top_line->text = new_text;
     top_line->text_len = new_top_len;
     top_line->char_count = left + (bottom_line->char_count - right);
+
+    if (b->parser) {
+        top_line->needs_highlight = 1;
+    }
 
     if (bottom > top) {
         for (int i = top + 1; i <= bottom; i++) {
@@ -2144,6 +2172,31 @@ void editor_command_exec(EditorCommand *cmd) {
                             }
                             free(deleted_text);
                         }
+                    }
+
+                    if (buffer->parser && buffer->tree) {
+                        uint32_t start_byte = 0;
+                        for (int i = 0; i < top; i++) {
+                            start_byte += buffer->lines[i]->text_len + 1;
+                        }
+
+                        uint32_t old_end_byte = start_byte;
+                        for (int i = top; i <= bottom; i++) {
+                            old_end_byte += buffer->lines[i]->text_len;
+                             if (i < buffer->line_count -1) {
+                                old_end_byte++;
+                            }
+                        }
+
+                        ts_tree_edit(buffer->tree, &(TSInputEdit){
+                            .start_byte = start_byte,
+                            .old_end_byte = old_end_byte,
+                            .new_end_byte = start_byte,
+                            .start_point = { (uint32_t)top, 0 },
+                            .old_end_point = { (uint32_t)bottom + 1, 0 },
+                            .new_end_point = { (uint32_t)top, 0 }
+                        });
+                        buffer->needs_parse = 1;
                     }
 
                     for (int i = top; i <= bottom; i++) {
