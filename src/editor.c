@@ -2129,7 +2129,19 @@ void editor_command_exec(EditorCommand *cmd) {
                     if (!is_undo_redo_active) {
                         char *deleted_text = buffer_get_text_in_range(buffer, top, left, bottom, right);
                         if (deleted_text) {
-                            history_add_change(buffer->history, CHANGE_TYPE_DELETE, top, left, deleted_text);
+                            if (bottom < buffer->line_count - 1) {
+                                size_t len = strlen(deleted_text);
+                                char *text_with_newline = malloc(len + 2);
+                                if (text_with_newline) {
+                                    strcpy(text_with_newline, deleted_text);
+                                    text_with_newline[len] = '\n';
+                                    text_with_newline[len+1] = '\0';
+                                    history_add_change(buffer->history, CHANGE_TYPE_DELETE, top, left, text_with_newline);
+                                    free(text_with_newline);
+                                }
+                            } else {
+                                history_add_change(buffer->history, CHANGE_TYPE_DELETE, top, left, deleted_text);
+                            }
                             free(deleted_text);
                         }
                     }
