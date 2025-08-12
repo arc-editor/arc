@@ -2,7 +2,6 @@
 #include "test.h"
 #include "../src/config.h"
 #include "../src/lsp.h"
-#include <string.h>
 #include <unistd.h>
 
 static void test_multi_server_lifecycle() {
@@ -12,17 +11,17 @@ static void test_multi_server_lifecycle() {
     // Simulate opening a C file
     lsp_init(&config, "test.c");
     ASSERT("C server should be running", lsp_is_running("c"));
-    ASSERT("Python server should not be running", !lsp_is_running("py"));
+    ASSERT("Go server should not be running", !lsp_is_running("py"));
 
-    // Simulate opening a Python file
-    lsp_init(&config, "test.py");
+    // Simulate opening a Go file
+    lsp_init(&config, "test.go");
     ASSERT("C server should still be running", lsp_is_running("c"));
-    ASSERT("Python server should be running", lsp_is_running("py"));
+    ASSERT("Go server should be running", lsp_is_running("go"));
 
     // Shutdown all servers
     lsp_shutdown_all();
     ASSERT("C server should not be running after shutdown", !lsp_is_running("c"));
-    ASSERT("Python server should not be running after shutdown", !lsp_is_running("py"));
+    ASSERT("Go server should not be running after shutdown", !lsp_is_running("go"));
 
     config_destroy(&config); // Assumes a function to clean up config
 }
