@@ -221,7 +221,7 @@ void buffer_line_apply_syntax_highlighting(Buffer *b, BufferLine *line, uint32_t
         line->highlight_runs = NULL;
     }
     line->highlight_runs_count = 0;
-    line->highlight_runs_capacity = 8;
+    line->highlight_runs_capacity = 1;
     line->highlight_runs = malloc(sizeof(HighlightRun) * line->highlight_runs_capacity);
 
     if (!b->cursor || !b->query) {
