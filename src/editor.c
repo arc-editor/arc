@@ -313,7 +313,7 @@ static int is_in_selection(int y, int x) {
     return 1;
 }
 
-void draw_buffer(Diagnostic *diagnostics, int diagnostics_count, int update_diagnostics) {
+void draw_buffer(Diagnostic *diagnostics, int diagnostics_count) {
     uint32_t start_byte = 0;
     for (int i = 0; i < buffer->offset_y; i++) {
         start_byte += buffer->lines[i]->text_len + 1; // +1 for newline
@@ -367,12 +367,10 @@ void draw_buffer(Diagnostic *diagnostics, int diagnostics_count, int update_diag
             }
         }
 
-        if (update_diagnostics) {
-            for (int i = 0; i < diagnostics_count; i++) {
-                if (diagnostics[i].line == row) {
-                    for (int j = diagnostics[i].col_start; j < diagnostics[i].col_end && j < line->char_count; j++) {
-                        char_styles[j].style |= STYLE_UNDERLINE;
-                    }
+        for (int i = 0; i < diagnostics_count; i++) {
+            if (diagnostics[i].line == row) {
+                for (int j = diagnostics[i].col_start; j < diagnostics[i].col_end && j < line->char_count; j++) {
+                    char_styles[j].style |= STYLE_UNDERLINE;
                 }
             }
         }
@@ -522,16 +520,11 @@ void editor_draw() {
     }
     Diagnostic *diagnostics = NULL;
     int diagnostic_count = 0;
-    int prev_diag_version = buffer->diagnostics_version;
-    int update_diagnostics = 0;
     if (buffer->file_name) {
         buffer->diagnostics_version = lsp_get_diagnostics(buffer->file_name, &diagnostics, &diagnostic_count);
-        if (buffer->diagnostics_version != prev_diag_version) {
-            update_diagnostics = 1;
-        }
     }
     editor_clear_screen();
-    draw_buffer(diagnostics, diagnostic_count, update_diagnostics);
+    draw_buffer(diagnostics, diagnostic_count);
     draw_statusline();
     if (editor_handle_input == normal_handle_input) {
         draw_diagnostics(diagnostics, diagnostic_count);
