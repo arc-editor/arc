@@ -311,12 +311,6 @@ void lsp_init(const Config *config, const char *file_name) {
     dup2(server->from_server_pipe[1], STDOUT_FILENO);
     close(server->from_server_pipe[1]);
 
-    int dev_null = open("/dev/null", O_WRONLY);
-    if (dev_null != -1) {
-      dup2(dev_null, STDERR_FILENO);
-      close(dev_null);
-    }
-
     char *cmd_copy = strdup(command);
     if (!cmd_copy) {
       log_error("lsp_init: strdup failed");
