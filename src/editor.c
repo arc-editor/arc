@@ -853,12 +853,14 @@ Buffer **editor_get_buffers(int *count) {
 }
 
 void editor_set_active_buffer(int index) {
+    pthread_mutex_lock(&editor_mutex);
     if (index >= 0 && index < editor.buffer_count) {
         editor.active_buffer_idx = index;
     }
     editor_handle_input = normal_handle_input;
     buffer_update_search_matches(buffer, editor.last_search_term);
     buffer->needs_draw = 1;
+    pthread_mutex_unlock(&editor_mutex);
 }
 
 int editor_is_any_buffer_dirty(void) {
