@@ -30,6 +30,8 @@ typedef struct {
   int diagnostic_count;
   int diagnostics_version;
   pthread_mutex_t diagnostics_mutex;
+  pthread_mutex_t init_mutex;
+  pthread_cond_t init_cond;
   char read_buffer[16384];
   int buffer_pos;
   int next_id;
@@ -47,3 +49,4 @@ bool lsp_is_running(const char *language_id);
 char *find_project_root(const char *file_path);
 
 #endif // LSP_H
+

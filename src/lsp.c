@@ -15,6 +15,7 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <limits.h>
+#include <time.h>
 
 #define MAX_LSP_SERVERS 10
 
@@ -98,6 +99,25 @@ static const char *get_lang_id_from_filename(const char *file_name) {
     return NULL;
   }
   return ext + 1;
+}
+
+static bool lsp_wait_for_initialization(LspServer *server) {
+  if (!server) return false;
+
+  pthread_mutex_lock(&server->init_mutex);
+  if (!server->initialized) {
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    ts.tv_sec += 5; // 5 second timeout
+    int rc = pthread_cond_timedwait(&server->init_cond, &server->init_mutex, &ts);
+    if (rc != 0) {
+      log_error("lsp_wait_for_initialization: timeout waiting for server to initialize");
+      pthread_mutex_unlock(&server->init_mutex);
+      return false;
+    }
+  }
+  pthread_mutex_unlock(&server->init_mutex);
+  return true;
 }
 
 static LspServer *get_server(const char *language_id) {
@@ -298,7 +318,10 @@ static void *lsp_reader_thread_func(void *arg) {
     } else if (cJSON_GetObjectItem(message, "id") &&
                cJSON_GetObjectItem(message, "id")->valueint == 1) {
       log_info("lsp.lsp_reader_thread_func: received initialize response");
+       pthread_mutex_lock(&server->init_mutex);
       server->initialized = true;
+       pthread_cond_signal(&server->init_cond);
+       pthread_mutex_unlock(&server->init_mutex);
       cJSON *root = cJSON_CreateObject();
       cJSON_AddStringToObject(root, "jsonrpc", "2.0");
       cJSON_AddStringToObject(root, "method", "initialized");
@@ -370,6 +393,8 @@ void lsp_init(const Config *config, const char *file_name) {
   server->diagnostic_count = 0;
   server->diagnostics_version = 0;
   pthread_mutex_init(&server->diagnostics_mutex, NULL);
+  pthread_mutex_init(&server->init_mutex, NULL);
+  pthread_cond_init(&server->init_cond, NULL);
   server->buffer_pos = 0;
   server->next_id = 1;
   server->initialized = false;
@@ -488,6 +513,10 @@ void lsp_did_open(const char *file_path, const char *language_id, const char *te
   LspServer *server = get_server(language_id);
   if (!server) return;
 
+  if (!lsp_wait_for_initialization(server)) {
+    return;
+  }
+
   cJSON *root = cJSON_CreateObject();
   cJSON_AddStringToObject(root, "jsonrpc", "2.0");
   cJSON_AddStringToObject(root, "method", "textDocument/didOpen");
@@ -513,6 +542,10 @@ void lsp_did_change(const char *file_path, const char *text, int version) {
   LspServer *server = get_server(lang_id);
   if (!server)
     return;
+
+  if (!lsp_wait_for_initialization(server)) {
+    return;
+  }
 
   cJSON *root = cJSON_CreateObject();
   cJSON_AddStringToObject(root, "jsonrpc", "2.0");
@@ -571,6 +604,8 @@ static void lsp_shutdown(LspServer *server) {
     }
     free(server->diagnostics);
     pthread_mutex_destroy(&server->diagnostics_mutex);
+    pthread_mutex_destroy(&server->init_mutex);
+    pthread_cond_destroy(&server->init_cond);
     free(server);
   }
 }
@@ -618,3 +653,4 @@ int lsp_get_diagnostics(const char *file_path, Diagnostic **out_diagnostics,
 bool lsp_is_running(const char *language_id) {
   return get_server(language_id) != NULL;
 }
+
