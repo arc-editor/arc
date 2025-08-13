@@ -547,6 +547,7 @@ void editor_draw() {
     if (diagnostics) {
         for (int i = 0; i < diagnostic_count; i++) {
             free(diagnostics[i].message);
+            free(diagnostics[i].file_name);
         }
         free(diagnostics);
     }

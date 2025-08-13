@@ -13,6 +13,7 @@ typedef enum {
 } DiagnosticSeverity;
 
 typedef struct {
+  char *file_name;
   int line;
   int col_start;
   int col_end;
