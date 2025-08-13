@@ -1,3 +1,4 @@
+#define _XOPEN_SOURCE 700
 #define _POSIX_C_SOURCE 200809L
 
 #include "lsp.h"
@@ -13,36 +14,45 @@
 #include <stdio.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <limits.h>
 
 #define MAX_LSP_SERVERS 10
 
 char *find_project_root(const char *file_path) {
-    char path[1024];
-    strncpy(path, file_path, sizeof(path) - 1);
-    path[sizeof(path) - 1] = '\0';
+    char path[PATH_MAX];
+    if (realpath(file_path, path) == NULL) {
+        // Fallback to the original path if realpath fails
+        strncpy(path, file_path, sizeof(path) - 1);
+        path[sizeof(path) - 1] = '\0';
+    }
 
     char *last_slash = strrchr(path, '/');
     if (last_slash) {
         *last_slash = '\0';
     }
 
-    char check_path[1024];
+    char check_path[PATH_MAX];
     struct stat st;
+
+    char *root_path = NULL;
 
     while (strlen(path) > 0) {
         snprintf(check_path, sizeof(check_path), "%s/.git", path);
         if (stat(check_path, &st) == 0 && S_ISDIR(st.st_mode)) {
-            return strdup(path);
+            root_path = strdup(path);
+            break;
         }
 
         snprintf(check_path, sizeof(check_path), "%s/go.mod", path);
         if (stat(check_path, &st) == 0 && S_ISREG(st.st_mode)) {
-            return strdup(path);
+            root_path = strdup(path);
+            break;
         }
 
         snprintf(check_path, sizeof(check_path), "%s/package.json", path);
         if (stat(check_path, &st) == 0 && S_ISREG(st.st_mode)) {
-            return strdup(path);
+            root_path = strdup(path);
+            break;
         }
 
         last_slash = strrchr(path, '/');
@@ -53,16 +63,27 @@ char *find_project_root(const char *file_path) {
         }
     }
 
-    // Fallback to the file's directory
-    strncpy(path, file_path, sizeof(path) - 1);
-    path[sizeof(path) - 1] = '\0';
-    last_slash = strrchr(path, '/');
-    if (last_slash) {
-        *last_slash = '\0';
-        return strdup(path);
+    if (!root_path) {
+        if (realpath(file_path, path) == NULL) {
+            strncpy(path, file_path, sizeof(path) - 1);
+            path[sizeof(path) - 1] = '\0';
+        }
+        last_slash = strrchr(path, '/');
+        if (last_slash) {
+            *last_slash = '\0';
+            root_path = strdup(path);
+        } else {
+            root_path = strdup(".");
+        }
     }
 
-    return strdup(".");
+    char absolute_path[PATH_MAX];
+    if (realpath(root_path, absolute_path) == NULL) {
+        return root_path;
+    }
+
+    free(root_path);
+    return strdup(absolute_path);
 }
 
 static LspServer *lsp_servers[MAX_LSP_SERVERS] = {NULL};
@@ -361,6 +382,12 @@ void lsp_init(const Config *config, const char *file_name) {
     dup2(server->from_server_pipe[1], STDOUT_FILENO);
     close(server->from_server_pipe[1]);
 
+    int dev_null = open("/dev/null", O_WRONLY);
+    if (dev_null != -1) {
+      dup2(dev_null, STDERR_FILENO);
+      close(dev_null);
+    }
+
     char *cmd_copy = strdup(command);
     if (!cmd_copy) {
       log_error("lsp_init: strdup failed");
@@ -403,9 +430,11 @@ void lsp_init(const Config *config, const char *file_name) {
     if (project_root) {
         char root_uri[1024 + 7];
         snprintf(root_uri, sizeof(root_uri), "file://%s", project_root);
+        log_info("project root: %s", root_uri);
         cJSON_AddStringToObject(params, "rootUri", root_uri);
         free(project_root);
     } else {
+        log_info("project root: none");
         cJSON_AddStringToObject(params, "rootUri", "file:///");
     }
 
@@ -423,11 +452,9 @@ void lsp_init(const Config *config, const char *file_name) {
   }
 }
 
-void lsp_did_open(const char *file_path, const char *language_id,
-                  const char *text) {
+void lsp_did_open(const char *file_path, const char *language_id, const char *text) {
   LspServer *server = get_server(language_id);
-  if (!server)
-    return;
+  if (!server) return;
 
   cJSON *root = cJSON_CreateObject();
   cJSON_AddStringToObject(root, "jsonrpc", "2.0");
@@ -435,13 +462,9 @@ void lsp_did_open(const char *file_path, const char *language_id,
 
   cJSON *params = cJSON_CreateObject();
   cJSON *text_document = cJSON_CreateObject();
-  char uri[2048];
-  if (strncmp(file_path, "file://", 7) == 0) {
-    strncpy(uri, file_path, sizeof(uri) - 1);
-  } else {
-    snprintf(uri, sizeof(uri), "file://%s", file_path);
-  }
-  uri[sizeof(uri) - 1] = '\0';
+  char uri[1024 + 7];
+  snprintf(uri, sizeof(uri), "file://%s", file_path);
+  log_info("did open: %s", uri);
   cJSON_AddStringToObject(text_document, "uri", uri);
   cJSON_AddStringToObject(text_document, "languageId", language_id);
   cJSON_AddNumberToObject(text_document, "version", 1);
