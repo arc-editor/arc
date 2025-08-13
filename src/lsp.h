@@ -20,14 +20,20 @@ typedef struct {
   char *message;
 } Diagnostic;
 
+typedef struct FileDiagnostics {
+  char *uri;
+  Diagnostic *diagnostics;
+  int diagnostic_count;
+  struct FileDiagnostics *next;
+} FileDiagnostics;
+
 typedef struct {
   char lang_id[64];
   pid_t pid;
   int to_server_pipe[2];
   int from_server_pipe[2];
   pthread_t reader_thread;
-  Diagnostic *diagnostics;
-  int diagnostic_count;
+  FileDiagnostics *diagnostics_head;
   int diagnostics_version;
   pthread_mutex_t diagnostics_mutex;
   pthread_mutex_t init_mutex;
@@ -47,6 +53,10 @@ void lsp_did_open(const char *file_path, const char *language_id,
 void lsp_did_change(const char *file_path, const char *text, int version);
 bool lsp_is_running(const char *language_id);
 char *find_project_root(const char *file_path);
+
+#ifdef TEST_BUILD
+void lsp_test_inject_message(const char *language_id, const char *message);
+#endif
 
 #endif // LSP_H
 

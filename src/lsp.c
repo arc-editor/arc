@@ -227,6 +227,140 @@ static cJSON *lsp_read_message(LspServer *server) {
   }
 }
 
+static void lsp_handle_message(LspServer *server, cJSON *message) {
+  cJSON *method = cJSON_GetObjectItem(message, "method");
+  if (method &&
+      strcmp(method->valuestring, "textDocument/publishDiagnostics") == 0) {
+    cJSON *params = cJSON_GetObjectItem(message, "params");
+    if (!params) {
+      return;
+    }
+
+    cJSON *uri_json = cJSON_GetObjectItem(params, "uri");
+    if (!uri_json || !uri_json->valuestring) {
+      return;
+    }
+
+    cJSON *diagnostics_json = cJSON_GetObjectItem(params, "diagnostics");
+    if (!diagnostics_json) {
+      return;
+    }
+
+    pthread_mutex_lock(&server->diagnostics_mutex);
+    server->diagnostics_version++;
+
+    FileDiagnostics *current = server->diagnostics_head;
+    FileDiagnostics *prev = NULL;
+    while (current) {
+      if (strcmp(current->uri, uri_json->valuestring) == 0) {
+        break;
+      }
+      prev = current;
+      current = current->next;
+    }
+
+    int new_diagnostic_count = cJSON_GetArraySize(diagnostics_json);
+    if (new_diagnostic_count == 0) {
+      if (current) {
+        if (prev) {
+          prev->next = current->next;
+        } else {
+          server->diagnostics_head = current->next;
+        }
+        free(current->uri);
+        for (int i = 0; i < current->diagnostic_count; i++) {
+          free(current->diagnostics[i].message);
+        }
+        free(current->diagnostics);
+        free(current);
+      }
+    } else {
+      if (!current) {
+        current = malloc(sizeof(FileDiagnostics));
+        current->uri = strdup(uri_json->valuestring);
+        current->next = server->diagnostics_head;
+        current->diagnostics = NULL;
+        current->diagnostic_count = 0;
+        server->diagnostics_head = current;
+      }
+
+      for (int i = 0; i < current->diagnostic_count; i++) {
+        free(current->diagnostics[i].message);
+      }
+      free(current->diagnostics);
+      current->diagnostics = NULL;
+
+      current->diagnostics =
+          malloc(sizeof(Diagnostic) * new_diagnostic_count);
+      if (!current->diagnostics) {
+        pthread_mutex_unlock(&server->diagnostics_mutex);
+        return;
+      }
+
+      current->diagnostic_count = new_diagnostic_count;
+      for (int i = 0; i < new_diagnostic_count; i++) {
+        cJSON *diag_json = cJSON_GetArrayItem(diagnostics_json, i);
+        if (!diag_json)
+          continue;
+
+        cJSON *range = cJSON_GetObjectItem(diag_json, "range");
+        if (!range)
+          continue;
+
+        cJSON *start = cJSON_GetObjectItem(range, "start");
+        cJSON *end = cJSON_GetObjectItem(range, "end");
+        if (!start || !end)
+          continue;
+
+        cJSON *message_json = cJSON_GetObjectItem(diag_json, "message");
+        if (!message_json)
+          continue;
+
+        cJSON *severity_json = cJSON_GetObjectItem(diag_json, "severity");
+        cJSON *line_obj = cJSON_GetObjectItem(start, "line");
+        cJSON *char_start_obj = cJSON_GetObjectItem(start, "character");
+        cJSON *char_end_obj = cJSON_GetObjectItem(end, "character");
+
+        if (!line_obj || !char_start_obj || !char_end_obj)
+          continue;
+
+        current->diagnostics[i].line = line_obj->valueint;
+        current->diagnostics[i].col_start = char_start_obj->valueint;
+        current->diagnostics[i].col_end = char_end_obj->valueint;
+
+        if (severity_json) {
+          current->diagnostics[i].severity =
+              (DiagnosticSeverity)severity_json->valueint;
+        } else {
+          current->diagnostics[i].severity = LSP_DIAGNOSTIC_SEVERITY_HINT;
+        }
+
+        current->diagnostics[i].message = strdup(message_json->valuestring);
+      }
+    }
+    pthread_mutex_unlock(&server->diagnostics_mutex);
+    editor_request_redraw();
+  } else if (cJSON_GetObjectItem(message, "id") &&
+             cJSON_GetObjectItem(message, "id")->valueint == 1) {
+    log_info("lsp.lsp_reader_thread_func: received initialize response");
+    pthread_mutex_lock(&server->init_mutex);
+    server->initialized = true;
+    pthread_cond_signal(&server->init_cond);
+    pthread_mutex_unlock(&server->init_mutex);
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddStringToObject(root, "jsonrpc", "2.0");
+    cJSON_AddStringToObject(root, "method", "initialized");
+    cJSON_AddItemToObject(root, "params", cJSON_CreateObject());
+    lsp_send_message(server, root);
+    cJSON_Delete(root);
+  } else {
+    char *message_str = cJSON_PrintUnformatted(message);
+    log_warning("lsp.lsp_reader_thread_func: unhandled message %s",
+                message_str);
+    free(message_str);
+  }
+}
+
 static void *lsp_reader_thread_func(void *arg) {
   LspServer *server = (LspServer *)arg;
   while (1) {
@@ -234,111 +368,25 @@ static void *lsp_reader_thread_func(void *arg) {
     if (!message) {
       break;
     }
-
-    cJSON *method = cJSON_GetObjectItem(message, "method");
-    if (method &&
-        strcmp(method->valuestring, "textDocument/publishDiagnostics") == 0) {
-      cJSON *params = cJSON_GetObjectItem(message, "params");
-      if (!params) {
-        cJSON_Delete(message);
-        continue;
-      }
-
-      cJSON *diagnostics_json = cJSON_GetObjectItem(params, "diagnostics");
-      if (!diagnostics_json) {
-        cJSON_Delete(message);
-        continue;
-      }
-
-      pthread_mutex_lock(&server->diagnostics_mutex);
-      server->diagnostics_version++;
-
-      for (int i = 0; i < server->diagnostic_count; i++) {
-        free(server->diagnostics[i].message);
-      }
-      free(server->diagnostics);
-      server->diagnostics = NULL;
-      server->diagnostic_count = 0;
-
-      int new_diagnostic_count = cJSON_GetArraySize(diagnostics_json);
-
-      if (new_diagnostic_count > 0) {
-        server->diagnostics =
-            malloc(sizeof(Diagnostic) * new_diagnostic_count);
-        if (!server->diagnostics) {
-          pthread_mutex_unlock(&server->diagnostics_mutex);
-          cJSON_Delete(message);
-          continue;
-        }
-
-        for (int i = 0; i < new_diagnostic_count; i++) {
-          cJSON *diag_json = cJSON_GetArrayItem(diagnostics_json, i);
-          if (!diag_json)
-            continue;
-
-          cJSON *range = cJSON_GetObjectItem(diag_json, "range");
-          if (!range)
-            continue;
-
-          cJSON *start = cJSON_GetObjectItem(range, "start");
-          cJSON *end = cJSON_GetObjectItem(range, "end");
-          if (!start || !end)
-            continue;
-
-          cJSON *message_json = cJSON_GetObjectItem(diag_json, "message");
-          if (!message_json)
-            continue;
-
-          cJSON *severity_json = cJSON_GetObjectItem(diag_json, "severity");
-          cJSON *line_obj = cJSON_GetObjectItem(start, "line");
-          cJSON *char_start_obj = cJSON_GetObjectItem(start, "character");
-          cJSON *char_end_obj = cJSON_GetObjectItem(end, "character");
-
-          if (!line_obj || !char_start_obj || !char_end_obj)
-            continue;
-
-          server->diagnostics[i].line = line_obj->valueint;
-          server->diagnostics[i].col_start = char_start_obj->valueint;
-          server->diagnostics[i].col_end = char_end_obj->valueint;
-
-          if (severity_json) {
-            server->diagnostics[i].severity =
-                (DiagnosticSeverity)severity_json->valueint;
-          } else {
-            server->diagnostics[i].severity = LSP_DIAGNOSTIC_SEVERITY_HINT;
-          }
-
-          server->diagnostics[i].message = strdup(message_json->valuestring);
-        }
-        server->diagnostic_count = new_diagnostic_count;
-      }
-
-      pthread_mutex_unlock(&server->diagnostics_mutex);
-      editor_request_redraw();
-    } else if (cJSON_GetObjectItem(message, "id") &&
-               cJSON_GetObjectItem(message, "id")->valueint == 1) {
-      log_info("lsp.lsp_reader_thread_func: received initialize response");
-       pthread_mutex_lock(&server->init_mutex);
-      server->initialized = true;
-       pthread_cond_signal(&server->init_cond);
-       pthread_mutex_unlock(&server->init_mutex);
-      cJSON *root = cJSON_CreateObject();
-      cJSON_AddStringToObject(root, "jsonrpc", "2.0");
-      cJSON_AddStringToObject(root, "method", "initialized");
-      cJSON_AddItemToObject(root, "params", cJSON_CreateObject());
-      lsp_send_message(server, root);
-      cJSON_Delete(root);
-    } else {
-      char *message_str = cJSON_PrintUnformatted(message);
-      log_warning("lsp.lsp_reader_thread_func: unhandled message %s", message_str);
-      free(message_str);
-    }
-
+    lsp_handle_message(server, message);
     cJSON_Delete(message);
   }
 
   return NULL;
 }
+#ifdef TEST_BUILD
+void lsp_test_inject_message(const char *language_id, const char *message_str) {
+    LspServer *server = get_server(language_id);
+    if (!server) {
+        return;
+    }
+    cJSON *message = cJSON_Parse(message_str);
+    if (message) {
+        lsp_handle_message(server, message);
+        cJSON_Delete(message);
+    }
+}
+#endif
 
 void lsp_init(const Config *config, const char *file_name) {
   const char *lang_id = get_lang_id_from_filename(file_name);
@@ -389,8 +437,7 @@ void lsp_init(const Config *config, const char *file_name) {
 
   strncpy(server->lang_id, lang_id, sizeof(server->lang_id) - 1);
   server->lang_id[sizeof(server->lang_id) - 1] = '\0';
-  server->diagnostics = NULL;
-  server->diagnostic_count = 0;
+  server->diagnostics_head = NULL;
   server->diagnostics_version = 0;
   pthread_mutex_init(&server->diagnostics_mutex, NULL);
   pthread_mutex_init(&server->init_mutex, NULL);
@@ -399,6 +446,7 @@ void lsp_init(const Config *config, const char *file_name) {
   server->next_id = 1;
   server->initialized = false;
 
+#ifndef TEST_BUILD
   if (pipe(server->to_server_pipe) == -1 ||
       pipe(server->from_server_pipe) == -1) {
     log_error("lsp_init: pipe failed");
@@ -507,11 +555,41 @@ void lsp_init(const Config *config, const char *file_name) {
       log_error("lsp_init: failed to create reader thread");
     }
   }
+#else
+  server->pid = -1;
+  lsp_servers[lsp_server_count++] = server;
+#endif
 }
 
 void lsp_did_open(const char *file_path, const char *language_id, const char *text) {
   LspServer *server = get_server(language_id);
   if (!server) return;
+
+  char uri[PATH_MAX];
+  snprintf(uri, sizeof(uri), "file://%s", file_path);
+
+  pthread_mutex_lock(&server->diagnostics_mutex);
+  FileDiagnostics *current = server->diagnostics_head;
+  FileDiagnostics *prev = NULL;
+  while (current) {
+    if (strcmp(current->uri, uri) == 0) {
+      if (prev) {
+        prev->next = current->next;
+      } else {
+        server->diagnostics_head = current->next;
+      }
+      free(current->uri);
+      for (int i = 0; i < current->diagnostic_count; i++) {
+        free(current->diagnostics[i].message);
+      }
+      free(current->diagnostics);
+      free(current);
+      break;
+    }
+    prev = current;
+    current = current->next;
+  }
+  pthread_mutex_unlock(&server->diagnostics_mutex);
 
   if (!lsp_wait_for_initialization(server)) {
     return;
@@ -523,8 +601,6 @@ void lsp_did_open(const char *file_path, const char *language_id, const char *te
 
   cJSON *params = cJSON_CreateObject();
   cJSON *text_document = cJSON_CreateObject();
-  char uri[1024 + 7];
-  snprintf(uri, sizeof(uri), "file://%s", file_path);
   log_info("did open: %s", uri);
   cJSON_AddStringToObject(text_document, "uri", uri);
   cJSON_AddStringToObject(text_document, "languageId", language_id);
@@ -599,10 +675,18 @@ static void lsp_shutdown(LspServer *server) {
     close(server->from_server_pipe[0]);
     log_info("LSP server for %s shut down", server->lang_id);
 
-    for (int i = 0; i < server->diagnostic_count; i++) {
-      free(server->diagnostics[i].message);
+    FileDiagnostics *current = server->diagnostics_head;
+    while (current) {
+      FileDiagnostics *next = current->next;
+      free(current->uri);
+      for (int i = 0; i < current->diagnostic_count; i++) {
+        free(current->diagnostics[i].message);
+      }
+      free(current->diagnostics);
+      free(current);
+      current = next;
     }
-    free(server->diagnostics);
+
     pthread_mutex_destroy(&server->diagnostics_mutex);
     pthread_mutex_destroy(&server->init_mutex);
     pthread_cond_destroy(&server->init_cond);
@@ -628,23 +712,37 @@ int lsp_get_diagnostics(const char *file_path, Diagnostic **out_diagnostics,
     return 0;
   }
 
+  char uri[PATH_MAX];
+  snprintf(uri, sizeof(uri), "file://%s", file_path);
+
   pthread_mutex_lock(&server->diagnostics_mutex);
-  *out_diagnostic_count = server->diagnostic_count;
-  if (server->diagnostic_count > 0) {
-    *out_diagnostics = malloc(sizeof(Diagnostic) * server->diagnostic_count);
-    if (*out_diagnostics) {
-      for (int i = 0; i < server->diagnostic_count; i++) {
-        (*out_diagnostics)[i] = server->diagnostics[i];
-        (*out_diagnostics)[i].message =
-            strdup(server->diagnostics[i].message);
+  FileDiagnostics *current = server->diagnostics_head;
+  while (current) {
+    if (strcmp(current->uri, uri) == 0) {
+      *out_diagnostic_count = current->diagnostic_count;
+      if (current->diagnostic_count > 0) {
+        *out_diagnostics = malloc(sizeof(Diagnostic) * current->diagnostic_count);
+        if (*out_diagnostics) {
+          for (int i = 0; i < current->diagnostic_count; i++) {
+            (*out_diagnostics)[i] = current->diagnostics[i];
+            (*out_diagnostics)[i].message =
+                strdup(current->diagnostics[i].message);
+          }
+        } else {
+          *out_diagnostic_count = 0;
+        }
+      } else {
+        *out_diagnostics = NULL;
       }
-    } else {
-      *out_diagnostic_count = 0;
-      *out_diagnostics = NULL;
+      int version = server->diagnostics_version;
+      pthread_mutex_unlock(&server->diagnostics_mutex);
+      return version;
     }
-  } else {
-    *out_diagnostics = NULL;
+    current = current->next;
   }
+
+  *out_diagnostic_count = 0;
+  *out_diagnostics = NULL;
   int version = server->diagnostics_version;
   pthread_mutex_unlock(&server->diagnostics_mutex);
   return version;
