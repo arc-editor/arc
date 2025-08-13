@@ -21,13 +21,19 @@ typedef struct {
 } Diagnostic;
 
 typedef struct {
+  char *file_path;
+  Diagnostic *diagnostics;
+  int diagnostic_count;
+} FileDiagnostics;
+
+typedef struct {
   char lang_id[64];
   pid_t pid;
   int to_server_pipe[2];
   int from_server_pipe[2];
   pthread_t reader_thread;
-  Diagnostic *diagnostics;
-  int diagnostic_count;
+  FileDiagnostics *file_diagnostics;
+  int file_diagnostic_count;
   int diagnostics_version;
   pthread_mutex_t diagnostics_mutex;
   pthread_mutex_t init_mutex;
