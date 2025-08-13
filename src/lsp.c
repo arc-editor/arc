@@ -431,11 +431,24 @@ void lsp_init(const Config *config, const char *file_name) {
         char root_uri[1024 + 7];
         snprintf(root_uri, sizeof(root_uri), "file://%s", project_root);
         log_info("project root: %s", root_uri);
+
+        // For backwards compatibility with older LSP servers
+        cJSON_AddStringToObject(params, "rootPath", project_root);
         cJSON_AddStringToObject(params, "rootUri", root_uri);
+
+        // For modern LSP servers
+        cJSON *workspace_folders = cJSON_CreateArray();
+        cJSON *folder = cJSON_CreateObject();
+        cJSON_AddStringToObject(folder, "uri", root_uri);
+        cJSON_AddStringToObject(folder, "name", "root");
+        cJSON_AddItemToArray(workspace_folders, folder);
+        cJSON_AddItemToObject(params, "workspaceFolders", workspace_folders);
+
         free(project_root);
     } else {
         log_info("project root: none");
-        cJSON_AddStringToObject(params, "rootUri", "file:///");
+        cJSON_AddNullToObject(params, "rootUri");
+        cJSON_AddNullToObject(params, "rootPath");
     }
 
     cJSON *capabilities = cJSON_CreateObject();
