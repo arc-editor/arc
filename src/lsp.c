@@ -295,8 +295,20 @@ static void *lsp_reader_thread_func(void *arg) {
 
       pthread_mutex_unlock(&server->diagnostics_mutex);
       editor_request_redraw();
+    } else if (cJSON_GetObjectItem(message, "id") &&
+               cJSON_GetObjectItem(message, "id")->valueint == 1) {
+      log_info("lsp.lsp_reader_thread_func: received initialize response");
+      server->initialized = true;
+      cJSON *root = cJSON_CreateObject();
+      cJSON_AddStringToObject(root, "jsonrpc", "2.0");
+      cJSON_AddStringToObject(root, "method", "initialized");
+      cJSON_AddItemToObject(root, "params", cJSON_CreateObject());
+      lsp_send_message(server, root);
+      cJSON_Delete(root);
     } else {
-      log_warning("lsp.lsp_reader_thread_func: unhandled method %s", method);
+      char *message_str = cJSON_PrintUnformatted(message);
+      log_warning("lsp.lsp_reader_thread_func: unhandled message %s", message_str);
+      free(message_str);
     }
 
     cJSON_Delete(message);
@@ -360,6 +372,7 @@ void lsp_init(const Config *config, const char *file_name) {
   pthread_mutex_init(&server->diagnostics_mutex, NULL);
   server->buffer_pos = 0;
   server->next_id = 1;
+  server->initialized = false;
 
   if (pipe(server->to_server_pipe) == -1 ||
       pipe(server->from_server_pipe) == -1) {

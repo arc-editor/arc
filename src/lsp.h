@@ -33,6 +33,7 @@ typedef struct {
   char read_buffer[16384];
   int buffer_pos;
   int next_id;
+  bool initialized;
 } LspServer;
 
 void lsp_init(const Config *config, const char *file_name);
