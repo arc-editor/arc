@@ -124,9 +124,9 @@ static void lsp_send_message(LspServer *server, cJSON *json_rpc) {
   int len = strlen(message);
   snprintf(header, sizeof(header), "Content-Length: %d\r\n\r\n", len);
 
-  ssize_t header_written =
-      write(server->to_server_pipe[1], header, strlen(header));
+  ssize_t header_written = write(server->to_server_pipe[1], header, strlen(header));
   ssize_t message_written = write(server->to_server_pipe[1], message, len);
+  log_info("lsp.lsp_send_message: %s", message);
 
   if (header_written < 0 || message_written < 0) {
     log_error("lsp_send_message: write failed");
@@ -295,6 +295,8 @@ static void *lsp_reader_thread_func(void *arg) {
 
       pthread_mutex_unlock(&server->diagnostics_mutex);
       editor_request_redraw();
+    } else {
+      log_warning("lsp.lsp_reader_thread_func: unhandled method %s", method);
     }
 
     cJSON_Delete(message);
@@ -452,6 +454,10 @@ void lsp_init(const Config *config, const char *file_name) {
     }
 
     cJSON *capabilities = cJSON_CreateObject();
+
+    cJSON *workspace = cJSON_CreateObject();
+    cJSON_AddBoolToObject(workspace, "workspaceFolders", true);
+    cJSON_AddItemToObject(capabilities, "workspace", workspace);
     cJSON_AddItemToObject(params, "capabilities", capabilities);
     cJSON_AddItemToObject(root, "params", params);
 
