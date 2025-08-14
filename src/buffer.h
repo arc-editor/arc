@@ -81,7 +81,11 @@ void buffer_reset_offset_x(Buffer *buffer, int screen_cols);
 void buffer_set_logical_position_x(Buffer *buffer, int visual_before);
 void buffer_line_init(BufferLine *line);
 void buffer_line_destroy(BufferLine *line);
-void buffer_init(Buffer *b, char *file_name);
+
+// This function copies file_name (freed by buffer_destroy).
+// The caller retains ownership of file_name.
+void buffer_init(Buffer *b, const char *file_name);
+
 void buffer_destroy(Buffer *b);
 void buffer_set_line_num_width(Buffer *b);
 char *buffer_get_content(Buffer *b);

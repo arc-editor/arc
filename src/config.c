@@ -768,7 +768,7 @@ char *get_path(const char *partial_format, ...) {
     return full_path;
 }
 
-TSLanguage *config_load_language(char *name) {
+TSLanguage *config_load_language(const char *name) {
     if (name == NULL) return NULL;
     char *parser_path = get_path("/grammars/%s.so", name);
     if (!parser_path) {
@@ -816,7 +816,7 @@ TSLanguage *config_load_language(char *name) {
     return fn();
 }
 
-TSQuery *config_load_highlights(TSLanguage *language, char *name) {
+TSQuery *config_load_highlights(TSLanguage *language, const char *name) {
     if (name == NULL || language == NULL) return NULL;
     char *highlights_path = get_path("/highlights/%s.scm", name);
     if (!highlights_path) {
@@ -956,7 +956,7 @@ void config_destroy(Config *config) {
     }
 }
 
-void config_load_theme(char *name, Theme *theme) {
+void config_load_theme(const char *name, Theme *theme) {
     if (name == NULL) {
         log_warning("config.config_load_theme: theme name is NULL, loading default");
         name = "default";

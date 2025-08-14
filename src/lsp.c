@@ -110,12 +110,12 @@ static bool lsp_wait_for_initialization(LspServer *server) {
   return true;
 }
 
-static LspServer *get_server(const char *language_id) {
-  if (!language_id) {
+static LspServer *get_server(const char *lang_name) {
+  if (!lang_name) {
     return NULL;
   }
   for (int i = 0; i < lsp_server_count; i++) {
-    if (strcmp(lsp_servers[i]->lang_name, language_id) == 0) {
+    if (strcmp(lsp_servers[i]->lang_name, lang_name) == 0) {
       return lsp_servers[i];
     }
   }
@@ -348,12 +348,11 @@ void lsp_init(const Config *config, const char *file_name) {
   }
 
   if (!command) {
-    if (strcmp(lang_name, "c") == 0 || strcmp(lang_name, "h") == 0 ||
-        strcmp(lang_name, "cpp") == 0) {
+    if (strcmp(lang_name, "c") == 0 || strcmp(lang_name, "cpp") == 0) {
       command = "clangd";
     } else if (strcmp(lang_name, "python") == 0) {
       command = "pylsp";
-    } else if (strcmp(lang_name, "rs") == 0) {
+    } else if (strcmp(lang_name, "rust") == 0) {
       command = "rust-analyzer";
     } else if (strcmp(lang_name, "go") == 0) {
       command = "gopls";
@@ -490,8 +489,8 @@ void lsp_init(const Config *config, const char *file_name) {
   }
 }
 
-void lsp_did_open(const char *file_path, const char *language_id, const char *text) {
-  LspServer *server = get_server(language_id);
+void lsp_did_open(const char *file_path, const char *lang_name, const char *text) {
+  LspServer *server = get_server(lang_name);
   if (!server) return;
 
   if (!lsp_wait_for_initialization(server)) {
@@ -507,7 +506,7 @@ void lsp_did_open(const char *file_path, const char *language_id, const char *te
   char uri[1024 + 7];
   snprintf(uri, sizeof(uri), "file://%s", file_path);
   cJSON_AddStringToObject(text_document, "uri", uri);
-  cJSON_AddStringToObject(text_document, "languageId", language_id);
+  cJSON_AddStringToObject(text_document, "languageId", lang_name);
   cJSON_AddNumberToObject(text_document, "version", 1);
   cJSON_AddStringToObject(text_document, "text", text);
   cJSON_AddItemToObject(params, "textDocument", text_document);
