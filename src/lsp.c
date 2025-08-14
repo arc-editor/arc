@@ -98,7 +98,16 @@ static const char *get_lang_id_from_filename(const char *file_name) {
   if (!ext) {
     return NULL;
   }
-  return ext + 1;
+  ext++;
+  const char *name;
+  if (!strcmp(ext, "js")) {
+    name = "javascript";
+  } else if (!strcmp(ext, "ts")) {
+    name = "typescript";
+  } else {
+    name = ext;
+  }
+  return name;
 }
 
 static bool lsp_wait_for_initialization(LspServer *server) {
@@ -361,13 +370,13 @@ void lsp_init(const Config *config, const char *file_name) {
     if (strcmp(lang_id, "c") == 0 || strcmp(lang_id, "h") == 0 ||
         strcmp(lang_id, "cpp") == 0) {
       command = "clangd";
-    } else if (strcmp(lang_id, "py") == 0) {
+    } else if (strcmp(lang_id, "python") == 0) {
       command = "pylsp";
     } else if (strcmp(lang_id, "rs") == 0) {
       command = "rust-analyzer";
     } else if (strcmp(lang_id, "go") == 0) {
       command = "gopls";
-    } else if (strcmp(lang_id, "ts") == 0 || strcmp(lang_id, "js") == 0) {
+    } else if (strcmp(lang_id, "typescript") == 0 || strcmp(lang_id, "javascript") == 0) {
       command = "typescript-language-server --stdio";
     }
   }

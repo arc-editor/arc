@@ -512,14 +512,23 @@ void draw_diagnostics(const Diagnostic *diagnostics, int diagnostics_count) {
 }
 
 static const char *get_lang_id_from_filename(const char *file_name) {
-    if (!file_name) {
-        return NULL;
-    }
-    const char *ext = strrchr(file_name, '.');
-    if (!ext) {
-        return NULL;
-    }
-    return ext + 1;
+  if (!file_name) {
+    return NULL;
+  }
+  const char *ext = strrchr(file_name, '.');
+  if (!ext) {
+    return NULL;
+  }
+  ext++;
+  const char *name;
+  if (!strcmp(ext, "js")) {
+    name = "javascript";
+  } else if (!strcmp(ext, "ts")) {
+    name = "typescript";
+  } else {
+    name = ext;
+  }
+  return name;
 }
 
 void editor_draw() {
