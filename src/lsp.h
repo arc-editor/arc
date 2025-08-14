@@ -22,7 +22,7 @@ typedef struct {
 } Diagnostic;
 
 typedef struct {
-  char lang_id[64];
+  char lang_name[64];
   pid_t pid;
   int to_server_pipe[2];
   int from_server_pipe[2];

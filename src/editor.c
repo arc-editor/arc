@@ -34,6 +34,7 @@
 #include "utf8.h"
 #include "search.h"
 #include "utf8.h"
+#include "str.h"
 
 static pthread_mutex_t editor_mutex = PTHREAD_MUTEX_INITIALIZER;
 Editor editor;
@@ -511,26 +512,6 @@ void draw_diagnostics(const Diagnostic *diagnostics, int diagnostics_count) {
     }
 }
 
-static const char *get_lang_id_from_filename(const char *file_name) {
-  if (!file_name) {
-    return NULL;
-  }
-  const char *ext = strrchr(file_name, '.');
-  if (!ext) {
-    return NULL;
-  }
-  ext++;
-  const char *name;
-  if (!strcmp(ext, "js")) {
-    name = "javascript";
-  } else if (!strcmp(ext, "ts")) {
-    name = "typescript";
-  } else {
-    name = ext;
-  }
-  return name;
-}
-
 void editor_draw() {
     if (!buffer->needs_draw) {
         return;
@@ -582,8 +563,8 @@ void editor_did_change_buffer() {
     buffer->version++;
 
     if (buffer->file_name) {
-        const char *lang_id = get_lang_id_from_filename(buffer->file_name);
-        if (lsp_is_running(lang_id)) {
+        const char *lang_name = str_get_lang_name_from_file_name(buffer->file_name);
+        if (lsp_is_running(lang_name)) {
             char *content = buffer_get_content(buffer);
             if (content) {
                 char absolute_path[PATH_MAX];
@@ -754,24 +735,22 @@ void setup_terminal() {
 void setup_terminal() {}
 #endif
 
-#include <stdbool.h>
-
 static void editor_setup_lsp(const char *file_name) {
     if (!file_name) {
         return;
     }
-    const char *lang_id = get_lang_id_from_filename(file_name);
-    if (!lang_id) {
+    const char *lang_name = str_get_lang_name_from_file_name(file_name);
+    if (!lang_name) {
         return;
     }
 
     char absolute_path[PATH_MAX];
     if (realpath(file_name, absolute_path) != NULL) {
         lsp_init(&editor.config, file_name);
-        if (lsp_is_running(lang_id)) {
+        if (lsp_is_running(lang_name)) {
             char *content = buffer_get_content(buffer);
             if (content) {
-                lsp_did_open(absolute_path, lang_id, content);
+                lsp_did_open(absolute_path, lang_name, content);
                 free(content);
             }
         }

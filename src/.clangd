@@ -1,6 +1,0 @@
-CompileFlags:
-  Add: 
-    - "-Iexternal/tree-sitter/lib/include"
-    - "-std=c11"
-    - "-Wall"
-    - "-Wextra"

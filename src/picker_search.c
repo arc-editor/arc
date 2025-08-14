@@ -6,10 +6,8 @@
 #include <dirent.h>
 #include <sys/stat.h>
 #include <unistd.h>
-
 #include "picker.h"
 #include "editor.h"
-#include "log.h"
 #include "picker_search.h"
 
 // Data structure for a single search result

@@ -1,10 +1,6 @@
 #define _XOPEN_SOURCE 700
 #define _POSIX_C_SOURCE 200809L
 
-#include "lsp.h"
-#include "log.h"
-#include "cJSON.h"
-#include "editor.h"
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -16,6 +12,11 @@
 #include <sys/stat.h>
 #include <limits.h>
 #include <time.h>
+#include "lsp.h"
+#include "log.h"
+#include "cJSON.h"
+#include "editor.h"
+#include "str.h"
 
 #define MAX_LSP_SERVERS 10
 
@@ -90,26 +91,6 @@ char *find_project_root(const char *file_path) {
 static LspServer *lsp_servers[MAX_LSP_SERVERS] = {NULL};
 static int lsp_server_count = 0;
 
-static const char *get_lang_id_from_filename(const char *file_name) {
-  if (!file_name) {
-    return NULL;
-  }
-  const char *ext = strrchr(file_name, '.');
-  if (!ext) {
-    return NULL;
-  }
-  ext++;
-  const char *name;
-  if (!strcmp(ext, "js")) {
-    name = "javascript";
-  } else if (!strcmp(ext, "ts")) {
-    name = "typescript";
-  } else {
-    name = ext;
-  }
-  return name;
-}
-
 static bool lsp_wait_for_initialization(LspServer *server) {
   if (!server) return false;
 
@@ -134,7 +115,7 @@ static LspServer *get_server(const char *language_id) {
     return NULL;
   }
   for (int i = 0; i < lsp_server_count; i++) {
-    if (strcmp(lsp_servers[i]->lang_id, language_id) == 0) {
+    if (strcmp(lsp_servers[i]->lang_name, language_id) == 0) {
       return lsp_servers[i];
     }
   }
@@ -345,8 +326,8 @@ static void *lsp_reader_thread_func(void *arg) {
 }
 
 void lsp_init(const Config *config, const char *file_name) {
-  const char *lang_id = get_lang_id_from_filename(file_name);
-  if (!lang_id || get_server(lang_id) != NULL) {
+  const char *lang_name = str_get_lang_name_from_file_name(file_name);
+  if (!lang_name || get_server(lang_name) != NULL) {
     return;
   }
 
@@ -356,7 +337,7 @@ void lsp_init(const Config *config, const char *file_name) {
   }
 
   char key[256];
-  snprintf(key, sizeof(key), "lsp.%s", lang_id);
+  snprintf(key, sizeof(key), "lsp.%s", lang_name);
 
   const char *command = NULL;
   if (config->toml_result.ok) {
@@ -367,16 +348,16 @@ void lsp_init(const Config *config, const char *file_name) {
   }
 
   if (!command) {
-    if (strcmp(lang_id, "c") == 0 || strcmp(lang_id, "h") == 0 ||
-        strcmp(lang_id, "cpp") == 0) {
+    if (strcmp(lang_name, "c") == 0 || strcmp(lang_name, "h") == 0 ||
+        strcmp(lang_name, "cpp") == 0) {
       command = "clangd";
-    } else if (strcmp(lang_id, "python") == 0) {
+    } else if (strcmp(lang_name, "python") == 0) {
       command = "pylsp";
-    } else if (strcmp(lang_id, "rs") == 0) {
+    } else if (strcmp(lang_name, "rs") == 0) {
       command = "rust-analyzer";
-    } else if (strcmp(lang_id, "go") == 0) {
+    } else if (strcmp(lang_name, "go") == 0) {
       command = "gopls";
-    } else if (strcmp(lang_id, "typescript") == 0 || strcmp(lang_id, "javascript") == 0) {
+    } else if (strcmp(lang_name, "typescript") == 0 || strcmp(lang_name, "javascript") == 0) {
       command = "typescript-language-server --stdio";
     }
   }
@@ -391,8 +372,8 @@ void lsp_init(const Config *config, const char *file_name) {
     return;
   }
 
-  strncpy(server->lang_id, lang_id, sizeof(server->lang_id) - 1);
-  server->lang_id[sizeof(server->lang_id) - 1] = '\0';
+  strncpy(server->lang_name, lang_name, sizeof(server->lang_name) - 1);
+  server->lang_name[sizeof(server->lang_name) - 1] = '\0';
   server->diagnostics = NULL;
   server->diagnostic_count = 0;
   server->diagnostics_version = 0;
@@ -453,7 +434,7 @@ void lsp_init(const Config *config, const char *file_name) {
   } else { // Parent process
     close(server->to_server_pipe[0]);
     close(server->from_server_pipe[1]);
-    log_info("LSP server for %s started with PID %d", server->lang_id, server->pid);
+    log_info("LSP server for %s started with PID %d", server->lang_name, server->pid);
 
     lsp_servers[lsp_server_count++] = server;
 
@@ -537,8 +518,8 @@ void lsp_did_open(const char *file_path, const char *language_id, const char *te
 }
 
 void lsp_did_change(const char *file_path, const char *text, int version) {
-  const char *lang_id = get_lang_id_from_filename(file_path);
-  LspServer *server = get_server(lang_id);
+  const char *lang_name = str_get_lang_name_from_file_name(file_path);
+  LspServer *server = get_server(lang_name);
   if (!server)
     return;
 
@@ -596,7 +577,7 @@ static void lsp_shutdown(LspServer *server) {
     waitpid(server->pid, NULL, 0);
     close(server->to_server_pipe[1]);
     close(server->from_server_pipe[0]);
-    log_info("LSP server for %s shut down", server->lang_id);
+    log_info("LSP server for %s shut down", server->lang_name);
 
     for (int i = 0; i < server->diagnostic_count; i++) {
       free(server->diagnostics[i].message);
@@ -627,8 +608,8 @@ int lsp_get_diagnostics(const char *file_path, Diagnostic **out_diagnostics, int
   char root_uri[1024 + 7];
   snprintf(root_uri, sizeof(root_uri), "file://%s/%s", project_root, file_path);
 
-  const char *lang_id = get_lang_id_from_filename(file_path);
-  LspServer *server = get_server(lang_id);
+  const char *lang_name = str_get_lang_name_from_file_name(file_path);
+  LspServer *server = get_server(lang_name);
   if (!server) {
     *out_diagnostic_count = 0;
     *out_diagnostics = NULL;
