@@ -82,23 +82,23 @@ void editor_set_style(Style *style, int fg, int bg) {
     char *p = escape_seq;
     p += sprintf(p, "\x1b[");
 
-    if (style->style & STYLE_BOLD) {
-        p += sprintf(p, "1;");
-    } else {
-        p += sprintf(p, "22;");
-    }
-    if (style->style & STYLE_ITALIC) {
-        p += sprintf(p, "3;");
-    } else {
-        p += sprintf(p, "23;");
-    }
-    if (style->style & STYLE_UNDERLINE) {
-        p += sprintf(p, "4;");
-    } else {
-        p += sprintf(p, "24;");
-    }
 
     if (fg) {
+        if (style->style & STYLE_BOLD) {
+            p += sprintf(p, "1;");
+        } else {
+            p += sprintf(p, "22;");
+        }
+        if (style->style & STYLE_ITALIC) {
+            p += sprintf(p, "3;");
+        } else {
+            p += sprintf(p, "23;");
+        }
+        if (style->style & STYLE_UNDERLINE) {
+            p += sprintf(p, "4;");
+        } else {
+            p += sprintf(p, "24;");
+        }
         p += sprintf(p, "38;2;%d;%d;%d", style->fg_r, style->fg_g, style->fg_b);
         if (bg) {
             p += sprintf(p, ";");
@@ -320,10 +320,21 @@ void draw_buffer(Diagnostic *diagnostics, int diagnostics_count) {
         start_byte += buffer->lines[i]->text_len + 1; // +1 for newline
     }
 
+    char utf8_buf[8];
+    char line_num_str[16];
+    int max_char_count = 0;
+    for (int row = buffer->offset_y; row < buffer->offset_y + editor.screen_rows - 1 && row < buffer->line_count; row++) {
+        BufferLine *line = buffer->lines[row];
+        if (line->char_count > max_char_count) max_char_count = line->char_count;
+    }
+
+    Style *char_styles = NULL;
+    if (max_char_count > 0) {
+        char_styles = malloc(sizeof(Style) * max_char_count);
+    }
     for (int row = buffer->offset_y; row < buffer->offset_y + editor.screen_rows - 1; row++) {
         int relative_y = row - buffer->offset_y;
         printf("\x1b[%d;1H", relative_y + 1);
-        char line_num_str[16];
         int line_num_len = snprintf(line_num_str, sizeof(line_num_str), "%*d ", buffer->line_num_width - 1, row + 1);
 
         if (row >= buffer->line_count) {
@@ -349,9 +360,7 @@ void draw_buffer(Diagnostic *diagnostics, int diagnostics_count) {
             buffer_line_apply_syntax_highlighting(buffer, line, start_byte, &editor.current_theme);
         }
 
-        Style *char_styles = NULL;
         if (line->char_count > 0) {
-            char_styles = malloc(sizeof(Style) * line->char_count);
             int run_idx = 0;
             int char_in_run = 0;
             for (int i = 0; i < line->char_count; i++) {
@@ -394,7 +403,6 @@ void draw_buffer(Diagnostic *diagnostics, int diagnostics_count) {
 
         char *p = line->text;
         for (int ch_idx = 0; ch_idx < line->char_count && chars_to_print > 0; ch_idx++) {
-            char utf8_buf[8];
             int char_len = utf8_char_len(p);
             strncpy(utf8_buf, p, char_len);
             utf8_buf[char_len] = '\0';
@@ -405,7 +413,6 @@ void draw_buffer(Diagnostic *diagnostics, int diagnostics_count) {
             } else {
                 current_char_width = utf8_char_width(utf8_buf);
             }
-
             if (cols_to_skip > 0) {
                 if (cols_to_skip >= current_char_width) {
                     cols_to_skip -= current_char_width;
@@ -465,7 +472,7 @@ void draw_buffer(Diagnostic *diagnostics, int diagnostics_count) {
                     }
                 }
             } else {
-                editor_set_style(&final_style, 1, 1);
+                editor_set_style(&final_style, 1, 0);
                 printf("%s", utf8_buf);
             }
 
@@ -474,16 +481,15 @@ void draw_buffer(Diagnostic *diagnostics, int diagnostics_count) {
             chars_to_print -= current_char_width;
         }
 
-        if (char_styles) {
-            free(char_styles);
-        }
-
         editor_set_style(line_style, 1, 1);
         while (chars_to_print > 0) {
             putchar(' ');
             chars_to_print--;
         }
         start_byte += line->text_len + 1;
+    }
+    if (char_styles) {
+        free(char_styles);
     }
     printf("\x1b[0m");
 }
