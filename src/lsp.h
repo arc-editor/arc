@@ -18,6 +18,7 @@ typedef struct {
   int col_end;
   DiagnosticSeverity severity;
   char *message;
+  char *uri;
 } Diagnostic;
 
 typedef struct {
