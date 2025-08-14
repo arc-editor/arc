@@ -168,6 +168,14 @@ void editor_set_cursor_shape(int shape_code) {
     printf("\x1b[%d q", shape_code);
 }
 
+// static void draw_statusline_diagnostics(int count) {
+//     char str[8] = {0};
+//     int len = 0;
+//     if (count > 0) {
+//         len = snprintf(str, sizeof(str), " ● %d", count);
+//     }
+// }
+
 void draw_statusline(Diagnostic *file_diagnostics, int file_diagnostic_count, Diagnostic *workspace_diagnostics, int workspace_diagnostic_count) {
     printf("\x1b[%d;1H", editor.screen_rows);
 
@@ -212,6 +220,8 @@ void draw_statusline(Diagnostic *file_diagnostics, int file_diagnostic_count, Di
     int workspace_warnings = 0;
     int workspace_infos = 0;
     int workspace_hints = 0;
+    // int foo = 4;
+    // int bar = "baz";
     for (int i = 0; i < workspace_diagnostic_count; i++) {
         switch (workspace_diagnostics[i].severity) {
             case LSP_DIAGNOSTIC_SEVERITY_ERROR:
@@ -229,38 +239,56 @@ void draw_statusline(Diagnostic *file_diagnostics, int file_diagnostic_count, Di
         }
     }
 
-    int file_errors = 0;
-    int file_warnings = 0;
-    int file_infos = 0;
-    int file_hints = 0;
-    for (int i = 0; i < file_diagnostic_count; i++) {
-        switch (file_diagnostics[i].severity) {
-            case LSP_DIAGNOSTIC_SEVERITY_ERROR:
-                file_errors++;
-                break;
-            case LSP_DIAGNOSTIC_SEVERITY_WARNING:
-                file_warnings++;
-                break;
-            case LSP_DIAGNOSTIC_SEVERITY_INFO:
-                file_infos++;
-                break;
-            case LSP_DIAGNOSTIC_SEVERITY_HINT:
-                file_hints++;
-                break;
-        }
-    }
+    // int file_errors = 0;
+    // int file_warnings = 0;
+    // int file_infos = 0;
+    // int file_hints = 0;
+    // for (int i = 0; i < file_diagnostic_count; i++) {
+    //     switch (file_diagnostics[i].severity) {
+    //         case LSP_DIAGNOSTIC_SEVERITY_ERROR:
+    //             file_errors++;
+    //             break;
+    //         case LSP_DIAGNOSTIC_SEVERITY_WARNING:
+    //             file_warnings++;
+    //             break;
+    //         case LSP_DIAGNOSTIC_SEVERITY_INFO:
+    //             file_infos++;
+    //             break;
+    //         case LSP_DIAGNOSTIC_SEVERITY_HINT:
+    //             file_hints++;
+    //             break;
+    //     }
+    // }
 
-    char workspace_diag_str[64] = {0};
-    int workspace_diag_len = 0;
-    if (workspace_errors > 0 || workspace_warnings > 0 || workspace_infos > 0 || workspace_hints > 0) {
-        workspace_diag_len = snprintf(workspace_diag_str, sizeof(workspace_diag_str), " E%d W%d", workspace_errors, workspace_warnings);
+    // char workspace_diag_str[64] = {0};
+    // int workspace_diag_len = 0;
+    char workspace_error_diag_str[8] = {0};
+    int workspace_error_diag_len = 0;
+    if (workspace_errors > 0) {
+        workspace_error_diag_len = snprintf(workspace_error_diag_str, sizeof(workspace_error_diag_str), " ● %d", workspace_errors);
     }
+    char workspace_warning_diag_str[8] = {0};
+    int workspace_warning_diag_len = 0;
+    if (workspace_warnings > 0) {
+        workspace_warning_diag_len = snprintf(workspace_warning_diag_str, sizeof(workspace_warning_diag_str), " ● %d", workspace_warnings);
+    }
+    char workspace_info_diag_str[8] = {0};
+    int workspace_info_diag_len = 0;
+    if (workspace_infos > 0) {
+        workspace_info_diag_len = snprintf(workspace_info_diag_str, sizeof(workspace_info_diag_str), " ● %d", workspace_infos);
+    }
+    char workspace_hint_diag_str[8] = {0};
+    int workspace_hint_diag_len = 0;
+    if (workspace_hints > 0) {
+        workspace_hint_diag_len = snprintf(workspace_hint_diag_str, sizeof(workspace_hint_diag_str), " ● %d", workspace_hints);
+    }
+    int workspace_diagnostic_len = workspace_error_diag_len + workspace_warning_diag_len + workspace_info_diag_len + workspace_hint_diag_len;
 
-    char file_diag_str[64] = {0};
-    int file_diag_len = 0;
-    if (file_errors > 0 || file_warnings > 0 || file_infos > 0 || file_hints > 0) {
-        file_diag_len = snprintf(file_diag_str, sizeof(file_diag_str), " E%d W%d", file_errors, file_warnings);
-    }
+    // char file_diag_str[64] = {0};
+    // int file_diag_len = 0;
+    // if (file_errors > 0 || file_warnings > 0 || file_infos > 0 || file_hints > 0) {
+    //     file_diag_len = snprintf(file_diag_str, sizeof(file_diag_str), " E%d W%d", file_errors, file_warnings);
+    // }
 
     printf("%s", mode);
     editor_set_style(&editor.current_theme.statusline_text, 1, 1);
@@ -286,8 +314,8 @@ void draw_statusline(Diagnostic *file_diagnostics, int file_diagnostic_count, Di
             printf("%s", search_stats);
         }
     } else {
-        int left_len = mode_len + branch_name_len + workspace_diag_len;
-        int right_len = position_len + line_count_len + file_diag_len;
+        int left_len = mode_len + branch_name_len + workspace_diagnostic_len;
+        int right_len = position_len + line_count_len;// + file_diag_len;
         char search_stats[32] = {0};
         int search_stats_len = 0;
         if (buffer->search_state.term && buffer->search_state.term[0] != '\0') {
@@ -308,14 +336,24 @@ void draw_statusline(Diagnostic *file_diagnostics, int file_diagnostic_count, Di
             printf(" %s", branch_name);
         }
 
-        if (workspace_diag_len > 0) {
-            if (workspace_errors > 0) editor_set_style(&editor.current_theme.diagnostics_error, 1, 1);
-            else if (workspace_warnings > 0) editor_set_style(&editor.current_theme.diagnostics_warning, 1, 1);
-            else if (workspace_infos > 0) editor_set_style(&editor.current_theme.diagnostics_info, 1, 1);
-            else if (workspace_hints > 0) editor_set_style(&editor.current_theme.diagnostics_hint, 1, 1);
-            printf(" ●");
+        if (workspace_diagnostic_len > 0) {
+            if (workspace_errors > 0) {
+                editor_set_style(&editor.current_theme.diagnostics_error, 1, 0);
+                printf("%s", workspace_error_diag_str);
+            }
+            if (workspace_warnings > 0) {
+                editor_set_style(&editor.current_theme.diagnostics_warning, 1, 0);
+                printf("%s", workspace_warning_diag_str);
+            }
+            if (workspace_infos > 0) {
+                editor_set_style(&editor.current_theme.diagnostics_info, 1, 0);
+                printf("%s", workspace_info_diag_str);
+            }
+            if (workspace_hints > 0) {
+                editor_set_style(&editor.current_theme.diagnostics_hint, 1, 0);
+                printf("%s", workspace_hint_diag_str);
+            }
             editor_set_style(&editor.current_theme.statusline_text, 1, 1);
-            printf("%s ", workspace_diag_str);
         }
 
 
@@ -323,15 +361,15 @@ void draw_statusline(Diagnostic *file_diagnostics, int file_diagnostic_count, Di
         if (buffer->file_name) {
             printf(" %s", buffer->file_name);
         }
-        if (file_diag_len > 0) {
-            if (file_errors > 0) editor_set_style(&editor.current_theme.diagnostics_error, 1, 1);
-            else if (file_warnings > 0) editor_set_style(&editor.current_theme.diagnostics_warning, 1, 1);
-            else if (file_infos > 0) editor_set_style(&editor.current_theme.diagnostics_info, 1, 1);
-            else if (file_hints > 0) editor_set_style(&editor.current_theme.diagnostics_hint, 1, 1);
-            printf(" ●");
-            editor_set_style(&editor.current_theme.statusline_text, 1, 1);
-            printf("%s ", file_diag_str);
-        }
+        // if (file_diag_len > 0) {
+        //     if (file_errors > 0) editor_set_style(&editor.current_theme.diagnostics_error, 1, 1);
+        //     else if (file_warnings > 0) editor_set_style(&editor.current_theme.diagnostics_warning, 1, 1);
+        //     else if (file_infos > 0) editor_set_style(&editor.current_theme.diagnostics_info, 1, 1);
+        //     else if (file_hints > 0) editor_set_style(&editor.current_theme.diagnostics_hint, 1, 1);
+        //     printf(" ●");
+        //     editor_set_style(&editor.current_theme.statusline_text, 1, 1);
+        //     printf("%s ", file_diag_str);
+        // }
 
         if (buffer->dirty) {
             if (buffer->file_name) {

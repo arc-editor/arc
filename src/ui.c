@@ -9,7 +9,7 @@ typedef struct {
     const char* text;
     int length;
 } DrawableLine;
-
+static int foo = 3;
 void ui_draw_popup(const Theme* theme, DiagnosticSeverity severity, const char *popup_text, int cursor_y, int screen_cols, int screen_rows) {
     #define MAX_POPUP_LINES 20
     DrawableLine lines[MAX_POPUP_LINES];
