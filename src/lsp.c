@@ -638,6 +638,41 @@ int lsp_get_diagnostics(const char *file_path, Diagnostic **out_diagnostics, int
   return version;
 }
 
+int lsp_get_all_diagnostics(Diagnostic **out_diagnostics) {
+  int total_diagnostics = 0;
+  for (int i = 0; i < lsp_server_count; i++) {
+    LspServer *server = lsp_servers[i];
+    pthread_mutex_lock(&server->diagnostics_mutex);
+    total_diagnostics += server->diagnostic_count;
+    pthread_mutex_unlock(&server->diagnostics_mutex);
+  }
+
+  if (total_diagnostics == 0) {
+    *out_diagnostics = NULL;
+    return 0;
+  }
+
+  *out_diagnostics = malloc(sizeof(Diagnostic) * total_diagnostics);
+  if (!*out_diagnostics) {
+    return 0;
+  }
+
+  int current_diagnostic = 0;
+  for (int i = 0; i < lsp_server_count; i++) {
+    LspServer *server = lsp_servers[i];
+    pthread_mutex_lock(&server->diagnostics_mutex);
+    for (int j = 0; j < server->diagnostic_count; j++) {
+      (*out_diagnostics)[current_diagnostic] = server->diagnostics[j];
+      (*out_diagnostics)[current_diagnostic].message = strdup(server->diagnostics[j].message);
+      (*out_diagnostics)[current_diagnostic].uri = strdup(server->diagnostics[j].uri);
+      current_diagnostic++;
+    }
+    pthread_mutex_unlock(&server->diagnostics_mutex);
+  }
+
+  return total_diagnostics;
+}
+
 bool lsp_is_running(const char *language_id) {
   return get_server(language_id) != NULL;
 }

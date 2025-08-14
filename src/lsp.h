@@ -46,6 +46,7 @@ int lsp_get_diagnostics(const char *file_path, Diagnostic **diagnostics,
 void lsp_did_open(const char *file_path, const char *language_id,
                   const char *text);
 void lsp_did_change(const char *file_path, const char *text, int version);
+int lsp_get_all_diagnostics(Diagnostic **diagnostics);
 bool lsp_is_running(const char *language_id);
 char *find_project_root(const char *file_path);
 
