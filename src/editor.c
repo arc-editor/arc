@@ -529,16 +529,16 @@ void draw_buffer(Diagnostic *diagnostics, int diagnostics_count) {
         switch (git_status) {
             case GIT_LINE_ADDED:
                 git_style = &editor.current_theme.git_added;
-                git_char = "|";
+                git_char = "▐";
                 break;
             case GIT_LINE_MODIFIED:
                 git_style = &editor.current_theme.git_modified;
-                git_char = "|";
+                git_char = "▐";
                 break;
             default:
                 if (deleted_lines > 0) {
                     git_style = &editor.current_theme.git_deleted;
-                    git_char = "‾";
+                    git_char = "▔";
                 }
                 break;
         }

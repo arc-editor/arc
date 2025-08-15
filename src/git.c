@@ -191,7 +191,7 @@ GitLineStatus git_get_line_status(const Buffer *buffer, int line_num, int* delet
 
     for (int i = 0; i < buffer->hunk_count; i++) {
         GitHunk* h = &buffer->hunks[i];
-        if (h->new_count == 0 && h->old_start == old_ln + 1) {
+        if (h->new_count == 0 && h->old_start == old_ln - 1) {
             *deleted_lines = h->old_count;
             break;
         }

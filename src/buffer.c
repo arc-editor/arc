@@ -542,7 +542,6 @@ void buffer_init(Buffer *b, const char *file_name) {
     if (file_name == NULL) {
         return;
     }
-    buffer_update_git_diff(b);
 
     struct stat st;
     if (stat(file_name, &st) == 0) {
@@ -631,6 +630,7 @@ void buffer_init(Buffer *b, const char *file_name) {
     if (b->parser) {
         buffer_parse(b);
     }
+    buffer_update_git_diff(b);
 }
 
 void buffer_destroy(Buffer *b) {
