@@ -8,6 +8,7 @@
 #include "picker_file.h"
 #include "picker_buffer.h"
 #include "picker_search.h"
+#include "picker_diagnostics.h"
 #include "visual.h"
 #include "utf8.h"
 
@@ -65,6 +66,14 @@ void normal_exec_motion(char ch) {
 
         if (cmd.action == 'g') {
             switch(ch) {
+                case 'd':
+                    picker_file_diagnostics_show();
+                    editor_command_reset(&cmd);
+                    return;
+                case 'D':
+                    picker_workspace_diagnostics_show();
+                    editor_command_reset(&cmd);
+                    return;
                 case 'h':
                     editor_move_to_start_of_line();
                     editor_command_reset(&cmd);

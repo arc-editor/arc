@@ -60,6 +60,7 @@ void editor_draw();
 void editor_init(char *file_name, bool benchmark_mode);
 void editor_start(char *file_name, int benchmark_mode);
 void editor_open(char *file_name);
+void editor_open_and_jump_to_line(const char *file_path, int line, int col);
 Buffer **editor_get_buffers(int *count);
 void editor_set_active_buffer(int index);
 int editor_get_active_buffer_idx(void);

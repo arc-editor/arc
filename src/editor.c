@@ -888,6 +888,21 @@ void editor_insert_new_line() {
     pthread_mutex_unlock(&editor_mutex);
 }
 
+void editor_open_and_jump_to_line(const char *file_path, int line, int col) {
+    editor_open((char *)file_path);
+    Buffer *buf = editor_get_active_buffer();
+    if (line > 0 && line <= buf->line_count) {
+        buf->position_y = line - 1;
+    }
+    if (col > 0 && col <= buf->lines[buf->position_y]->char_count + 1) {
+        buf->position_x = col - 1;
+    } else {
+        buf->position_x = 0;
+    }
+    editor_center_view();
+    editor_request_redraw();
+}
+
 struct termios orig_termios;
 
 void reset_terminal() {
