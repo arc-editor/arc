@@ -4,8 +4,10 @@
 #include "theme.h"
 
 typedef struct {
-    char flag;
+    const char* flag;
     unsigned char style;
+    int has_fg_color;
+    unsigned char fg_r, fg_g, fg_b;
 } PickerItemStyle;
 
 typedef struct {

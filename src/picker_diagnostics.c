@@ -86,7 +86,31 @@ static const char* get_severity_string(DiagnosticSeverity severity) {
 
 static void get_item_style(int index, PickerItemStyle *style) {
     style->style = 0;
-    style->flag = ' ';
+    style->has_fg_color = 1;
+
+    Diagnostic *d = &diagnostics[index];
+    switch (d->severity) {
+        case LSP_DIAGNOSTIC_SEVERITY_ERROR:
+            style->flag = "E";
+            style->fg_r = 255; style->fg_g = 100; style->fg_b = 100;
+            break;
+        case LSP_DIAGNOSTIC_SEVERITY_WARNING:
+            style->flag = "W";
+            style->fg_r = 255; style->fg_g = 255; style->fg_b = 100;
+            break;
+        case LSP_DIAGNOSTIC_SEVERITY_INFO:
+            style->flag = "I";
+            style->fg_r = 100; style->fg_g = 100; style->fg_b = 255;
+            break;
+        case LSP_DIAGNOSTIC_SEVERITY_HINT:
+            style->flag = "H";
+            style->fg_r = 100; style->fg_g = 255; style->fg_b = 100;
+            break;
+        default:
+            style->flag = " ";
+            style->has_fg_color = 0;
+            break;
+    }
 }
 
 

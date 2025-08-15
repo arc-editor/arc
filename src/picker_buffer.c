@@ -85,9 +85,9 @@ static void get_item_style(int index, PickerItemStyle *style) {
     Buffer **buffers = editor_get_buffers(&buffer_count);
     if (index < buffer_count) {
         if (buffers[index]->dirty) {
-            style->flag = '+';
+            style->flag = "+";
         } else {
-            style->flag = ' ';
+            style->flag = " ";
         }
         if (index == editor_get_active_buffer_idx()) {
             style->style |= STYLE_BOLD;
@@ -96,6 +96,7 @@ static void get_item_style(int index, PickerItemStyle *style) {
         }
         style->style &= ~STYLE_ITALIC;
     }
+    style->has_fg_color = 0;
 }
 
 static PickerDelegate delegate = {

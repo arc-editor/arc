@@ -170,15 +170,24 @@ void picker_draw(int screen_cols, int screen_rows, Theme *theme) {
             style.bg_b = theme->content_background.bg_b;
         }
 
-        PickerItemStyle item_style = { .flag = ' ', .style = 0 };
+        PickerItemStyle item_style = { .flag = " ", .style = 0, .has_fg_color = 0 };
         if (delegate->get_item_style) {
             delegate->get_item_style(item_index, &item_style);
         }
 
-        style.style |= item_style.style;
         editor_set_style(&style, 1, 1);
+        printf(" ");
 
-        printf(" %c", item_style.flag);
+        Style flag_style = style;
+        if (item_style.has_fg_color) {
+            flag_style.fg_r = item_style.fg_r;
+            flag_style.fg_g = item_style.fg_g;
+            flag_style.fg_b = item_style.fg_b;
+        }
+        flag_style.style |= item_style.style;
+        editor_set_style(&flag_style, 1, 1);
+        printf("%s", item_style.flag);
+        editor_set_style(&style, 1, 1);
 
         int len = strlen(item_text);
         int display_width = w - 2 - 2;
