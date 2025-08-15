@@ -58,6 +58,10 @@ typedef struct {
     Style diagnostics_error;
     Style diagnostics_hint;
 
+    Style git_added;
+    Style git_modified;
+    Style git_deleted;
+
     Style picker_item_text;
     Style picker_item_text_highlight;
 

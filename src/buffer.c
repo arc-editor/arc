@@ -14,6 +14,7 @@
 #include "theme.h"
 #include "history.h"
 #include "utf8.h"
+#include "git.h"
 
 
 void buffer_set_line_num_width(Buffer *buffer) {
@@ -373,7 +374,7 @@ void buffer_parse(Buffer *b) {
 
 int buffer_get_visual_position_x(Buffer *buffer) {
     BufferLine *line = buffer->lines[buffer->position_y];
-    int x = buffer->line_num_width + 2 + 1; // 2 for diagnostics width
+    int x = buffer->line_num_width + 3 + 1; // gutter width
 
     char *p = line->text;
     int char_idx = 0;
@@ -490,6 +491,10 @@ void buffer_line_destroy(BufferLine *line) {
     }
 }
 
+void buffer_update_git_diff(Buffer *b) {
+    git_update_diff(b);
+}
+
 void buffer_init(Buffer *b, const char *file_name) {
     b->diagnostics_version = 0;
     b->history = history_create();
@@ -532,9 +537,12 @@ void buffer_init(Buffer *b, const char *file_name) {
     b->parser = NULL;
     b->tree = NULL;
     b->mtime = 0;
+    b->hunks = NULL;
+    b->hunk_count = 0;
     if (file_name == NULL) {
         return;
     }
+    buffer_update_git_diff(b);
 
     struct stat st;
     if (stat(file_name, &st) == 0) {
@@ -648,6 +656,9 @@ void buffer_destroy(Buffer *b) {
     }
     if (b->history) {
         history_destroy(b->history);
+    }
+    if (b->hunks) {
+        free(b->hunks);
     }
     free(b->read_buffer);
 }

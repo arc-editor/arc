@@ -521,6 +521,42 @@ void draw_buffer(Diagnostic *diagnostics, int diagnostics_count) {
             printf(" ");
         }
 
+        int deleted_lines = 0;
+        GitLineStatus git_status = git_get_line_status(buffer, row, &deleted_lines);
+
+        Style* git_style = NULL;
+        const char* git_char = " ";
+        switch (git_status) {
+            case GIT_LINE_ADDED:
+                git_style = &editor.current_theme.git_added;
+                git_char = "|";
+                break;
+            case GIT_LINE_MODIFIED:
+                git_style = &editor.current_theme.git_modified;
+                git_char = "|";
+                break;
+            default:
+                if (deleted_lines > 0) {
+                    git_style = &editor.current_theme.git_deleted;
+                    git_char = "‾";
+                }
+                break;
+        }
+
+        if (git_style) {
+            editor_set_style(git_style, 1, 0);
+            printf("%s", git_char);
+            if (buffer->offset_x) {
+                editor_set_style(&editor.current_theme.content_line_number_sticky, 1, 1);
+            } else if (row == buffer->position_y) {
+                editor_set_style(&editor.current_theme.content_line_number_active, 1, 1);
+            } else {
+                editor_set_style(&editor.current_theme.content_line_number, 1, 1);
+            }
+        } else {
+            printf(" ");
+        }
+
         printf("%.*s", line_num_len, line_num_str);
 
         int is_visual_mode = editor_handle_input == visual_handle_input;
@@ -722,6 +758,7 @@ void editor_did_change_buffer() {
         }
     }
     buffer_clear_search_state(buffer);
+    buffer_update_git_diff(buffer);
 }
 
 void *render_loop(void * arg __attribute__((unused))) {
@@ -1219,6 +1256,7 @@ void editor_write_force() {
     if (stat(buffer->file_name, &st) == 0) {
         buffer->mtime = st.st_mtime;
     }
+    buffer_update_git_diff(buffer);
 
     buffer->needs_draw = 1;
     pthread_mutex_unlock(&editor_mutex);

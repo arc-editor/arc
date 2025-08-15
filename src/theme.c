@@ -216,6 +216,9 @@ static void parse_theme_from_toml(toml_datum_t toptab, Theme *theme) {
     parse_style(toptab, "diagnostics.warning", &theme->diagnostics_warning);
     parse_style(toptab, "diagnostics.error", &theme->diagnostics_error);
     parse_style(toptab, "diagnostics.hint", &theme->diagnostics_hint);
+    parse_style(toptab, "git.added", &theme->git_added);
+    parse_style(toptab, "git.modified", &theme->git_modified);
+    parse_style(toptab, "git.deleted", &theme->git_deleted);
     parse_style(toptab, "picker.item-text", &theme->picker_item_text);
     parse_style(toptab, "picker.item-text-highlight", &theme->picker_item_text_highlight);
     parse_style(toptab, "content.background", &theme->content_background);

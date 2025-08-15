@@ -6,6 +6,8 @@
 #include "theme.h"
 #include "history.h"
 
+struct GitHunk;
+
 typedef enum {
     VISUAL_MODE_NONE,
     VISUAL_MODE_CHARACTER,
@@ -67,6 +69,9 @@ typedef struct {
             int x;
         } *matches;
     } search_state;
+
+    struct GitHunk* hunks;
+    int hunk_count;
 } Buffer;
 
 void buffer_line_apply_syntax_highlighting(Buffer *b, BufferLine *line, uint32_t start_byte, Theme *theme);
@@ -98,5 +103,6 @@ void buffer_clear_search_state(Buffer *b);
 void buffer_update_current_search_match(Buffer *b);
 int buffer_find_first_match(Buffer *b, const char *term, int start_y, int start_x, int *match_y, int *match_x);
 int buffer_find_last_match_before(Buffer *b, const char *term, int start_y, int start_x, int *match_y, int *match_x);
+void buffer_update_git_diff(Buffer *b);
 
 #endif
