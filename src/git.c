@@ -106,7 +106,7 @@ void git_update_diff(Buffer *buffer) {
     if (head_fd == -1) return;
 
     char command[1024];
-    snprintf(command, sizeof(command), "git show HEAD:./%s > %s", buffer->file_name, head_path);
+    snprintf(command, sizeof(command), "git show HEAD:./%s > %s 2>/dev/null", buffer->file_name, head_path);
     int ret = system(command);
     // if file is not in git, system will return non-zero
     if (ret != 0) {
