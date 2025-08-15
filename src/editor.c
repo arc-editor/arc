@@ -168,6 +168,7 @@ void check_for_config_reload() {
         config_destroy(&editor.config);
         config_init(&editor.config);
         config_load(&editor.config);
+        log_info("editor.check_for_config_reload: reloading config");
         config_load_theme(editor.config.theme, &editor.current_theme);
         buffer->needs_draw = 1;
     }
