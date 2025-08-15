@@ -181,7 +181,7 @@ static void workspace_on_open() {
 static void workspace_on_select(int selection_idx, int *close_picker) {
     char cwd[PATH_MAX];
     if (getcwd(cwd, sizeof(cwd)) == NULL) {
-        log_error("picker_diagnostics.workspace_on_open: unable to getcwd");
+        log_error("picker_diagnostics.workspace_on_select: unable to getcwd");
         return;
     }
     int original_index = filtered_indices[selection_idx];
