@@ -373,7 +373,7 @@ void buffer_parse(Buffer *b) {
 
 int buffer_get_visual_position_x(Buffer *buffer) {
     BufferLine *line = buffer->lines[buffer->position_y];
-    int x = buffer->line_num_width + 1;
+    int x = buffer->line_num_width + 2 + 1; // 2 for diagnostics width
 
     char *p = line->text;
     int char_idx = 0;
