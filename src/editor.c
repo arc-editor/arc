@@ -877,6 +877,7 @@ void editor_insert_new_line() {
     editor_add_insertion_to_history("\n");
     buffer->position_y++;
     buffer_reset_offset_y(buffer, editor.screen_rows);
+    buffer_reset_offset_x(buffer, editor.screen_cols);
     buffer->position_x = 0;
     editor_did_change_buffer();
     buffer_set_line_num_width(buffer);
