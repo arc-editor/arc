@@ -1875,6 +1875,27 @@ static void get_target_range(EditorCommand *cmd, Range *range) {
                 }
                 if (diagnostics) free(diagnostics);
             }
+            if (strcmp(cmd->specifier, "g") == 0) {
+                if (buffer->hunk_count > 0) {
+                    int next_hunk_y = -1;
+
+                    for (int i = 0; i < buffer->hunk_count; i++) {
+                        if (buffer->hunks[i].new_start - 1 > buffer->position_y) {
+                            next_hunk_y = buffer->hunks[i].new_start - 1;
+                            break;
+                        }
+                    }
+
+                    if (next_hunk_y == -1) {
+                        next_hunk_y = buffer->hunks[0].new_start - 1;
+                    }
+
+                    if (next_hunk_y != -1) {
+                        range->y_end = next_hunk_y;
+                        range->x_end = 0;
+                    }
+                }
+            }
             break;
         case 'p':
             if (cmd->action == 0) {
@@ -1947,6 +1968,27 @@ static void get_target_range(EditorCommand *cmd, Range *range) {
                         }
                     }
                     if (diagnostics) free(diagnostics);
+                }
+                if (strcmp(cmd->specifier, "g") == 0) {
+                    if (buffer->hunk_count > 0) {
+                        int prev_hunk_y = -1;
+
+                        for (int i = buffer->hunk_count - 1; i >= 0; i--) {
+                            if (buffer->hunks[i].new_start - 1 < buffer->position_y) {
+                                prev_hunk_y = buffer->hunks[i].new_start - 1;
+                                break;
+                            }
+                        }
+
+                        if (prev_hunk_y == -1) {
+                            prev_hunk_y = buffer->hunks[buffer->hunk_count - 1].new_start - 1;
+                        }
+
+                        if (prev_hunk_y != -1) {
+                            range->y_end = prev_hunk_y;
+                            range->x_end = 0;
+                        }
+                    }
                 }
             } else {
                 if (cmd->specifier[0] == '\0') {
