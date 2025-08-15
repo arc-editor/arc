@@ -204,10 +204,9 @@ static void diagnostic_cell_add(DiagnosticCell *cell) {
 
 static void draw_diagnostic_cell(DiagnosticCell *cell, Style *statusline_text) {
     if (!cell->count) return;
-    editor_set_style(&cell->style, 1, 0);    
+    editor_set_style(&cell->style, 1, 0);
     printf(" ● ");
-    editor_set_style(statusline_text, 1, 1);    
-    // log_info("draw diag cell, %d %d", cell->count, cell->len);
+    editor_set_style(statusline_text, 1, 1);
     printf("%d", cell->count);
 }
 
