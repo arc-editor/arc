@@ -4,6 +4,15 @@
 #include "config.h"
 #include <stdbool.h>
 #include <pthread.h>
+#include <time.h>
+
+typedef struct DebounceRequest {
+  char *file_path;
+  char *text;
+  int version;
+  struct timespec last_change_time;
+  struct DebounceRequest *next;
+} DebounceRequest;
 
 typedef enum {
   LSP_DIAGNOSTIC_SEVERITY_ERROR = 1,
@@ -37,6 +46,11 @@ typedef struct {
   int buffer_pos;
   int next_id;
   bool initialized;
+
+  struct DebounceRequest *debounce_requests_head;
+  pthread_mutex_t debounce_mutex;
+  pthread_t debouncer_thread;
+  bool debouncer_thread_running;
 } LspServer;
 
 void lsp_init(const Config *config, const char *file_name);

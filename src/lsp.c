@@ -19,6 +19,7 @@
 #include "str.h"
 
 #define MAX_LSP_SERVERS 10
+#define DEBOUNCE_MS 100
 
 char *find_project_root(const char *file_path) {
     char path[PATH_MAX];
@@ -325,6 +326,71 @@ static void *lsp_reader_thread_func(void *arg) {
   return NULL;
 }
 
+static void *debouncer_thread_func(void *arg) {
+    LspServer *server = (LspServer *)arg;
+    server->debouncer_thread_running = true;
+
+    while (server->debouncer_thread_running) {
+        struct timespec sleep_time = {0, 10 * 1000 * 1000}; // 10ms
+        nanosleep(&sleep_time, NULL);
+
+        pthread_mutex_lock(&server->debounce_mutex);
+
+        DebounceRequest *current = server->debounce_requests_head;
+        DebounceRequest *prev = NULL;
+
+        while (current) {
+            struct timespec now;
+            clock_gettime(CLOCK_MONOTONIC, &now);
+
+            long long elapsed_ms = (now.tv_sec - current->last_change_time.tv_sec) * 1000 +
+                                   (now.tv_nsec - current->last_change_time.tv_nsec) / 1000000;
+
+            if (elapsed_ms >= DEBOUNCE_MS) {
+                cJSON *root = cJSON_CreateObject();
+                cJSON_AddStringToObject(root, "jsonrpc", "2.0");
+                cJSON_AddStringToObject(root, "method", "textDocument/didChange");
+
+                cJSON *params = cJSON_CreateObject();
+                cJSON *text_document = cJSON_CreateObject();
+                char uri[2048];
+                snprintf(uri, sizeof(uri), "file://%s", current->file_path);
+                cJSON_AddStringToObject(text_document, "uri", uri);
+                cJSON_AddNumberToObject(text_document, "version", current->version);
+                cJSON_AddItemToObject(params, "textDocument", text_document);
+
+                cJSON *content_changes = cJSON_CreateArray();
+                cJSON *change = cJSON_CreateObject();
+                cJSON_AddStringToObject(change, "text", current->text);
+                cJSON_AddItemToArray(content_changes, change);
+                cJSON_AddItemToObject(params, "contentChanges", content_changes);
+
+                cJSON_AddItemToObject(root, "params", params);
+
+                lsp_send_message(server, root);
+                cJSON_Delete(root);
+
+                if (prev) {
+                    prev->next = current->next;
+                } else {
+                    server->debounce_requests_head = current->next;
+                }
+                DebounceRequest *to_free = current;
+                current = current->next;
+
+                free(to_free->file_path);
+                free(to_free->text);
+                free(to_free);
+            } else {
+                prev = current;
+                current = current->next;
+            }
+        }
+        pthread_mutex_unlock(&server->debounce_mutex);
+    }
+    return NULL;
+}
+
 void lsp_init(const Config *config, const char *file_name) {
   const char *lang_name = str_get_lang_name_from_file_name(file_name);
   if (!lang_name || get_server(lang_name) != NULL) {
@@ -382,6 +448,9 @@ void lsp_init(const Config *config, const char *file_name) {
   server->buffer_pos = 0;
   server->next_id = 1;
   server->initialized = false;
+  server->debounce_requests_head = NULL;
+  pthread_mutex_init(&server->debounce_mutex, NULL);
+  server->debouncer_thread_running = false;
 
   if (pipe(server->to_server_pipe) == -1 ||
       pipe(server->from_server_pipe) == -1) {
@@ -486,6 +555,9 @@ void lsp_init(const Config *config, const char *file_name) {
     if (pthread_create(&server->reader_thread, NULL, lsp_reader_thread_func, server) != 0) {
       log_error("lsp_init: failed to create reader thread");
     }
+    if (pthread_create(&server->debouncer_thread, NULL, debouncer_thread_func, server) != 0) {
+        log_error("lsp_init: failed to create debouncer thread");
+    }
   }
 }
 
@@ -517,42 +589,44 @@ void lsp_did_open(const char *file_path, const char *lang_name, const char *text
 }
 
 void lsp_did_change(const char *file_path, const char *text, int version) {
-  const char *lang_name = str_get_lang_name_from_file_name(file_path);
-  LspServer *server = get_server(lang_name);
-  if (!server)
-    return;
+    const char *lang_name = str_get_lang_name_from_file_name(file_path);
+    LspServer *server = get_server(lang_name);
+    if (!server)
+        return;
 
-  if (!lsp_wait_for_initialization(server)) {
-    return;
-  }
+    if (!lsp_wait_for_initialization(server)) {
+        return;
+    }
 
-  cJSON *root = cJSON_CreateObject();
-  cJSON_AddStringToObject(root, "jsonrpc", "2.0");
-  cJSON_AddStringToObject(root, "method", "textDocument/didChange");
+    pthread_mutex_lock(&server->debounce_mutex);
 
-  cJSON *params = cJSON_CreateObject();
-  cJSON *text_document = cJSON_CreateObject();
-  char uri[2048];
-  if (strncmp(file_path, "file://", 7) == 0) {
-    strncpy(uri, file_path, sizeof(uri) - 1);
-  } else {
-    snprintf(uri, sizeof(uri), "file://%s", file_path);
-  }
-  uri[sizeof(uri) - 1] = '\0';
-  cJSON_AddStringToObject(text_document, "uri", uri);
-  cJSON_AddNumberToObject(text_document, "version", version);
-  cJSON_AddItemToObject(params, "textDocument", text_document);
+    DebounceRequest *req = server->debounce_requests_head;
+    while (req) {
+        if (strcmp(req->file_path, file_path) == 0) {
+            free(req->text);
+            req->text = strdup(text);
+            req->version = version;
+            clock_gettime(CLOCK_MONOTONIC, &req->last_change_time);
+            pthread_mutex_unlock(&server->debounce_mutex);
+            return;
+        }
+        req = req->next;
+    }
 
-  cJSON *content_changes = cJSON_CreateArray();
-  cJSON *change = cJSON_CreateObject();
-  cJSON_AddStringToObject(change, "text", text);
-  cJSON_AddItemToArray(content_changes, change);
-  cJSON_AddItemToObject(params, "contentChanges", content_changes);
+    DebounceRequest *new_req = malloc(sizeof(DebounceRequest));
+    if (!new_req) {
+        log_error("lsp_did_change: malloc failed");
+        pthread_mutex_unlock(&server->debounce_mutex);
+        return;
+    }
+    new_req->file_path = strdup(file_path);
+    new_req->text = strdup(text);
+    new_req->version = version;
+    clock_gettime(CLOCK_MONOTONIC, &new_req->last_change_time);
+    new_req->next = server->debounce_requests_head;
+    server->debounce_requests_head = new_req;
 
-  cJSON_AddItemToObject(root, "params", params);
-
-  lsp_send_message(server, root);
-  cJSON_Delete(root);
+    pthread_mutex_unlock(&server->debounce_mutex);
 }
 
 static void lsp_shutdown(LspServer *server) {
@@ -572,6 +646,20 @@ static void lsp_shutdown(LspServer *server) {
 
     pthread_join(server->reader_thread, NULL);
 
+    if (server->debouncer_thread_running) {
+        server->debouncer_thread_running = false;
+        pthread_join(server->debouncer_thread, NULL);
+    }
+
+    DebounceRequest *req = server->debounce_requests_head;
+    while (req) {
+        DebounceRequest *next = req->next;
+        free(req->file_path);
+        free(req->text);
+        free(req);
+        req = next;
+    }
+
     kill(server->pid, SIGTERM);
     waitpid(server->pid, NULL, 0);
     close(server->to_server_pipe[1]);
@@ -585,6 +673,7 @@ static void lsp_shutdown(LspServer *server) {
     pthread_mutex_destroy(&server->diagnostics_mutex);
     pthread_mutex_destroy(&server->init_mutex);
     pthread_cond_destroy(&server->init_cond);
+    pthread_mutex_destroy(&server->debounce_mutex);
     free(server);
   }
 }
