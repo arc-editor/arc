@@ -1707,6 +1707,32 @@ static void get_target_range(EditorCommand *cmd, Range *range) {
                 range->y_end = y;
                 range->x_end = 0;
             }
+            if (strcmp(cmd->specifier, "d") == 0) {
+                Diagnostic *diagnostics = NULL;
+                int diagnostic_count = 0;
+                if (buffer->file_name) {
+                    lsp_get_diagnostics(buffer->file_name, &diagnostics, &diagnostic_count);
+                }
+                if (diagnostic_count > 0) {
+                    int next_diag_y = -1;
+                    int next_diag_x = -1;
+
+                    for (int i = 0; i < diagnostic_count; i++) {
+                        if (diagnostics[i].line > buffer->position_y || (diagnostics[i].line == buffer->position_y && diagnostics[i].col_start > buffer->position_x)) {
+                            if (next_diag_y == -1 || diagnostics[i].line < next_diag_y || (diagnostics[i].line == next_diag_y && diagnostics[i].col_start < next_diag_x)) {
+                                next_diag_y = diagnostics[i].line;
+                                next_diag_x = diagnostics[i].col_start;
+                            }
+                        }
+                    }
+
+                    if (next_diag_y != -1) {
+                        range->y_end = next_diag_y;
+                        range->x_end = next_diag_x;
+                    }
+                }
+                if (diagnostics) free(diagnostics);
+            }
             break;
         case 'p':
             if (cmd->action == 0) {
@@ -1732,6 +1758,32 @@ static void get_target_range(EditorCommand *cmd, Range *range) {
                     }
                     range->y_end = y;
                     range->x_end = 0;
+                }
+                if (strcmp(cmd->specifier, "d") == 0) {
+                    Diagnostic *diagnostics = NULL;
+                    int diagnostic_count = 0;
+                    if (buffer->file_name) {
+                        lsp_get_diagnostics(buffer->file_name, &diagnostics, &diagnostic_count);
+                    }
+                    if (diagnostic_count > 0) {
+                        int prev_diag_y = -1;
+                        int prev_diag_x = -1;
+
+                        for (int i = 0; i < diagnostic_count; i++) {
+                            if (diagnostics[i].line < buffer->position_y || (diagnostics[i].line == buffer->position_y && diagnostics[i].col_start < buffer->position_x)) {
+                                if (prev_diag_y == -1 || diagnostics[i].line > prev_diag_y || (diagnostics[i].line == prev_diag_y && diagnostics[i].col_start > prev_diag_x)) {
+                                    prev_diag_y = diagnostics[i].line;
+                                    prev_diag_x = diagnostics[i].col_start;
+                                }
+                            }
+                        }
+
+                        if (prev_diag_y != -1) {
+                            range->y_end = prev_diag_y;
+                            range->x_end = prev_diag_x;
+                        }
+                    }
+                    if (diagnostics) free(diagnostics);
                 }
             } else {
                 if (cmd->specifier[0] == '\0') {
