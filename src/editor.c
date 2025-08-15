@@ -1692,13 +1692,25 @@ static void get_target_range(EditorCommand *cmd, Range *range) {
         case 'n':
             if (strcmp(cmd->specifier, "p") == 0) {
                 int y = buffer->position_y;
+                int original_y = y;
                 int count = cmd->count ? cmd->count : 1;
                 for (int i = 0; i < count; i++) {
+                    int last_y = y;
                     // find next empty line
                     while (y < buffer->line_count - 1 && !is_line_empty(buffer->lines[y])) {
                         y++;
                     }
                     // find next non-empty line
+                    while (y < buffer->line_count - 1 && is_line_empty(buffer->lines[y])) {
+                        y++;
+                    }
+                    if (y == last_y) { // stuck at the end
+                        break;
+                    }
+                }
+
+                if (y == original_y) { // Didn't move at all, wrap around
+                    y = 0;
                     while (y < buffer->line_count - 1 && is_line_empty(buffer->lines[y])) {
                         y++;
                     }
@@ -1726,6 +1738,15 @@ static void get_target_range(EditorCommand *cmd, Range *range) {
                         }
                     }
 
+                    if (next_diag_y == -1) { // Wrap around
+                        for (int i = 0; i < diagnostic_count; i++) {
+                            if (next_diag_y == -1 || diagnostics[i].line < next_diag_y || (diagnostics[i].line == next_diag_y && diagnostics[i].col_start < next_diag_x)) {
+                                next_diag_y = diagnostics[i].line;
+                                next_diag_x = diagnostics[i].col_start;
+                            }
+                        }
+                    }
+
                     if (next_diag_y != -1) {
                         range->y_end = next_diag_y;
                         range->x_end = next_diag_x;
@@ -1738,6 +1759,7 @@ static void get_target_range(EditorCommand *cmd, Range *range) {
             if (cmd->action == 0) {
                 if (strcmp(cmd->specifier, "p") == 0) {
                     int y = buffer->position_y;
+                    int original_y = y;
                     int count = cmd->count ? cmd->count : 1;
                     for (int i = 0; i < count; i++) {
                         int start_of_current = y;
@@ -1756,6 +1778,17 @@ static void get_target_range(EditorCommand *cmd, Range *range) {
                             }
                         }
                     }
+
+                    if (y == original_y && y == 0) { // stuck at the beginning
+                        y = buffer->line_count - 1;
+                        while (y > 0 && is_line_empty(buffer->lines[y])) {
+                            y--;
+                        }
+                        while (y > 0 && !is_line_empty(buffer->lines[y-1])) {
+                            y--;
+                        }
+                    }
+
                     range->y_end = y;
                     range->x_end = 0;
                 }
@@ -1771,6 +1804,15 @@ static void get_target_range(EditorCommand *cmd, Range *range) {
 
                         for (int i = 0; i < diagnostic_count; i++) {
                             if (diagnostics[i].line < buffer->position_y || (diagnostics[i].line == buffer->position_y && diagnostics[i].col_start < buffer->position_x)) {
+                                if (prev_diag_y == -1 || diagnostics[i].line > prev_diag_y || (diagnostics[i].line == prev_diag_y && diagnostics[i].col_start > prev_diag_x)) {
+                                    prev_diag_y = diagnostics[i].line;
+                                    prev_diag_x = diagnostics[i].col_start;
+                                }
+                            }
+                        }
+
+                        if (prev_diag_y == -1) { // Wrap around
+                            for (int i = 0; i < diagnostic_count; i++) {
                                 if (prev_diag_y == -1 || diagnostics[i].line > prev_diag_y || (diagnostics[i].line == prev_diag_y && diagnostics[i].col_start > prev_diag_x)) {
                                     prev_diag_y = diagnostics[i].line;
                                     prev_diag_x = diagnostics[i].col_start;
