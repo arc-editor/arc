@@ -195,6 +195,7 @@ static void diagnostic_cell_init(DiagnosticCell *cell, Style *style) {
     cell->style.fg_r = style->fg_r;
     cell->style.fg_g = style->fg_g;
     cell->style.fg_b = style->fg_b;
+    cell->style.style = 0;
 }
 
 static void diagnostic_cell_add(DiagnosticCell *cell) {
@@ -501,6 +502,42 @@ void draw_buffer(Diagnostic *diagnostics, int diagnostics_count) {
         }
 
         printf(" ");
+        int deleted_lines = 0;
+        GitLineStatus git_status = git_get_line_status(buffer, row, &deleted_lines);
+
+        Style* git_style = NULL;
+        const char* git_char = " ";
+        switch (git_status) {
+            case GIT_LINE_ADDED:
+                git_style = &editor.current_theme.git_added;
+                git_char = "▌";
+                break;
+            case GIT_LINE_MODIFIED:
+                git_style = &editor.current_theme.git_modified;
+                git_char = "▌";
+                break;
+            default:
+                if (deleted_lines > 0) {
+                    git_style = &editor.current_theme.git_deleted;
+                    git_char = "▔";
+                }
+                break;
+        }
+
+        if (git_style) {
+            editor_set_style(git_style, 1, 0);
+            printf("%s", git_char);
+            if (buffer->offset_x) {
+                editor_set_style(&editor.current_theme.content_line_number_sticky, 1, 1);
+            } else if (row == buffer->position_y) {
+                editor_set_style(&editor.current_theme.content_line_number_active, 1, 1);
+            } else {
+                editor_set_style(&editor.current_theme.content_line_number, 1, 1);
+            }
+        } else {
+            printf(" ");
+        }
+
         if (highest_severity) {
             Style *diag_style;
             switch (highest_severity) {
@@ -522,42 +559,6 @@ void draw_buffer(Diagnostic *diagnostics, int diagnostics_count) {
             }
             editor_set_style(diag_style, 1, 0);
             printf("●");
-            if (buffer->offset_x) {
-                editor_set_style(&editor.current_theme.content_line_number_sticky, 1, 1);
-            } else if (row == buffer->position_y) {
-                editor_set_style(&editor.current_theme.content_line_number_active, 1, 1);
-            } else {
-                editor_set_style(&editor.current_theme.content_line_number, 1, 1);
-            }
-        } else {
-            printf(" ");
-        }
-
-        int deleted_lines = 0;
-        GitLineStatus git_status = git_get_line_status(buffer, row, &deleted_lines);
-
-        Style* git_style = NULL;
-        const char* git_char = " ";
-        switch (git_status) {
-            case GIT_LINE_ADDED:
-                git_style = &editor.current_theme.git_added;
-                git_char = "▐";
-                break;
-            case GIT_LINE_MODIFIED:
-                git_style = &editor.current_theme.git_modified;
-                git_char = "▐";
-                break;
-            default:
-                if (deleted_lines > 0) {
-                    git_style = &editor.current_theme.git_deleted;
-                    git_char = "▔";
-                }
-                break;
-        }
-
-        if (git_style) {
-            editor_set_style(git_style, 1, 0);
-            printf("%s", git_char);
             if (buffer->offset_x) {
                 editor_set_style(&editor.current_theme.content_line_number_sticky, 1, 1);
             } else if (row == buffer->position_y) {
