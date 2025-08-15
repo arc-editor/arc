@@ -66,14 +66,6 @@ void normal_exec_motion(char ch) {
 
         if (cmd.action == 'g') {
             switch(ch) {
-                case 'd':
-                    picker_file_diagnostics_show();
-                    editor_command_reset(&cmd);
-                    return;
-                case 'D':
-                    picker_workspace_diagnostics_show();
-                    editor_command_reset(&cmd);
-                    return;
                 case 'h':
                     editor_move_to_start_of_line();
                     editor_command_reset(&cmd);
@@ -229,6 +221,12 @@ int normal_handle_input(const char *ch_str) {
 
   if (is_space_mode) {
     switch (ch) {
+      case 'd':
+        picker_file_diagnostics_show();
+        break;
+      case 'D':
+        picker_workspace_diagnostics_show();
+        break;
       case 'f':
         picker_file_show();
         break;

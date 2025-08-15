@@ -1,16 +1,17 @@
 #define _POSIX_C_SOURCE 200809L
 
-#include "str.h"
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
+#include <unistd.h>
+#include <limits.h>
 #include "fuzzy.h"
 #include "picker.h"
 #include "picker_diagnostics.h"
 #include "editor.h"
 #include "lsp.h"
-#include "log.h"
 #include "buffer.h"
+#include "log.h"
+#include "str.h"
 
 // For both pickers
 static Diagnostic *diagnostics = NULL;
@@ -156,13 +157,15 @@ static void workspace_on_open() {
     formatted_diagnostics = malloc(sizeof(char*) * diagnostic_count);
     filtered_indices = malloc(sizeof(int) * diagnostic_count);
 
+    char cwd[PATH_MAX];
+    if (getcwd(cwd, sizeof(cwd)) == NULL) {
+        log_error("picker_diagnostics.workspace_on_open: unable to getcwd");
+        return;
+    }
     for (int i = 0; i < diagnostic_count; i++) {
-        char *path = "??";
+        const char *path = "??";
         if (diagnostics[i].uri) {
-            path = diagnostics[i].uri;
-            if (strncmp(path, "file://", 7) == 0) {
-                path += 7;
-            }
+            path = str_uri_to_relative_path(diagnostics[i].uri, cwd);
         }
 
         // Format: "path:line:col | message"
@@ -176,13 +179,15 @@ static void workspace_on_open() {
 
 
 static void workspace_on_select(int selection_idx, int *close_picker) {
+    char cwd[PATH_MAX];
+    if (getcwd(cwd, sizeof(cwd)) == NULL) {
+        log_error("picker_diagnostics.workspace_on_open: unable to getcwd");
+        return;
+    }
     int original_index = filtered_indices[selection_idx];
     Diagnostic *d = &diagnostics[original_index];
     if (d->uri) {
-        char *path = d->uri;
-        if (strncmp(path, "file://", 7) == 0) {
-            path += 7;
-        }
+        const char *path = str_uri_to_relative_path(d->uri, cwd);
         editor_open_and_jump_to_line(path, d->line + 1, d->col_start + 1);
     }
     *close_picker = 1;
