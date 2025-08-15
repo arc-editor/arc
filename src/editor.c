@@ -367,13 +367,12 @@ void draw_statusline(Diagnostic *file_diagnostics, int file_diagnostic_count, Di
 }
 
 static int is_in_selection(int y, int x) {
-    Buffer *buf = buffer;
-    int start_y = buf->selection_start_y;
-    int start_x = buf->selection_start_x;
-    int end_y = buf->position_y;
-    int end_x = buf->position_x;
+    int start_y = buffer->selection_start_y;
+    int start_x = buffer->selection_start_x;
+    int end_y = buffer->position_y;
+    int end_x = buffer->position_x;
 
-    if (buf->visual_mode == VISUAL_MODE_LINE) {
+    if (buffer->visual_mode == VISUAL_MODE_LINE) {
         if (start_y > end_y) {
             int tmp = start_y;
             start_y = end_y;
@@ -413,11 +412,6 @@ void draw_buffer(Diagnostic *diagnostics, int diagnostics_count) {
 
     char utf8_buf[8];
     char line_num_str[16];
-    // int max_char_count = 0;
-    // for (int row = buffer->offset_y; row < buffer->offset_y + editor.screen_rows - 1 && row < buffer->line_count; row++) {
-    //     BufferLine *line = buffer->lines[row];
-    //     if (line->char_count > max_char_count) max_char_count = line->char_count;
-    // }
 
     for (int row = buffer->offset_y; row < buffer->offset_y + editor.screen_rows - 1; row++) {
         int relative_y = row - buffer->offset_y;
@@ -450,7 +444,7 @@ void draw_buffer(Diagnostic *diagnostics, int diagnostics_count) {
         Style *char_styles = NULL;
         if (line->char_count) {
             char_styles = malloc(sizeof(Style) * line->char_count);
-            // TODO: null check
+            if (char_styles == NULL) continue;
         }
         if (line->char_count > 0) {
             int run_idx = 0;
@@ -607,7 +601,7 @@ void draw_buffer(Diagnostic *diagnostics, int diagnostics_count) {
                     }
                 }
             } else {
-                editor_set_style(&final_style, 1, 0);
+                editor_set_style(&final_style, 1, 1);
                 printf("%s", utf8_buf);
             }
 
