@@ -597,8 +597,7 @@ void lsp_shutdown_all(void) {
   lsp_server_count = 0;
 }
 
-#ifndef TEST_BUILD
-int lsp_get_diagnostics(const char *file_path, Diagnostic **out_diagnostics, int *out_diagnostic_count) {
+int __attribute__((weak)) lsp_get_diagnostics(const char *file_path, Diagnostic **out_diagnostics, int *out_diagnostic_count) {
   char *project_root = find_project_root(file_path);
   if (!project_root) {
     *out_diagnostic_count = 0;
@@ -638,7 +637,6 @@ int lsp_get_diagnostics(const char *file_path, Diagnostic **out_diagnostics, int
   pthread_mutex_unlock(&server->diagnostics_mutex);
   return version;
 }
-#endif
 
 int lsp_get_all_diagnostics(Diagnostic **out_diagnostics) {
   int total_diagnostics = 0;

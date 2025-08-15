@@ -131,4 +131,19 @@ void run_normal_tests(void) {
     teardown_diagnostics();
 
     test_motion_helper("test_nd_no_diagnostics", "line1\nline2\nline3", 0, 0, "nd", 0, 0);
+
+    printf("--- Diagnostic navigation wrap around tests ---\n");
+    Diagnostic diags5[] = {{.line = 0, .col_start = 1, .message = "error"}};
+    setup_diagnostics(diags5, 1);
+    test_motion_helper("test_nd_wrap_around", "line1\nline2\nline3", 1, 0, "nd", 0, 1);
+    teardown_diagnostics();
+
+    Diagnostic diags6[] = {{.line = 2, .col_start = 3, .message = "error"}};
+    setup_diagnostics(diags6, 1);
+    test_motion_helper("test_pd_wrap_around", "line1\nline2\nline3", 1, 0, "pd", 2, 3);
+    teardown_diagnostics();
+
+    printf("--- Paragraph navigation wrap around tests ---\n");
+    test_motion_helper("test_np_wrap_around", "p1\n\np2", 2, 0, "np", 0, 0);
+    test_motion_helper("test_pp_wrap_around", "p1\n\np2", 0, 0, "pp", 2, 0);
 }
