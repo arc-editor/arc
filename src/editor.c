@@ -2381,6 +2381,7 @@ void range_delete(Buffer *b, Range *range, EditorCommand *cmd) {
     free(top_line->text);
     top_line->text = new_text;
     top_line->text_len = new_top_len;
+    top_line->capacity = new_top_len + 1;
     top_line->char_count = left + (bottom_line->char_count - right);
 
     if (b->parser) {

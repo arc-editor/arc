@@ -1,7 +1,7 @@
-CC = clang
+CC = gcc
 LD = $(CC)
-CFLAGS = -O3 -march=native -Wall -Wextra -std=c23 -Iexternal/tree-sitter/lib/include -Iexternal/tomlc17/src -Iexternal/cjson -Isrc
-LDFLAGS = -lm
+CFLAGS = -O3 -march=native -Wall -Wextra -std=c2x -Iexternal/tree-sitter/lib/include -Iexternal/tomlc17/src -Iexternal/cjson -Isrc
+LDFLAGS = -lm -fsanitize=address
 SRC_DIR = src
 SRCS = $(wildcard $(SRC_DIR)/*.c)
 BUILD_DIR = build
@@ -23,7 +23,7 @@ DEPS_SRCS = $(TOMLC17_SRC) $(CJSON_SRC)
 DEPS_OBJS = $(addprefix $(BUILD_DIR)/, $(patsubst %.c,%.o,$(notdir $(DEPS_SRCS))))
 
 # Test paths
-TEST_CFLAGS = -O0 -g -Wall -Wextra -std=c23 -Iexternal/tree-sitter/lib/include -Iexternal/tomlc17/src -Iexternal/cjson -Isrc -DTEST_BUILD
+TEST_CFLAGS = -O0 -g -Wall -Wextra -std=c2x -Iexternal/tree-sitter/lib/include -Iexternal/tomlc17/src -Iexternal/cjson -Isrc -DTEST_BUILD -fsanitize=address
 TEST_SRC_DIR = test
 TEST_SRCS = $(wildcard $(TEST_SRC_DIR)/*.c)
 TEST_BUILD_DIR = build/test
