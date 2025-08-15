@@ -702,6 +702,7 @@ void editor_draw() {
     }
     if (buffer->needs_parse) {
         buffer_parse(buffer);
+        buffer_update_git_diff(buffer);
     }
     Diagnostic *diagnostics = NULL;
     int diagnostic_count = 0;
@@ -771,7 +772,6 @@ void editor_did_change_buffer() {
         }
     }
     buffer_clear_search_state(buffer);
-    buffer_update_git_diff(buffer);
 }
 
 void *render_loop(void * arg __attribute__((unused))) {
