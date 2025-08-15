@@ -1,4 +1,40 @@
 #include "test.h"
+#include "../src/lsp.h"
+#include <stdlib.h>
+#include <string.h>
+
+static Diagnostic* mock_diagnostics = NULL;
+static int mock_diagnostic_count = 0;
+
+int lsp_get_diagnostics(const char *file_path, Diagnostic **diagnostics, int *diagnostic_count) {
+    (void)file_path;
+    if (mock_diagnostic_count == 0) {
+        *diagnostics = NULL;
+        *diagnostic_count = 0;
+        return 0;
+    }
+
+    *diagnostics = malloc(sizeof(Diagnostic) * mock_diagnostic_count);
+    for (int i = 0; i < mock_diagnostic_count; i++) {
+        (*diagnostics)[i] = mock_diagnostics[i];
+        // The calling code frees the message, so we need to give it a heap-allocated string.
+        if (mock_diagnostics[i].message) {
+            (*diagnostics)[i].message = strdup(mock_diagnostics[i].message);
+        }
+    }
+    *diagnostic_count = mock_diagnostic_count;
+    return 1;
+}
+
+void setup_diagnostics(Diagnostic* diags, int count) {
+    mock_diagnostics = diags;
+    mock_diagnostic_count = count;
+}
+
+void teardown_diagnostics() {
+    mock_diagnostics = NULL;
+    mock_diagnostic_count = 0;
+}
 
 void run_normal_tests(void) {
     printf("--- Normal mode tests ---\n");
@@ -71,4 +107,28 @@ void run_normal_tests(void) {
     // J
     test_helper("test_J_join_lines", "hello\nworld", 0, 2, "J", "hello world");
     test_helper("test_J_on_last_line", "hello", 0, 2, "J", "hello");
+
+    // Diagnostic navigation
+    printf("--- Diagnostic navigation tests ---\n");
+    Diagnostic diags1[] = {{.line = 2, .col_start = 3, .message = "error"}};
+    setup_diagnostics(diags1, 1);
+    test_motion_helper("test_nd_simple_move", "line1\nline2\nline3\nline4\nline5", 0, 0, "nd", 2, 3);
+    teardown_diagnostics();
+
+    Diagnostic diags2[] = {{.line = 1, .col_start = 2, .message = "error"}};
+    setup_diagnostics(diags2, 1);
+    test_motion_helper("test_pd_simple_move", "line1\nline2\nline3\nline4\nline5", 3, 0, "pd", 1, 2);
+    teardown_diagnostics();
+
+    Diagnostic diags3[] = {{.line = 3, .col_start = 1, .message = "error"}, {.line = 1, .col_start = 2, .message = "warning"}};
+    setup_diagnostics(diags3, 2);
+    test_motion_helper("test_nd_finds_closest", "line1\nline2\nline3\nline4\nline5", 1, 0, "nd", 1, 2);
+    teardown_diagnostics();
+
+    Diagnostic diags4[] = {{.line = 0, .col_start = 1, .message = "error"}, {.line = 2, .col_start = 2, .message = "warning"}};
+    setup_diagnostics(diags4, 2);
+    test_motion_helper("test_pd_finds_closest", "line1\nline2\nline3\nline4\nline5", 2, 5, "pd", 2, 2);
+    teardown_diagnostics();
+
+    test_motion_helper("test_nd_no_diagnostics", "line1\nline2\nline3", 0, 0, "nd", 0, 0);
 }
