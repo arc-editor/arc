@@ -14,6 +14,7 @@ typedef struct {
     int screen_cols;
     atomic_int resize_requested;
     atomic_int redraw_requested;
+    atomic_int config_reloaded_requested;
     Buffer **buffers;
     int buffer_count;
     int buffer_capacity;

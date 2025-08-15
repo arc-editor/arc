@@ -33,5 +33,6 @@ void config_init(Config *config);
 void config_load(Config *config);
 void config_destroy(Config *config);
 int config_mkdir_p(const char *path);
+char *config_get_path(void);
 
 #endif

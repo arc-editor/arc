@@ -15,8 +15,10 @@
 #include <pthread.h>
 #include <dlfcn.h>
 #include <limits.h>
+#include <libgen.h>
 #include <stdarg.h>
 #include <sys/stat.h>
+#include <sys/inotify.h>
 #include "log.h"
 #include "picker.h"
 #include "picker_file.h"
@@ -157,6 +159,16 @@ void check_for_resize() {
 
 void check_for_redraw_request() {
     if (atomic_exchange(&editor.redraw_requested, 0)) {
+        buffer->needs_draw = 1;
+    }
+}
+
+void check_for_config_reload() {
+    if (atomic_exchange(&editor.config_reloaded_requested, 0)) {
+        config_destroy(&editor.config);
+        config_init(&editor.config);
+        config_load(&editor.config);
+        config_load_theme(editor.config.theme, &editor.current_theme);
         buffer->needs_draw = 1;
     }
 }
@@ -733,6 +745,7 @@ void *render_loop(void * arg __attribute__((unused))) {
         pthread_mutex_lock(&editor_mutex);
         check_for_resize();
         check_for_redraw_request();
+        check_for_config_reload();
         editor_draw();
         pthread_mutex_unlock(&editor_mutex);
     }
@@ -903,11 +916,66 @@ static void editor_setup_lsp(const char *file_name) {
     }
 }
 
+void *watch_config_file(void *arg __attribute__((unused))) {
+    char *path = config_get_path();
+    if (!path) {
+        log_error("watch_config_file: config_get_path failed");
+        return NULL;
+    }
+
+    char *dir_path = dirname(path);
+    if (!dir_path) {
+        log_error("watch_config_file: dirname failed");
+        free(path);
+        return NULL;
+    }
+
+    int fd = inotify_init();
+    if (fd < 0) {
+        log_error("watch_config_file: inotify_init failed");
+        free(path);
+        return NULL;
+    }
+
+    int wd = inotify_add_watch(fd, dir_path, IN_MODIFY | IN_CREATE | IN_MOVED_TO | IN_CLOSE_WRITE);
+    if (wd < 0) {
+        log_error("watch_config_file: inotify_add_watch failed for %s", dir_path);
+        free(path);
+        close(fd);
+        return NULL;
+    }
+
+    char read_buffer[4096];
+    while (1) {
+        ssize_t len = read(fd, read_buffer, sizeof(read_buffer));
+        if (len < 0) {
+            log_error("watch_config_file: read failed");
+            break;
+        }
+
+        for (char *p = read_buffer; p < read_buffer + len; ) {
+            struct inotify_event *event = (struct inotify_event *)p;
+            if (event->len) {
+                if (strcmp(event->name, "config.toml") == 0) {
+                    atomic_store(&editor.config_reloaded_requested, 1);
+                }
+            }
+            p += sizeof(struct inotify_event) + event->len;
+        }
+    }
+
+    inotify_rm_watch(fd, wd);
+    close(fd);
+    free(path);
+    return NULL;
+}
+
 void editor_init(char *file_name, bool benchmark_mode) {
     if (!benchmark_mode) {
         init_terminal_size();
         setup_terminal();
     }
+    atomic_store(&editor.config_reloaded_requested, 0);
     editor.buffer_capacity = 1;
     editor.buffers = malloc(sizeof(Buffer*) * editor.buffer_capacity);
     if (!editor.buffers) {
@@ -1051,9 +1119,14 @@ void editor_start(char *file_name, int benchmark_mode) {
         return;
     }
     pthread_t render_thread_id;
+    pthread_t config_watch_thread_id;
     editor_mutex = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
     if (pthread_create(&render_thread_id, NULL, render_loop, NULL) != 0) {
         log_error("editor.editor_start: unable to create render thread");
+        exit(1);
+    }
+    if (pthread_create(&config_watch_thread_id, NULL, watch_config_file, NULL) != 0) {
+        log_error("editor.editor_start: unable to create config watch thread");
         exit(1);
     }
     char utf8_buf[8];
