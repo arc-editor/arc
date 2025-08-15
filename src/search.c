@@ -62,8 +62,10 @@ static void search_update_and_jump() {
     editor_needs_draw();
 }
 
-int search_handle_input(const char *ch_str) {
-    if (ch_str[0] == 27 && ch_str[1] == '\0') { // Escape key
+#include "utf8.h"
+
+int search_handle_input(const char *buf, int len) {
+    if (len == 1 && buf[0] == 27) { // Escape key
         Buffer *buffer = editor_get_active_buffer();
         buffer->position_y = editor.search_start_y;
         buffer->position_x = editor.search_start_x;
@@ -73,7 +75,7 @@ int search_handle_input(const char *ch_str) {
         return 1;
     }
 
-    if (strcmp(ch_str, "\x0d") == 0) { // Enter key
+    if (len == 1 && buf[0] == '\r') { // Enter key
         if (editor.search_term_len > 0) {
             strcpy(editor.last_search_term, editor.search_term);
             editor.last_search_direction = editor.search_direction;
@@ -83,8 +85,9 @@ int search_handle_input(const char *ch_str) {
         return 1;
     }
 
-    if (strcmp(ch_str, "\x7f") == 0) { // Backspace
+    if (len == 1 && buf[0] == 127) { // Backspace
         if (editor.search_term_len > 0) {
+            // This is tricky with UTF-8. For now, just remove the last byte.
             editor.search_term_len--;
             editor.search_term[editor.search_term_len] = '\0';
             if (editor.search_term_len == 0) {
@@ -101,9 +104,9 @@ int search_handle_input(const char *ch_str) {
     }
 
     // Handle regular character input
-    if (strlen(ch_str) == 1 && editor.search_term_len < SEARCH_TERM_MAX_LEN - 1) {
-        editor.search_term[editor.search_term_len++] = ch_str[0];
-        editor.search_term[editor.search_term_len] = '\0';
+    if (editor.search_term_len + len < SEARCH_TERM_MAX_LEN) {
+        strncat(editor.search_term, buf, len);
+        editor.search_term_len += len;
         search_update_and_jump();
     }
 

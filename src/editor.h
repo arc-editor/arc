@@ -47,7 +47,7 @@ typedef struct {
 } EditorCommand;
 
 extern Editor editor;
-extern int (*editor_handle_input)(const char *);
+extern int (*editor_handle_input)(const char *, int);
 
 void editor_command_reset(EditorCommand *cmd);
 void editor_command_exec(EditorCommand *cmd);
@@ -75,6 +75,7 @@ void editor_move_cursor_up();
 void editor_move_to_start_of_line(void);
 void editor_move_to_end_of_line(void);
 void editor_insert_char(const char *ch);
+void editor_insert_string(const char *text);
 void editor_insert_new_line();
 void editor_write();
 void editor_write_force();

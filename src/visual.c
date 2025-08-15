@@ -10,8 +10,16 @@ void visual_mode_enter() {
     editor_command_reset(&cmd);
 }
 
-int visual_handle_input(const char *ch_str) {
+#include "utf8.h"
+
+int visual_handle_input(const char *buf, int len) {
     if (is_waiting_for_specifier) {
+        char ch_str[8];
+        int char_len = utf8_char_len(buf);
+        if (char_len > len) return 1; // Incomplete char
+        strncpy(ch_str, buf, char_len);
+        ch_str[char_len] = '\0';
+
         strncpy(cmd.specifier, ch_str, sizeof(cmd.specifier) - 1);
         cmd.specifier[sizeof(cmd.specifier) - 1] = '\0';
         dispatch_command();
@@ -20,11 +28,11 @@ int visual_handle_input(const char *ch_str) {
         return 1;
     }
 
-    if (ch_str[1] != '\0') {
+    if (len > 1) {
         // Not a single byte character, ignore for now.
         return 1;
     }
-    char ch = ch_str[0];
+    char ch = buf[0];
 
     if (ch >= '0' && ch <= '9') {
         if (cmd.count) {

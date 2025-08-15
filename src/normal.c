@@ -177,14 +177,20 @@ void normal_exec_motion(char ch) {
     }
 }
 
-int normal_handle_input(const char *ch_str) {
-  if (ch_str[0] == 27 && ch_str[1] == '\0') {
+int normal_handle_input(const char *buf, int len) {
+  if (len == 1 && buf[0] == 27) { // ESC
       editor_command_reset(&cmd);
       is_waiting_for_text_object_specifier = 0;
       return 1;
   }
 
   if (is_waiting_for_specifier) {
+    char ch_str[8];
+    int char_len = utf8_char_len(buf);
+    if (char_len > len) return 1; // Incomplete char
+    strncpy(ch_str, buf, char_len);
+    ch_str[char_len] = '\0';
+
     strncpy(cmd.specifier, ch_str, sizeof(cmd.specifier) - 1);
     cmd.specifier[sizeof(cmd.specifier) - 1] = '\0';
     dispatch_command();
@@ -192,11 +198,11 @@ int normal_handle_input(const char *ch_str) {
     return 1;
   }
 
-  if (ch_str[1] != '\0') {
+  if (len > 1) {
       // Not a single byte character, ignore for now for other commands
       return 1;
   }
-  char ch = ch_str[0];
+  char ch = buf[0];
 
   if (is_waiting_for_text_object_specifier) {
     if (ch == 'i' || ch == 'a') {

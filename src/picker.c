@@ -49,10 +49,10 @@ void picker_close() {
     editor_request_redraw();
 }
 
-int picker_handle_input(const char *ch_str) {
+int picker_handle_input(const char *buf, int len) {
     if (!delegate) return 0;
 
-    if (strcmp(ch_str, "\r") == 0 || strcmp(ch_str, "\n") == 0) { // Enter key
+    if (len == 1 && (buf[0] == '\r' || buf[0] == '\n')) { // Enter key
         if (delegate->get_results_count() > 0) {
             int close_picker = 1;
             delegate->on_select(selection, &close_picker);
@@ -63,7 +63,7 @@ int picker_handle_input(const char *ch_str) {
         return 1;
     }
 
-    if (ch_str[0] == 27 && ch_str[1] == '\0') { // Escape key
+    if (len == 1 && buf[0] == 27) { // Escape key
         picker_close();
         return 1;
     }
@@ -72,7 +72,7 @@ int picker_handle_input(const char *ch_str) {
     int picker_h = editor.screen_rows - margin_y * 2 - 1;
     int list_h = picker_h - 4;
 
-    if (ch_str[0] == 14 && ch_str[1] == '\0') { // Down arrow
+    if (len == 1 && buf[0] == 14) { // Down arrow
         if (selection < delegate->get_results_count() - 1) {
             if (selection == scroll_offset + list_h - 1) {
                 scroll_offset += list_h;
@@ -84,7 +84,7 @@ int picker_handle_input(const char *ch_str) {
             editor_request_redraw();
         }
         return 1;
-    } else if (ch_str[0] == 16 && ch_str[1] == '\0') { // Up arrow
+    } else if (len == 1 && buf[0] == 16) { // Up arrow
         if (selection > 0) {
             if (selection == scroll_offset) {
                 scroll_offset -= list_h;
@@ -100,16 +100,16 @@ int picker_handle_input(const char *ch_str) {
     
     selection = 0;
     scroll_offset = 0;
-    if ((ch_str[0] == 8 || ch_str[0] == 127) && ch_str[1] == '\0') { // Backspace
+    if (len == 1 && (buf[0] == 8 || buf[0] == 127)) { // Backspace
         if (search_len > 0) {
             // This is not UTF-8 aware, but it's a start
             search_len--;
             search[search_len] = '\0';
         }
     } else {
-        if (search_len + strlen(ch_str) < sizeof(search) - 1) {
-            strcat(search, ch_str);
-            search_len += strlen(ch_str);
+        if (search_len + (size_t)len < sizeof(search) - 1) {
+            strncat(search, buf, len);
+            search_len += len;
         }
     }
 

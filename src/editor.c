@@ -39,11 +39,13 @@
 #include "utf8.h"
 #include "str.h"
 
+static void _editor_insert_string_unlocked(const char *text);
+static void editor_did_change_buffer(void);
 static pthread_mutex_t editor_mutex = PTHREAD_MUTEX_INITIALIZER;
 Editor editor;
 static int is_undo_redo_active = 0;
 
-int (*editor_handle_input)(const char *);
+int (*editor_handle_input)(const char *, int);
 
 #define buffer (editor.buffers[editor.active_buffer_idx])
 
@@ -749,6 +751,136 @@ void editor_needs_draw() {
     pthread_mutex_unlock(&editor_mutex);
 }
 
+static void _editor_insert_string_unlocked(const char *text) {
+    if (!text || *text == '\0') {
+        return;
+    }
+
+    history_add_change(buffer->history, CHANGE_TYPE_INSERT, buffer->position_y, buffer->position_x, text);
+
+    int y = buffer->position_y;
+    int x = buffer->position_x;
+    BufferLine *current_line = buffer->lines[y];
+    int byte_pos_x = buffer_get_byte_position_x(buffer);
+
+    char *tail = strdup(current_line->text + byte_pos_x);
+    int tail_char_count = current_line->char_count - x;
+
+    current_line->text[byte_pos_x] = '\0';
+    current_line->text_len = byte_pos_x;
+    current_line->char_count = x;
+
+    int new_lines = 0;
+    const char *temp_p = text;
+    while ((temp_p = strchr(temp_p, '\n')) != NULL) {
+        new_lines++;
+        temp_p++;
+    }
+
+    if (new_lines > 0) {
+        if (buffer->line_count + new_lines > buffer->capacity) {
+            int new_capacity = buffer->capacity;
+            while (new_capacity < buffer->line_count + new_lines) {
+                new_capacity *= 2;
+            }
+            BufferLine **new_lines_ptr = realloc(buffer->lines, new_capacity * sizeof(BufferLine *));
+            if (new_lines_ptr == NULL) {
+                log_error("editor_insert_string: realloc failed");
+                exit(1);
+            }
+            buffer->lines = new_lines_ptr;
+            buffer->capacity = new_capacity;
+        }
+
+        if (y < buffer->line_count - 1) {
+            memmove(&buffer->lines[y + 1 + new_lines],
+                    &buffer->lines[y + 1],
+                    (buffer->line_count - y - 1) * sizeof(BufferLine *));
+        }
+        buffer->line_count += new_lines;
+    }
+
+    const char *line_content_start = text;
+    for (int i = 0; i <= new_lines; i++) {
+        const char *next_newline = strchr(line_content_start, '\n');
+        size_t line_len = next_newline ? (size_t)(next_newline - line_content_start) : strlen(line_content_start);
+
+        if (i == 0) {
+            buffer_line_realloc_for_capacity(current_line, current_line->text_len + line_len + 1);
+            memcpy(current_line->text + current_line->text_len, line_content_start, line_len);
+            current_line->text_len += line_len;
+            current_line->text[current_line->text_len] = '\0';
+            current_line->char_count += utf8_strlen_len(line_content_start, line_len);
+        } else {
+            BufferLine *new_line = malloc(sizeof(BufferLine));
+            buffer_line_init(new_line);
+            buffer_line_realloc_for_capacity(new_line, line_len + 1);
+            memcpy(new_line->text, line_content_start, line_len);
+            new_line->text[line_len] = '\0';
+            new_line->text_len = line_len;
+            new_line->char_count = utf8_strlen_len(line_content_start, line_len);
+            buffer->lines[y + i] = new_line;
+        }
+
+        if (next_newline) {
+            line_content_start = next_newline + 1;
+        } else {
+            break;
+        }
+    }
+
+    BufferLine *last_pasted_line = buffer->lines[y + new_lines];
+    size_t tail_len = strlen(tail);
+    buffer_line_realloc_for_capacity(last_pasted_line, last_pasted_line->text_len + tail_len + 1);
+    memcpy(last_pasted_line->text + last_pasted_line->text_len, tail, tail_len);
+    last_pasted_line->text_len += tail_len;
+    last_pasted_line->text[last_pasted_line->text_len] = '\0';
+    last_pasted_line->char_count += tail_char_count;
+
+    free(tail);
+
+    buffer->position_y = y + new_lines;
+    buffer->position_x = last_pasted_line->char_count - tail_char_count;
+
+    if (buffer->parser && buffer->tree) {
+        uint32_t start_byte_offset = 0;
+        for (int i = 0; i < y; i++) {
+            start_byte_offset += buffer->lines[i]->text_len + 1;
+        }
+        uint32_t start_byte = start_byte_offset + byte_pos_x;
+        uint32_t new_end_byte = start_byte + strlen(text);
+        int end_y_point = buffer->position_y;
+        int end_x_point_bytes = buffer_get_byte_position_x(buffer);
+
+        ts_tree_edit(buffer->tree, &(TSInputEdit){
+            .start_byte = start_byte,
+            .old_end_byte = start_byte,
+            .new_end_byte = new_end_byte,
+            .start_point = {(uint32_t)y, (uint32_t)byte_pos_x},
+            .old_end_point = {(uint32_t)y, (uint32_t)byte_pos_x},
+            .new_end_point = {(uint32_t)end_y_point, (uint32_t)end_x_point_bytes}
+        });
+
+        for (int i = y; i <= buffer->position_y; i++) {
+            buffer->lines[i]->needs_highlight = 1;
+        }
+    }
+
+    editor_did_change_buffer();
+    buffer_reset_offset_y(buffer, editor.screen_rows);
+    buffer_reset_offset_x(buffer, editor.screen_cols);
+    buffer_set_line_num_width(buffer);
+    if (buffer->parser) {
+        buffer->needs_parse = 1;
+    }
+}
+
+void editor_insert_string(const char *text) {
+    pthread_mutex_lock(&editor_mutex);
+    _editor_insert_string_unlocked(text);
+    pthread_mutex_unlock(&editor_mutex);
+}
+
 void editor_did_change_buffer() {
     buffer->dirty = 1;
     buffer->needs_draw = 1;
@@ -1182,9 +1314,10 @@ void editor_start(char *file_name, int benchmark_mode) {
         log_error("editor.editor_start: unable to create config watch thread");
         exit(1);
     }
-    char utf8_buf[8];
-    while (read_utf8_char_from_stdin(utf8_buf, sizeof(utf8_buf)) > 0) {
-        if (!editor_handle_input(utf8_buf)) {
+    char read_buf[256];
+    ssize_t nread;
+    while ((nread = read(STDIN_FILENO, read_buf, sizeof(read_buf))) > 0) {
+        if (!editor_handle_input(read_buf, nread)) {
             break;
         }
     }
@@ -2685,22 +2818,11 @@ static int utf8_char_len_from_string(const char *s) {
 }
 
 static void editor_insert_string_at(const char *text, int y, int x) {
+    pthread_mutex_lock(&editor_mutex);
     buffer->position_y = y;
     buffer->position_x = x;
-    const char *p = text;
-    while (*p) {
-        if (*p == '\n') {
-            editor_insert_new_line();
-            p++;
-        } else {
-            char utf8_buf[8];
-            size_t len = utf8_char_len_from_string(p);
-            strncpy(utf8_buf, p, len);
-            utf8_buf[len] = '\0';
-            editor_insert_char(utf8_buf);
-            p += len;
-        }
-    }
+    _editor_insert_string_unlocked(text);
+    pthread_mutex_unlock(&editor_mutex);
 }
 
 static void calculate_end_point(const char *text, int start_y, int start_x, int *end_y, int *end_x) {

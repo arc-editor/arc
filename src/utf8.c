@@ -133,3 +133,25 @@ size_t utf8_strlen(const char *s) {
     }
     return char_count;
 }
+
+size_t utf8_strlen_len(const char *s, size_t n) {
+    if (!s) return 0;
+    size_t char_count = 0;
+    const unsigned char *p = (const unsigned char*)s;
+    const unsigned char *end = p + n;
+    while (p < end) {
+        char_count++;
+        if (*p < 0x80) {
+            p += 1;
+        } else if ((*p & 0xE0) == 0xC0) {
+            p += 2;
+        } else if ((*p & 0xF0) == 0xE0) {
+            p += 3;
+        } else if ((*p & 0xF8) == 0xF0) {
+            p += 4;
+        } else {
+            p += 1;
+        }
+    }
+    return char_count;
+}
