@@ -38,6 +38,35 @@ void test_helper(const char* test_name, const char* initial_content, int start_y
     remove(filename);
 }
 
+void paste_test_helper(const char* test_name, const char* initial_content, int start_y, int start_x, const char* commands, const char* paste_string, const char* expected_content) {
+    printf("  - %s\n", test_name);
+
+    const char* filename = "test.txt";
+    FILE *fp = fopen(filename, "w");
+    fprintf(fp, "%s", initial_content);
+    fclose(fp);
+
+    editor_open((char*)filename);
+
+    Buffer *buffer = editor_get_active_buffer();
+    buffer->position_y = start_y;
+    buffer->position_x = start_x;
+
+    for (int i = 0; commands[i] != '\0'; i++) {
+        char ch_str[2] = {commands[i], '\0'};
+        editor_handle_input(ch_str);
+    }
+
+    editor_handle_input(paste_string);
+
+    char *result = buffer_get_content(buffer);
+    ASSERT_STRING_EQUAL(test_name, result, expected_content);
+    editor_close_buffer(editor_get_active_buffer_idx());
+
+    free(result);
+    remove(filename);
+}
+
 void test_visual_motion_helper(const char* test_name, const char* initial_content, int start_y, int start_x, const char* commands, int sel_start_y, int sel_start_x, int end_y, int end_x) {
     printf("  - %s\n", test_name);
 

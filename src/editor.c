@@ -1210,10 +1210,11 @@ void editor_insert_char(const char *ch) {
 
     line->text_len += ch_len;
     line->text[line->text_len] = '\0';
-    line->char_count++;
+    int char_count = utf8_strlen(ch);
+    line->char_count += char_count;
 
     editor_add_insertion_to_history(ch);
-    buffer->position_x++;
+    buffer->position_x += char_count;
     buffer_reset_offset_x(buffer, editor.screen_cols);
     editor_did_change_buffer();
 

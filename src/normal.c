@@ -34,6 +34,19 @@ void normal_register_insertion(char ch) {
     }
 }
 
+void normal_register_insertion_string(const char* str) {
+    if (is_insertion_bufferable) {
+        size_t len = strlen(str);
+        if ((size_t)insertion_buffer_count + len >= sizeof(insertion_buffer)) {
+            is_insertion_bufferable = 0;
+            insertion_buffer_count = 0;
+            return;
+        }
+        memcpy(insertion_buffer + insertion_buffer_count, str, len);
+        insertion_buffer_count += len;
+    }
+}
+
 void normal_insertion_registration_init() {
     insertion_buffer_count = 0;
     is_insertion_bufferable = 1;
