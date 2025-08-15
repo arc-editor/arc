@@ -9,6 +9,7 @@
 #include "picker_diagnostics.h"
 #include "editor.h"
 #include "lsp.h"
+#include "theme.h"
 #include "buffer.h"
 #include "log.h"
 #include "str.h"
@@ -91,20 +92,28 @@ static void get_item_style(int index, PickerItemStyle *style) {
     Diagnostic *d = &diagnostics[index];
     switch (d->severity) {
         case LSP_DIAGNOSTIC_SEVERITY_ERROR:
-            style->flag = "E";
-            style->fg_r = 255; style->fg_g = 100; style->fg_b = 100;
+            style->flag = "●";
+            style->fg_r = editor.current_theme.diagnostics_error.fg_r;
+            style->fg_g = editor.current_theme.diagnostics_error.fg_g;
+            style->fg_b = editor.current_theme.diagnostics_error.fg_b;
             break;
         case LSP_DIAGNOSTIC_SEVERITY_WARNING:
-            style->flag = "W";
-            style->fg_r = 255; style->fg_g = 255; style->fg_b = 100;
+            style->flag = "●";
+            style->fg_r = editor.current_theme.diagnostics_warning.fg_r;
+            style->fg_g = editor.current_theme.diagnostics_warning.fg_g;
+            style->fg_b = editor.current_theme.diagnostics_warning.fg_b;
             break;
         case LSP_DIAGNOSTIC_SEVERITY_INFO:
-            style->flag = "I";
-            style->fg_r = 100; style->fg_g = 100; style->fg_b = 255;
+            style->flag = "●";
+            style->fg_r = editor.current_theme.diagnostics_info.fg_r;
+            style->fg_g = editor.current_theme.diagnostics_info.fg_g;
+            style->fg_b = editor.current_theme.diagnostics_info.fg_b;
             break;
         case LSP_DIAGNOSTIC_SEVERITY_HINT:
-            style->flag = "H";
-            style->fg_r = 100; style->fg_g = 255; style->fg_b = 100;
+            style->flag = "●";
+            style->fg_r = editor.current_theme.diagnostics_hint.fg_r;
+            style->fg_g = editor.current_theme.diagnostics_hint.fg_g;
+            style->fg_b = editor.current_theme.diagnostics_hint.fg_b;
             break;
         default:
             style->flag = " ";
