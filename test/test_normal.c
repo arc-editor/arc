@@ -146,4 +146,8 @@ void run_normal_tests(void) {
     printf("--- Paragraph navigation wrap around tests ---\n");
     test_motion_helper("test_np_wrap_around", "p1\n\np2", 2, 0, "np", 0, 0);
     test_motion_helper("test_pp_wrap_around", "p1\n\np2", 0, 0, "pp", 2, 0);
+
+    printf("--- Paste tests ---\n");
+    paste_test_helper("test_paste_in_insert_mode", "hello world", 0, 0, "i", "pasted ", "pasted hello world");
+    paste_test_helper("test_paste_with_newline_in_insert_mode", "hello world", 0, 6, "i", "new\nline ", "hello new\nline world");
 }
