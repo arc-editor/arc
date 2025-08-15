@@ -484,13 +484,56 @@ void draw_buffer(Diagnostic *diagnostics, int diagnostics_count) {
         } else {
             editor_set_style(&editor.current_theme.content_line_number, 1, 1);
         }
+
+        DiagnosticSeverity highest_severity = 0;
+        for (int i = 0; i < diagnostics_count; i++) {
+            if (diagnostics[i].line == row) {
+                if (highest_severity == 0 || diagnostics[i].severity < highest_severity) {
+                    highest_severity = diagnostics[i].severity;
+                }
+            }
+        }
+
+        printf(" ");
+        if (highest_severity) {
+            Style *diag_style;
+            switch (highest_severity) {
+                case LSP_DIAGNOSTIC_SEVERITY_ERROR:
+                    diag_style = &editor.current_theme.diagnostics_error;
+                    break;
+                case LSP_DIAGNOSTIC_SEVERITY_WARNING:
+                    diag_style = &editor.current_theme.diagnostics_warning;
+                    break;
+                case LSP_DIAGNOSTIC_SEVERITY_INFO:
+                    diag_style = &editor.current_theme.diagnostics_info;
+                    break;
+                case LSP_DIAGNOSTIC_SEVERITY_HINT:
+                    diag_style = &editor.current_theme.diagnostics_hint;
+                    break;
+                default:
+                    diag_style = &editor.current_theme.content_line_number;
+                    break;
+            }
+            editor_set_style(diag_style, 1, 0);
+            printf("●");
+            if (buffer->offset_x) {
+                editor_set_style(&editor.current_theme.content_line_number_sticky, 1, 1);
+            } else if (row == buffer->position_y) {
+                editor_set_style(&editor.current_theme.content_line_number_active, 1, 1);
+            } else {
+                editor_set_style(&editor.current_theme.content_line_number, 1, 1);
+            }
+        } else {
+            printf(" ");
+        }
+
         printf("%.*s", line_num_len, line_num_str);
 
         int is_visual_mode = editor_handle_input == visual_handle_input;
         Style *line_style = (row == buffer->position_y) ? &editor.current_theme.content_cursor_line : &editor.current_theme.content_background;
 
         int cols_to_skip = buffer->offset_x;
-        int chars_to_print = editor.screen_cols - buffer->line_num_width;
+        int chars_to_print = editor.screen_cols - buffer->line_num_width - 2;
         int visual_x = 0;
 
         char *p = line->text;
