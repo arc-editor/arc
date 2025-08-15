@@ -765,8 +765,29 @@ int ensure_directory_exists(const char *file_path) {
     return 0;
 }
 
-// caller must free the return value
-char *get_path(const char *partial_format, ...) {
+char *config_get_path(void) {
+    const char *home_dir = getenv("HOME");
+    if (!home_dir) {
+        log_warning("config.config_get_path: unable to get env HOME");
+        return NULL;
+    }
+    const char *config_path = "/.config/arc/config.toml";
+    size_t full_len = strlen(home_dir) + strlen(config_path) + 1;
+    char *full_path = malloc(full_len);
+    if (!full_path) {
+        log_warning("config.config_get_path: malloc failed for full_path");
+        return NULL;
+    }
+    snprintf(full_path, full_len, "%s%s", home_dir, config_path);
+    if (ensure_directory_exists(full_path) != 0) {
+        log_warning("config.make_config_path: failed to create directories for %s", full_path);
+        free(full_path);
+        return NULL;
+    }
+    return full_path;
+}
+
+static char *get_path(const char *partial_format, ...) {
     const char *home_dir = getenv("HOME");
     if (!home_dir) {
         log_warning("config.make_config_path: unable to get env HOME");
@@ -946,9 +967,9 @@ void config_load(Config *config) {
     config->whitespace.tab_char = strdup("→");
     config->toml_result.ok = false;
 
-    char *path = get_path("/config.toml");
+    char *path = config_get_path();
     if (!path) {
-        log_error("config.config_load: make_config_path failed");
+        log_error("config.config_load: config_get_path failed");
         return;
     }
     
