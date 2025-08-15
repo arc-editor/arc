@@ -1,8 +1,6 @@
 #include "test.h"
 #include "../src/editor.h"
 #include "../src/buffer.h"
-#include "../src/normal.h"
-#include "../src/visual.h"
 #include "test_search.h"
 #include "test_normal.h"
 #include "test_undo.h"
