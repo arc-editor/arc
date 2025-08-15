@@ -70,21 +70,6 @@ static int get_result_index(int result_idx) {
     return filtered_indices[result_idx];
 }
 
-static const char* get_severity_string(DiagnosticSeverity severity) {
-    switch (severity) {
-        case LSP_DIAGNOSTIC_SEVERITY_ERROR:
-            return "ERROR";
-        case LSP_DIAGNOSTIC_SEVERITY_WARNING:
-            return "WARNING";
-        case LSP_DIAGNOSTIC_SEVERITY_INFO:
-            return "INFO";
-        case LSP_DIAGNOSTIC_SEVERITY_HINT:
-            return "HINT";
-        default:
-            return "UNKNOWN";
-    }
-}
-
 static void get_item_style(int index, PickerItemStyle *style) {
     style->style = 0;
     style->has_fg_color = 1;
@@ -140,10 +125,9 @@ static void file_on_open() {
     filtered_indices = malloc(sizeof(int) * diagnostic_count);
 
     for (int i = 0; i < diagnostic_count; i++) {
-        const char *severity = get_severity_string(diagnostics[i].severity);
-        int len = snprintf(NULL, 0, "%s | %s", severity, diagnostics[i].message);
+        int len = snprintf(NULL, 0, "%s", diagnostics[i].message);
         formatted_diagnostics[i] = malloc(len + 1);
-        snprintf(formatted_diagnostics[i], len + 1, "%s | %s", severity, diagnostics[i].message);
+        snprintf(formatted_diagnostics[i], len + 1, "%s", diagnostics[i].message);
     }
 
     results_count = fuzzy_search((const char**)formatted_diagnostics, diagnostic_count, "", filtered_indices);
@@ -200,10 +184,9 @@ static void workspace_on_open() {
             path = str_uri_to_relative_path(diagnostics[i].uri, cwd);
         }
 
-        const char *severity = get_severity_string(diagnostics[i].severity);
-        int len = snprintf(NULL, 0, "%s | %s | %s", severity, path, diagnostics[i].message);
+        int len = snprintf(NULL, 0, "%s | %s", path, diagnostics[i].message);
         formatted_diagnostics[i] = malloc(len + 1);
-        snprintf(formatted_diagnostics[i], len + 1, "%s | %s | %s", severity, path, diagnostics[i].message);
+        snprintf(formatted_diagnostics[i], len + 1, "%s | %s", path, diagnostics[i].message);
     }
 
     results_count = fuzzy_search((const char**)formatted_diagnostics, diagnostic_count, "", filtered_indices);
