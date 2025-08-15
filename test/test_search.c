@@ -19,7 +19,8 @@ void test_generic_motion_helper(const char* test_name, const char* initial_conte
     buffer->position_x = start_x;
 
     for (int i = 0; commands[i] != '\0'; i++) {
-        editor_handle_input(&commands[i], 1);
+        char ch_str[2] = {commands[i], '\0'};
+        editor_handle_input(ch_str);
     }
 
     ASSERT_EQUAL(test_name, buffer->position_y, end_y);

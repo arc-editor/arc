@@ -36,11 +36,10 @@
 #include "ui.h"
 #include "utf8.h"
 #include "search.h"
-#include "utf8.h"
 #include "str.h"
 
-static void _editor_insert_string_unlocked(const char *text);
 static void editor_did_change_buffer(void);
+
 static pthread_mutex_t editor_mutex = PTHREAD_MUTEX_INITIALIZER;
 Editor editor;
 static int is_undo_redo_active = 0;
@@ -751,12 +750,17 @@ void editor_needs_draw() {
     pthread_mutex_unlock(&editor_mutex);
 }
 
-static void _editor_insert_string_unlocked(const char *text) {
+void editor_insert_string(const char *text) {
+    pthread_mutex_lock(&editor_mutex);
+
     if (!text || *text == '\0') {
+        pthread_mutex_unlock(&editor_mutex);
         return;
     }
 
-    history_add_change(buffer->history, CHANGE_TYPE_INSERT, buffer->position_y, buffer->position_x, text);
+    if (!is_undo_redo_active) {
+        history_add_change(buffer->history, CHANGE_TYPE_INSERT, buffer->position_y, buffer->position_x, text);
+    }
 
     int y = buffer->position_y;
     int x = buffer->position_x;
@@ -770,6 +774,7 @@ static void _editor_insert_string_unlocked(const char *text) {
     current_line->text_len = byte_pos_x;
     current_line->char_count = x;
 
+    const char *p = text;
     int new_lines = 0;
     const char *temp_p = text;
     while ((temp_p = strchr(temp_p, '\n')) != NULL) {
@@ -873,11 +878,7 @@ static void _editor_insert_string_unlocked(const char *text) {
     if (buffer->parser) {
         buffer->needs_parse = 1;
     }
-}
 
-void editor_insert_string(const char *text) {
-    pthread_mutex_lock(&editor_mutex);
-    _editor_insert_string_unlocked(text);
     pthread_mutex_unlock(&editor_mutex);
 }
 
@@ -2818,11 +2819,22 @@ static int utf8_char_len_from_string(const char *s) {
 }
 
 static void editor_insert_string_at(const char *text, int y, int x) {
-    pthread_mutex_lock(&editor_mutex);
     buffer->position_y = y;
     buffer->position_x = x;
-    _editor_insert_string_unlocked(text);
-    pthread_mutex_unlock(&editor_mutex);
+    const char *p = text;
+    while (*p) {
+        if (*p == '\n') {
+            editor_insert_new_line();
+            p++;
+        } else {
+            char utf8_buf[8];
+            size_t len = utf8_char_len_from_string(p);
+            strncpy(utf8_buf, p, len);
+            utf8_buf[len] = '\0';
+            editor_insert_char(utf8_buf);
+            p += len;
+        }
+    }
 }
 
 static void calculate_end_point(const char *text, int start_y, int start_x, int *end_y, int *end_x) {

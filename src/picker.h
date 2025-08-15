@@ -26,7 +26,7 @@ void picker_set_delegate(PickerDelegate *delegate);
 void picker_open();
 int picker_is_open();
 void picker_close();
-int picker_handle_input(const char *buf, int len);
+int picker_handle_input(const char *ch);
 void picker_draw(int screen_cols, int screen_rows, Theme *theme);
 
 #endif // PICKER_H
