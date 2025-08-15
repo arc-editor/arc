@@ -9,6 +9,7 @@
 #include "log.h"
 #include "git.h"
 #include "buffer.h"
+#include "git_diff.h"
 
 static char cached_branch_name[256] = "";
 static long last_update_ms = 0;
@@ -66,31 +67,8 @@ void git_current_branch(char *buffer, size_t buffer_size) {
     snprintf(cached_branch_name, sizeof(cached_branch_name), "%s", buffer);
 }
 
-static void parse_hunk_header(const char* line, GitHunk* hunk) {
-    const char *p = line;
-    // Skip "@@ -"
-    p += 4;
-    hunk->old_start = strtol(p, (char**)&p, 10);
-    if (*p == ',') {
-        p++;
-        hunk->old_count = strtol(p, (char**)&p, 10);
-    } else {
-        hunk->old_count = 1;
-    }
-
-    // Skip " +"
-    while (*p == ' ') p++;
-    p++;
-    hunk->new_start = strtol(p, (char**)&p, 10);
-    if (*p == ',') {
-        p++;
-        hunk->new_count = strtol(p, (char**)&p, 10);
-    } else {
-        hunk->new_count = 1;
-    }
-}
-
 void git_update_diff(Buffer *buffer) {
+    log_info("git_update_diff start");
     if (buffer->hunks) {
         free(buffer->hunks);
         buffer->hunks = NULL;
@@ -124,40 +102,27 @@ void git_update_diff(Buffer *buffer) {
     }
     close(head_fd);
 
-    char buffer_path[] = "/tmp/arc_git_buffer_XXXXXX";
-    int buffer_fd = mkstemp(buffer_path);
-    if (buffer_fd == -1) {
+    FILE* head_file = fopen(head_path, "r");
+    if (!head_file) {
         unlink(head_path);
         return;
     }
-
-    char* content = buffer_get_content(buffer);
-    if (content) {
-        write(buffer_fd, content, strlen(content));
-        free(content);
-    }
-    close(buffer_fd);
-
-    snprintf(command, sizeof(command), "git diff --no-index --no-color -U0 %s %s", head_path, buffer_path);
-    FILE* fp = popen(command, "r");
-    if (!fp) {
-        unlink(head_path);
-        unlink(buffer_path);
-        return;
-    }
-
-    char line[1024];
-    while (fgets(line, sizeof(line), fp)) {
-        if (strncmp(line, "@@", 2) == 0) {
-            buffer->hunk_count++;
-            buffer->hunks = realloc(buffer->hunks, sizeof(GitHunk) * buffer->hunk_count);
-            parse_hunk_header(line, &buffer->hunks[buffer->hunk_count - 1]);
-        }
-    }
-
-    pclose(fp);
+    fseek(head_file, 0, SEEK_END);
+    long head_size = ftell(head_file);
+    fseek(head_file, 0, SEEK_SET);
+    char* head_content = malloc(head_size + 1);
+    fread(head_content, 1, head_size, head_file);
+    head_content[head_size] = '\0';
+    fclose(head_file);
     unlink(head_path);
-    unlink(buffer_path);
+
+    char* buffer_content = buffer_get_content(buffer);
+
+    diff_lines(head_content, buffer_content, buffer);
+
+    free(head_content);
+    free(buffer_content);
+    log_info("git_update_diff end");
 }
 
 GitLineStatus git_get_line_status(const Buffer *buffer, int line_num, int* deleted_lines) {

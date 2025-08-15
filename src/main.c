@@ -3,8 +3,10 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
+#include "log.h"
 
 int main(int argc, char *argv[]) {
+    log_info("Starting arc editor");
     char *filename = NULL;
     bool benchmark_mode = false;
     for (int i = 1; i < argc; i++) {

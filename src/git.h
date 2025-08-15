@@ -11,13 +11,7 @@ typedef enum {
     GIT_LINE_DELETED
 } GitLineStatus;
 
-typedef struct GitHunk {
-    int old_start;
-    int old_count;
-    int new_start;
-    int new_count;
-    struct GitHunk* next;
-} GitHunk;
+struct GitHunk;
 
 void git_update_diff(Buffer *buffer);
 GitLineStatus git_get_line_status(const Buffer *buffer, int line_num, int* deleted_lines);
