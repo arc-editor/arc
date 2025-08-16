@@ -435,7 +435,7 @@ void draw_buffer(Diagnostic *diagnostics, int diagnostics_count) {
             int chars_to_print = editor.screen_cols;
             if (buffer->offset_x) {
                 editor_set_style(&editor.current_theme.content_line_number_sticky, 0, 1);
-                for (int i = 0; i < line_num_len; i++) {
+                for (int i = 0; i < line_num_len + 3; i++) {
                     putchar(' ');
                     chars_to_print--;
                 }
